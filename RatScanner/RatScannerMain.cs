@@ -51,6 +51,8 @@ public class RatScannerMain : INotifyPropertyChanged {
 
 	internal RatEyeEngine RatEyeEngine;
 
+	private Bitmap? _searchMarker;
+
 	public event PropertyChangedEventHandler? PropertyChanged;
 
 	internal ItemQueue ItemScans = new();
@@ -210,12 +212,23 @@ public class RatScannerMain : INotifyPropertyChanged {
 		};
 	}
 
-	private static Config.Processing.Inspection CreateInspectionConfig() {
-		var marker = new Bitmap(RatConfig.Paths.SearchIcon);
+	private Config.Processing.Inspection CreateInspectionConfig() {
+		if (_searchMarker == null) {
+			string path = RatConfig.Paths.SearchIcon;
+			if (!File.Exists(path)) {
+				Logger.LogError(
+					$"Search icon not found at: {path}\n\n" +
+					"Name scan requires Data/icon_search.png. Reinstall or update RatScanner so the full package is present.");
+			}
+
+			_searchMarker = new Bitmap(path);
+			Logger.LogInfo($"Loaded name-scan marker {_searchMarker.Width}x{_searchMarker.Height} from {path}");
+		}
+
 		// MarkerItemScale is calibrated to template width: in-game icon is ~16px at 1080p
 		return new Config.Processing.Inspection() {
-			Marker = marker,
-			MarkerItemScale = 16f / marker.Width,
+			Marker = _searchMarker,
+			MarkerItemScale = 16f / _searchMarker.Width,
 		};
 	}
 

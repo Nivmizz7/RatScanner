@@ -325,14 +325,23 @@ public static class TarkovDevAPI {
 	public static Item[] GetItems() => GetCached<Item>(ItemsQueryKey(), ItemsQuery, RatConfig.MediumTTL);
 
 	/// <summary>
-	/// Looks up an item by id in the current language cache and, if needed, in other loaded item caches.
+	/// Looks up an item by id in loaded caches for the current game mode (no network).
+	/// Prefers the active language, then other languages of the same mode.
 	/// </summary>
 	public static bool TryGetItemById(string id, out Item? item) {
-		item = GetItems().FirstOrDefault(i => i.Id == id);
-		if (item != null) return true;
+		item = null;
+		if (string.IsNullOrEmpty(id)) return false;
 
+		if (Cache.TryGetValue(ItemsQueryKey(), out (long expire, object response) current)
+			&& current.response is Item[] currentItems) {
+			item = currentItems.FirstOrDefault(i => i.Id == id);
+			if (item != null) return true;
+		}
+
+		string modeSuffix = $"_{RatConfig.GameMode}";
 		foreach (KeyValuePair<string, (long expire, object response)> entry in Cache) {
 			if (!entry.Key.StartsWith("items_", StringComparison.Ordinal)) continue;
+			if (!entry.Key.EndsWith(modeSuffix, StringComparison.Ordinal)) continue;
 			if (entry.Value.response is not Item[] items) continue;
 
 			item = items.FirstOrDefault(i => i.Id == id);

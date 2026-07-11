@@ -117,58 +117,57 @@ internal class SettingsVM : INotifyPropertyChanged {
 
 		RatScannerMain.Instance.HotkeyManager.UnregisterHotkeys();
 		try {
-		// Save config
-		RatConfig.NameScan.Enable = EnableNameScan;
-		RatConfig.NameScan.EnableAuto = EnableAutoNameScan;
-		RatConfig.NameScan.Language = (Language)NameScanLanguage;
+			// Save config
+			RatConfig.NameScan.Enable = EnableNameScan;
+			RatConfig.NameScan.EnableAuto = EnableAutoNameScan;
+			RatConfig.NameScan.Language = (Language)NameScanLanguage;
 
-		RatConfig.IconScan.Enable = EnableIconScan;
-		RatConfig.IconScan.ScanRotatedIcons = ScanRotatedIcons;
-		RatConfig.IconScan.UseCachedIcons = UseCachedIcons;
-		RatConfig.IconScan.Hotkey = IconScanHotkey;
+			RatConfig.IconScan.Enable = EnableIconScan;
+			RatConfig.IconScan.ScanRotatedIcons = ScanRotatedIcons;
+			RatConfig.IconScan.UseCachedIcons = UseCachedIcons;
+			RatConfig.IconScan.Hotkey = IconScanHotkey;
 
-		RatConfig.ToolTip.Duration = int.TryParse(ToolTipDuration, out int i) ? i : 0;
-		RatConfig.ToolTip.Duration = ToolTipMilli;
-		RatConfig.UserInterface.Language = UiLanguage;
+			RatConfig.ToolTip.Duration = ToolTipMilli;
+			RatConfig.UserInterface.Language = UiLanguage;
 
-		RatConfig.MinimalUi.ShowName = ShowName;
-		RatConfig.MinimalUi.ShowAvgDayPrice = ShowAvgDayPrice;
-		RatConfig.MinimalUi.ShowPricePerSlot = ShowPricePerSlot;
-		RatConfig.MinimalUi.ShowTraderPrice = ShowTraderPrice;
-		RatConfig.MinimalUi.ShowKappa = ShowKappa;
-		RatConfig.MinimalUi.ShowQuestHideoutTracker = ShowQuestHideoutTracker;
-		RatConfig.MinimalUi.ShowQuestHideoutTeamTracker = ShowQuestHideoutTeamTracker;
-		RatConfig.MinimalUi.ShowUpdated = ShowUpdated;
-		RatConfig.MinimalUi.Opacity = Opacity;
+			RatConfig.MinimalUi.ShowName = ShowName;
+			RatConfig.MinimalUi.ShowAvgDayPrice = ShowAvgDayPrice;
+			RatConfig.MinimalUi.ShowPricePerSlot = ShowPricePerSlot;
+			RatConfig.MinimalUi.ShowTraderPrice = ShowTraderPrice;
+			RatConfig.MinimalUi.ShowKappa = ShowKappa;
+			RatConfig.MinimalUi.ShowQuestHideoutTracker = ShowQuestHideoutTracker;
+			RatConfig.MinimalUi.ShowQuestHideoutTeamTracker = ShowQuestHideoutTeamTracker;
+			RatConfig.MinimalUi.ShowUpdated = ShowUpdated;
+			RatConfig.MinimalUi.Opacity = Opacity;
 
-		RatConfig.Tracking.ShowNonFIRNeeds = ShowNonFIRNeeds;
-		RatConfig.Tracking.ShowKappaNeeds = ShowKappaNeeds;
+			RatConfig.Tracking.ShowNonFIRNeeds = ShowNonFIRNeeds;
+			RatConfig.Tracking.ShowKappaNeeds = ShowKappaNeeds;
 
-		RatConfig.Tracking.TarkovTracker.Token = TarkovTrackerToken.Trim();
-		RatConfig.Tracking.TarkovTracker.ShowTeam = ShowTarkovTrackerTeam;
-		RatConfig.Tracking.TarkovTracker.Backend = TarkovTrackerBackend;
+			RatConfig.Tracking.TarkovTracker.Token = TarkovTrackerToken.Trim();
+			RatConfig.Tracking.TarkovTracker.ShowTeam = ShowTarkovTrackerTeam;
+			RatConfig.Tracking.TarkovTracker.Backend = TarkovTrackerBackend;
 
-		RatConfig.Overlay.Search.Enable = EnableIneractableOverlay;
-		RatConfig.Overlay.Search.BlurBehind = BlurBehindSearch;
-		RatConfig.Overlay.Search.Hotkey = InteractableOverlayHotkey;
+			RatConfig.Overlay.Search.Enable = EnableIneractableOverlay;
+			RatConfig.Overlay.Search.BlurBehind = BlurBehindSearch;
+			RatConfig.Overlay.Search.Hotkey = InteractableOverlayHotkey;
 
-		RatConfig.ScreenWidth = ScreenWidth;
-		RatConfig.ScreenHeight = ScreenHeight;
-		RatConfig.ScreenScale = ScreenScale;
-		RatConfig.GameMode = GameMode;
-		RatConfig.MinimizeToTray = MinimizeToTray;
-		RatConfig.AlwaysOnTop = AlwaysOnTop;
-		RatConfig.LogDebug = LogDebug;
+			RatConfig.ScreenWidth = ScreenWidth;
+			RatConfig.ScreenHeight = ScreenHeight;
+			RatConfig.ScreenScale = ScreenScale;
+			RatConfig.GameMode = GameMode;
+			RatConfig.MinimizeToTray = MinimizeToTray;
+			RatConfig.AlwaysOnTop = AlwaysOnTop;
+			RatConfig.LogDebug = LogDebug;
 
-		// Apply config
-		PageSwitcher.Instance.Topmost = RatConfig.AlwaysOnTop;
-		PageSwitcher.Instance.ResetWindowSize();
-		await TarkovDevAPI.InitializeCache();
-		if (updateTarkovTrackerToken || updateTarkovTrackerBackend) UpdateTarkovTrackerToken();
-		if (updateUiLanguage) _localizationService.SetLanguage(UiLanguage);
-		if (updateResolution || updateLanguage) RatScannerMain.Instance.SetupRatEye();
+			// Apply config
+			PageSwitcher.Instance.Topmost = RatConfig.AlwaysOnTop;
+			PageSwitcher.Instance.ResetWindowSize();
+			await TarkovDevAPI.InitializeCache();
+			if (updateTarkovTrackerToken || updateTarkovTrackerBackend) UpdateTarkovTrackerToken();
+			if (updateUiLanguage) _localizationService.SetLanguage(UiLanguage);
+			if (updateResolution || updateLanguage) RatScannerMain.Instance.SetupRatEye();
 
-		RatEye.Config.LogDebug = RatConfig.LogDebug;
+			RatEye.Config.LogDebug = RatConfig.LogDebug;
 		} finally {
 			RatScannerMain.Instance.HotkeyManager.RegisterHotkeys();
 		}
