@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -306,6 +307,12 @@ public static class TarkovDevAPI {
 	/// Full cache initialization - waits for all requests to complete
 	/// </summary>
 	public static async Task InitializeCache() {
+		// Preload offline cache for the current language so scans do not fail during fetch
+		TryLoadFromOfflineCache<Item>(ItemsQueryKey(), RatConfig.MediumTTL);
+		TryLoadFromOfflineCache<TTask>(TasksQueryKey(), RatConfig.LongTTL);
+		TryLoadFromOfflineCache<HideoutStation>(HideoutStationsQueryKey(), RatConfig.LongTTL);
+		TryLoadFromOfflineCache<Map>(MapsQueryKey(), RatConfig.LongTTL);
+
 		await Task.WhenAll(
 			QueueRequest<Item>(ItemsQueryKey(), ItemsQuery, RatConfig.MediumTTL),
 			QueueRequest<TTask>(TasksQueryKey(), TasksQuery, RatConfig.LongTTL),
@@ -316,6 +323,26 @@ public static class TarkovDevAPI {
 
 	public static Item[] GetItems(LanguageCode language, GameMode gameMode) => GetCached<Item>(ItemsQueryKey(language, gameMode), () => ItemsQuery(language, gameMode), RatConfig.MediumTTL);
 	public static Item[] GetItems() => GetCached<Item>(ItemsQueryKey(), ItemsQuery, RatConfig.MediumTTL);
+
+	/// <summary>
+	/// Looks up an item by id in the current language cache and, if needed, in other loaded item caches.
+	/// </summary>
+	public static bool TryGetItemById(string id, out Item? item) {
+		item = GetItems().FirstOrDefault(i => i.Id == id);
+		if (item != null) return true;
+
+		foreach (KeyValuePair<string, (long expire, object response)> entry in Cache) {
+			if (!entry.Key.StartsWith("items_", StringComparison.Ordinal)) continue;
+			if (entry.Value.response is not Item[] items) continue;
+
+			item = items.FirstOrDefault(i => i.Id == id);
+			if (item != null) return true;
+		}
+
+		item = null;
+		return false;
+	}
+
 	public static bool TryGetCachedItems(out Item[] items) {
 		if (Cache.TryGetValue(ItemsQueryKey(), out (long expire, object response) cached)) {
 			items = (Item[])cached.response;

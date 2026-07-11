@@ -1,6 +1,9 @@
 ## Custom ignores
-# Static icon data
+# Static icon data (downloaded from RatScannerData releases for local dev)
 RatScanner/[Dd]ata/*
+# Shipped with the app: updated magnifier template for BSG's post-patch inspect UI.
+# RatEye 4.x no longer embeds this asset; Name Scan loads it from Data/icon_search.png.
+!RatScanner/[Dd]ata/icon_search.png
 
 # publish folder
 publish/

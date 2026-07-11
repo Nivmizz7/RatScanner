@@ -115,6 +115,8 @@ internal class SettingsVM : INotifyPropertyChanged {
 		bool updateLanguage = RatConfig.NameScan.Language != (Language)NameScanLanguage;
 		bool updateUiLanguage = RatConfig.UserInterface.Language != UiLanguage;
 
+		RatScannerMain.Instance.HotkeyManager.UnregisterHotkeys();
+		try {
 		// Save config
 		RatConfig.NameScan.Enable = EnableNameScan;
 		RatConfig.NameScan.EnableAuto = EnableAutoNameScan;
@@ -167,7 +169,9 @@ internal class SettingsVM : INotifyPropertyChanged {
 		if (updateResolution || updateLanguage) RatScannerMain.Instance.SetupRatEye();
 
 		RatEye.Config.LogDebug = RatConfig.LogDebug;
-		RatScannerMain.Instance.HotkeyManager.RegisterHotkeys();
+		} finally {
+			RatScannerMain.Instance.HotkeyManager.RegisterHotkeys();
+		}
 
 		// Save config to file
 		Logger.LogInfo("Saving config...");

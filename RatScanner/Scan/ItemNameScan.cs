@@ -1,7 +1,7 @@
 ﻿using RatEye;
 using RatEye.Processing;
 using System;
-using System.Linq;
+using TarkovItem = RatScanner.TarkovDev.GraphQL.Item;
 
 namespace RatScanner.Scan;
 
@@ -10,7 +10,11 @@ public class ItemNameScan : ItemScan {
 
 	public ItemNameScan(Inspection inspection, Vector2 toolTipPosition, int duration) {
 		RatStash.Item inspectionItem = inspection.Item;
-		Item = TarkovDevAPI.GetItems().FirstOrDefault(item => item.Id == inspectionItem.Id) ?? throw new Exception($"Unknown item: {inspection.Item.Id}");
+		if (!TarkovDevAPI.TryGetItemById(inspectionItem.Id, out TarkovItem? tarkovItem) || tarkovItem is null) {
+			throw new Exception($"Unknown item: {inspectionItem.Id}");
+		}
+
+		Item = tarkovItem;
 		Confidence = inspection.MarkerConfidence;
 		IconPath = inspection.IconPath;
 		_toolTipPosition = toolTipPosition;

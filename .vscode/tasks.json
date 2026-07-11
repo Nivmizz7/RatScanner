@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"build",
+				"${workspaceFolder}/RatScanner/RatScanner.csproj",
+				"/property:GenerateFullPaths=true",
+				"/consoleloggerparameters:NoSummary"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": "$msCompile"
+		},
+		{
+			"label": "publish",
+			"command": "dotnet",
+			"type": "process",
+			"args": [
+				"publish",
+				"${workspaceFolder}/RatScanner/RatScanner.csproj",
+				"-c",
+				"Release",
+				"-o",
+				"${workspaceFolder}/publish",
+				"--runtime",
+				"win-x64",
+				"-p:PublishSingleFile=true",
+				"--self-contained",
+				"true"
+			],
+			"problemMatcher": "$msCompile"
+		}
+	]
+}

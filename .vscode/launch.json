@@ -1,0 +1,16 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "RatScanner (Debug)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "build",
+			"program": "${workspaceFolder}/RatScanner/bin/Debug/net10.0-windows10.0.22621.0/RatScanner.exe",
+			"args": [],
+			"cwd": "${workspaceFolder}/RatScanner/bin/Debug/net10.0-windows10.0.22621.0",
+			"console": "integratedTerminal",
+			"stopAtEntry": false
+		}
+	]
+}

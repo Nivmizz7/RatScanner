@@ -44,6 +44,7 @@ internal static class RatConfig {
 		internal static string ItemData = Path.Combine(Data, "items.json");
 		internal static string TrainedData = Path.Combine(Data, "traineddata");
 		internal static string UnknownIcon = Path.Combine(Data, "unknown.png");
+		internal static string SearchIcon = Path.Combine(Data, "icon_search.png");
 		internal static string ConfigFile = Path.Combine(Base, "config.cfg");
 		internal static string Debug = Path.Combine(Base, "Debug");
 		internal static string Updater = Path.Combine(Base, "RatUpdater.exe");

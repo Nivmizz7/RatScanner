@@ -205,7 +205,17 @@ public class RatScannerMain : INotifyPropertyChanged {
 				InventoryConfig = new Config.Processing.Inventory() {
 					OptimizeHighlighted = highlighted,
 				},
+				InspectionConfig = CreateInspectionConfig(),
 			},
+		};
+	}
+
+	private static Config.Processing.Inspection CreateInspectionConfig() {
+		var marker = new Bitmap(RatConfig.Paths.SearchIcon);
+		// MarkerItemScale is calibrated to template width: in-game icon is ~16px at 1080p
+		return new Config.Processing.Inspection() {
+			Marker = marker,
+			MarkerItemScale = 16f / marker.Width,
 		};
 	}
 
@@ -298,15 +308,23 @@ public class RatScannerMain : INotifyPropertyChanged {
 			toolTipPosition += new Vector2(-(int)(marker.Width * scale), (int)(marker.Height * scale));
 			toolTipPosition += position;
 
-			ItemNameScan tempNameScan = new(
-				inspection,
-				toolTipPosition,
-				RatConfig.ToolTip.Duration);
-
-			ItemScans.Enqueue(tempNameScan);
+			if (!TryEnqueueNameScan(inspection, toolTipPosition)) return;
 
 			RefreshOverlay();
 		}
+	}
+
+	private bool TryEnqueueNameScan(RatEye.Processing.Inspection inspection, Vector2 toolTipPosition) {
+		if (!TarkovDevAPI.TryGetItemById(inspection.Item!.Id, out _)) {
+			Logger.LogWarning($"Skipping name scan: item {inspection.Item.Id} is not in cache yet.");
+			return false;
+		}
+
+		ItemScans.Enqueue(new ItemNameScan(
+			inspection,
+			toolTipPosition,
+			RatConfig.ToolTip.Duration));
+		return true;
 	}
 
 	/// <summary>
@@ -333,12 +351,7 @@ public class RatScannerMain : INotifyPropertyChanged {
 				Bitmap marker = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.Marker;
 				toolTipPosition += new Vector2(0, (int)(marker.Height * scale));
 
-				ItemNameScan tempNameScan = new(
-						inspection,
-						toolTipPosition,
-						RatConfig.ToolTip.Duration);
-
-				ItemScans.Enqueue(tempNameScan);
+				TryEnqueueNameScan(inspection, toolTipPosition);
 			}
 			RefreshOverlay();
 		}
@@ -364,6 +377,10 @@ public class RatScannerMain : INotifyPropertyChanged {
 			RatEye.Processing.Icon? icon = inventory.LocateIcon();
 
 			if (icon?.DetectionConfidence <= 0 || icon?.Item == null) return;
+			if (!TarkovDevAPI.TryGetItemById(icon.Item.Id, out _)) {
+				Logger.LogWarning($"Skipping icon scan: item {icon.Item.Id} is not in cache yet.");
+				return;
+			}
 
 			Vector2 toolTipPosition = position;
 			toolTipPosition += icon.Position + icon.ItemPosition;
