@@ -484,26 +484,24 @@ public static class TarkovDevAPI
                     .WithAvg24HPrice()
                     .WithTypes()
                     .WithProperties(
-                        new ItemPropertiesQueryBuilder()
-                            .WithItemPropertiesAmmoFragment(
-                                new ItemPropertiesAmmoQueryBuilder()
-                                    .WithCaliber()
-                                    .WithDamage()
-                                    .WithPenetrationPower()
-                                    .WithFragmentationChance()
-                            )
+                        new ItemPropertiesQueryBuilder().WithItemPropertiesAmmoFragment(
+                            new ItemPropertiesAmmoQueryBuilder()
+                                .WithCaliber()
+                                .WithDamage()
+                                .WithPenetrationPower()
+                                .WithFragmentationChance()
+                        )
                     )
                     .WithSellFor(
                         new ItemPriceQueryBuilder()
                             .WithPriceRub()
                             .WithVendor(
-                                new VendorQueryBuilder()
-                                    .WithTraderOfferFragment(
-                                        new TraderOfferQueryBuilder()
-                                            .WithName()
-                                            .WithNormalizedName()
-                                            .WithTrader(new TraderQueryBuilder().WithId().WithImageLink())
-                                    )
+                                new VendorQueryBuilder().WithTraderOfferFragment(
+                                    new TraderOfferQueryBuilder()
+                                        .WithName()
+                                        .WithNormalizedName()
+                                        .WithTrader(new TraderQueryBuilder().WithId().WithImageLink())
+                                )
                             )
                     ),
                 alias: "data",
@@ -524,27 +522,23 @@ public static class TarkovDevAPI
 
     private static string TasksQuery() => TasksQuery(RatConfig.NameScan.Language.ToTarkovDevType(), RatConfig.GameMode);
 
-    private static string TasksQuery(LanguageCode language, GameMode gameMode)
+    internal static string TasksQuery(LanguageCode language, GameMode gameMode)
     {
         return new QueryQueryBuilder()
             .WithTasks(
                 new TaskQueryBuilder()
-                    .WithAllScalarFields()
+                    .WithId()
+                    .WithName()
+                    .WithWikiLink()
+                    .WithTaskImageLink()
                     .WithKappaRequired()
-                    .WithMap(new MapQueryBuilder().WithId())
-                    .WithTrader(new TraderQueryBuilder().WithId())
+                    .WithTrader(new TraderQueryBuilder().WithImageLink())
                     .WithObjectives(
                         new TaskObjectiveQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithTaskObjectiveBasicFragment(
-                                new TaskObjectiveBasicQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithZones(
-                                        new TaskZoneQueryBuilder()
-                                            .WithMap(new MapQueryBuilder().WithId())
-                                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                                    )
-                            )
+                            .WithId()
+                            .WithType()
+                            .WithDescription()
+                            .WithTaskObjectiveBasicFragment(new TaskObjectiveBasicQueryBuilder().WithAllScalarFields())
                             .WithTaskObjectiveBuildItemFragment(
                                 new TaskObjectiveBuildItemQueryBuilder()
                                     .WithAllScalarFields()
@@ -559,35 +553,18 @@ public static class TarkovDevAPI
                             .WithTaskObjectiveItemFragment(
                                 new TaskObjectiveItemQueryBuilder()
                                     .WithAllScalarFields()
-                                    .WithZones(
-                                        new TaskZoneQueryBuilder()
-                                            .WithMap(new MapQueryBuilder().WithId())
-                                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                                    )
                                     .WithItems(new ItemQueryBuilder().WithId())
                             )
                             .WithTaskObjectiveMarkFragment(
                                 new TaskObjectiveMarkQueryBuilder()
                                     .WithAllScalarFields()
-                                    .WithZones(
-                                        new TaskZoneQueryBuilder()
-                                            .WithMap(new MapQueryBuilder().WithId())
-                                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                                    )
                                     .WithMarkerItem(new ItemQueryBuilder().WithId())
                             )
                             .WithTaskObjectivePlayerLevelFragment(
                                 new TaskObjectivePlayerLevelQueryBuilder().WithAllScalarFields()
                             )
                             .WithTaskObjectiveQuestItemFragment(
-                                new TaskObjectiveQuestItemQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithZones(
-                                        new TaskZoneQueryBuilder()
-                                            .WithMap(new MapQueryBuilder().WithId())
-                                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                                    )
-                                    .WithQuestItem(new QuestItemQueryBuilder().WithAllScalarFields())
+                                new TaskObjectiveQuestItemQueryBuilder().WithAllScalarFields()
                             )
                             .WithTaskObjectiveShootFragment(new TaskObjectiveShootQueryBuilder().WithAllScalarFields())
                             .WithTaskObjectiveSkillFragment(new TaskObjectiveSkillQueryBuilder().WithAllScalarFields())
@@ -595,30 +572,14 @@ public static class TarkovDevAPI
                                 new TaskObjectiveTaskStatusQueryBuilder().WithAllScalarFields()
                             )
                             .WithTaskObjectiveTraderLevelFragment(
-                                new TaskObjectiveTraderLevelQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithTrader(new TraderQueryBuilder().WithId())
+                                new TaskObjectiveTraderLevelQueryBuilder().WithAllScalarFields()
                             )
                             .WithTaskObjectiveTraderStandingFragment(
-                                new TaskObjectiveTraderStandingQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithTrader(new TraderQueryBuilder().WithId())
+                                new TaskObjectiveTraderStandingQueryBuilder().WithAllScalarFields()
                             )
                             .WithTaskObjectiveUseItemFragment(
-                                new TaskObjectiveUseItemQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithZones(
-                                        new TaskZoneQueryBuilder()
-                                            .WithMap(new MapQueryBuilder().WithId())
-                                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                                    )
-                                    .WithUseAny(new ItemQueryBuilder().WithId())
+                                new TaskObjectiveUseItemQueryBuilder().WithAllScalarFields()
                             )
-                    )
-                    .WithTaskRequirements(
-                        new TaskStatusRequirementQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithTask(new TaskQueryBuilder().WithId())
                     ),
                 alias: "data",
                 lang: language,
@@ -640,40 +601,20 @@ public static class TarkovDevAPI
     private static string HideoutStationsQuery() =>
         HideoutStationsQuery(RatConfig.NameScan.Language.ToTarkovDevType(), RatConfig.GameMode);
 
-    private static string HideoutStationsQuery(LanguageCode language, GameMode gameMode)
+    internal static string HideoutStationsQuery(LanguageCode language, GameMode gameMode)
     {
         return new QueryQueryBuilder()
             .WithHideoutStations(
-                new HideoutStationQueryBuilder()
-                    .WithAllScalarFields()
-                    .WithLevels(
-                        new HideoutStationLevelQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithItemRequirements(
-                                new RequirementItemQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithItem(new ItemQueryBuilder().WithId())
-                            )
-                            .WithStationLevelRequirements(
-                                new RequirementHideoutStationLevelQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithStation(new HideoutStationQueryBuilder().WithAllScalarFields())
-                            )
-                            .WithCrafts(
-                                new CraftQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithRequiredItems(
-                                        new ContainedItemQueryBuilder()
-                                            .WithAllScalarFields()
-                                            .WithItem(new ItemQueryBuilder().WithId())
-                                    )
-                                    .WithRewardItems(
-                                        new ContainedItemQueryBuilder()
-                                            .WithAllScalarFields()
-                                            .WithItem(new ItemQueryBuilder().WithId())
-                                    )
-                            )
-                    ),
+                new HideoutStationQueryBuilder().WithLevels(
+                    new HideoutStationLevelQueryBuilder()
+                        .WithId()
+                        .WithItemRequirements(
+                            new RequirementItemQueryBuilder()
+                                .WithId()
+                                .WithCount()
+                                .WithItem(new ItemQueryBuilder().WithId())
+                        )
+                ),
                 alias: "data",
                 lang: language,
                 gameMode: gameMode
@@ -692,31 +633,10 @@ public static class TarkovDevAPI
 
     private static string MapsQuery() => MapsQuery(RatConfig.NameScan.Language.ToTarkovDevType(), RatConfig.GameMode);
 
-    private static string MapsQuery(LanguageCode language, GameMode gameMode)
+    internal static string MapsQuery(LanguageCode language, GameMode gameMode)
     {
         return new QueryQueryBuilder()
-            .WithMaps(
-                new MapQueryBuilder()
-                    .WithAllScalarFields()
-                    .WithExtracts(
-                        new MapExtractQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                            .WithTransferItem(
-                                new ContainedItemQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithItem(new ItemQueryBuilder().WithId())
-                            )
-                    )
-                    .WithTransits(
-                        new MapTransitQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithPosition(new MapPositionQueryBuilder().WithAllScalarFields())
-                    ),
-                alias: "data",
-                lang: language,
-                gameMode: gameMode
-            )
+            .WithMaps(new MapQueryBuilder().WithId().WithName(), alias: "data", lang: language, gameMode: gameMode)
             .Build();
     }
 

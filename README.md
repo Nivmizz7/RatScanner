@@ -86,12 +86,13 @@ If you have any problems with the process please checkout the [FAQ][faq-page] or
 
 ## Setting up the repository for development
 
-1. Clone the repository
-2. Copy the `Data` folder from the latest release to `RatScanner\Data\`
+1. Clone the repository.
+2. Run `powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1` to install item icons and OCR data.
+3. Run `dotnet restore RatScanner.sln`.
 
 ### Compiling
 
-- Open the solution inside Visual Studio and click Build -> Build Solution
+- Run `dotnet build RatScanner.sln`, or open the solution in Visual Studio and select **Build → Build Solution**.
 
 ### Publishing
 
@@ -114,6 +115,6 @@ This will help to finance the backend server as well as the [API][tarkov-dev] wh
 [discord]: https://discord.com/invite/aHZf7aP
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [faq-page]: FAQ.md
-[latest-release]: https://github.com/RatScanner/RatScanner/releases/latest/download/RatScanner.zip
-[releases]: https://github.com/RatScanner/RatScanner/releases/
+[latest-release]: https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip
+[releases]: https://github.com/tarkovtracker-org/RatScanner/releases/
 [tarkov-dev]: https://tarkov.dev/

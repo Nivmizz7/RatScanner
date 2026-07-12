@@ -14,23 +14,8 @@
 		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
 		<nullable>Enable</nullable>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-		<!--
-			Some IDE design-time hosts (or past EmitCompilerGeneratedFiles runs) can leave a
-			stale GraphQlClient.cs under obj/generated/. If that tree is still compiled alongside
-			the live source-generator output, every TarkovDev.GraphQL type becomes ambiguous.
-			DefaultItemExcludes already drops most of obj/, but keep an explicit belt for this path.
-		-->
+		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
 		<DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\generated\**</DefaultItemExcludes>
-		<!--
-			GraphQlClientGenerator emits non-nullable reference properties (e.g. Id: string)
-			without `required` / field initializers when DataClassMemberNullability=DefinedBySchema.
-			Those members cannot be fixed in generated code. Suppress CS8618 only for this
-			project (hosts the generator). RatEye/tests keep full analysis. Hand-written
-			CS8618 is still fixed in source (e.g. Blazor [Parameter] uses `= default!;`).
-			IDE/pathless generated trees are covered by .globalconfig + .editorconfig override.
-		-->
-		<NoWarn>$(NoWarn);CS8618</NoWarn>
-		<GraphQlClientGenerator_ServiceUrl>https://api.tarkov.dev/graphql</GraphQlClientGenerator_ServiceUrl>
 		<GraphQlClientGenerator_Namespace>$(RootNamespace).TarkovDev.GraphQL</GraphQlClientGenerator_Namespace>
 		<GraphQlClientGenerator_IdTypeMapping>String</GraphQlClientGenerator_IdTypeMapping>
 		<GraphQlClientGenerator_DataClassMemberNullability>DefinedBySchema</GraphQlClientGenerator_DataClassMemberNullability>
@@ -54,26 +39,29 @@
 
 	<ItemGroup>
 		<PackageReference Include="DeepCloner" Version="0.10.4" />
-		<PackageReference Include="GraphQlClientGenerator" Version="0.9.22" IncludeAssets="analyzers" />
+		<PackageReference Include="GraphQlClientGenerator" Version="0.9.31" IncludeAssets="analyzers" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.71" />
 		<PackageReference Include="MudBlazor" Version="6.10.0" />
 		<PackageReference Include="Microsoft.DotNet.UpgradeAssistant.Extensions.Default.Analyzers" Version="0.4.421302">
 			<PrivateAssets>all</PrivateAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Windows.Compatibility" Version="8.0.7" />
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.9" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="RatStash" Version="6.0.0" />
 		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
 		<PackageReference Include="Tesseract" Version="5.2.0" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<CompilerVisibleProperty Include="GraphQlClientGenerator_ServiceUrl" />
 		<CompilerVisibleProperty Include="GraphQlClientGenerator_Namespace" />
 		<CompilerVisibleProperty Include="GraphQlClientGenerator_IdTypeMapping" />
 		<CompilerVisibleProperty Include="GraphQlClientGenerator_DataClassMemberNullability" />
-		<!-- Unfinished migration draft (not .cs) so IDE/MSBuild don't load it alongside GraphQL-generated models. -->
-		<None Include="TarkovDev\Models.cs.wip" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Keep clean/offline builds independent of tarkov.dev availability. -->
+		<AdditionalFiles Include="TarkovDev.gql.schema.json" CacheObjects="true" />
+		<Content Update="TarkovDev.gql.schema.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
 	</ItemGroup>
 
 	<ItemGroup>

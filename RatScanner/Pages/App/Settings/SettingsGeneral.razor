@@ -74,7 +74,7 @@
         },
     };
 
-    private IEnumerable<UiLanguage> GetUiLanguages() => (Enum.GetValues(typeof(UiLanguage)) as IEnumerable<UiLanguage>).OrderBy(l => l.ToCultureName());
+    private IEnumerable<UiLanguage> GetUiLanguages() => Enum.GetValues<UiLanguage>().OrderBy(l => l.ToCultureName());
 
     protected override void OnInitialized() {
         SettingsVM.PropertyChanged += PropertyChangeHandler;

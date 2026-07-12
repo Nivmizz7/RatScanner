@@ -6,7 +6,7 @@
     --rs-purple: #9272f8; --rs-purple-hover: #a58bfa; --rs-purple-surface: rgba(146,114,248,.15);
     --rs-success: #58d17b; --rs-success-strong: #42bc69; --rs-success-surface: rgba(88,209,123,.10);
     --rs-warning: #e7ad55; --rs-danger: #eb6c73; --rs-info: #68a7f4;
-    --rs-radius-sm: 8px; --rs-radius: 12px; --rs-sidebar-width: 252px;
+    --rs-radius-sm: 8px; --rs-radius: 12px; --rs-sidebar-width: 224px;
 }
 
 html, body, #app { height: 100%; margin: 0; background: var(--rs-bg); color: var(--rs-text); }

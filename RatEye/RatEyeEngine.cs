@@ -7,8 +7,10 @@ namespace RatEye
     /// <summary>
     /// Core class which allows creating new processing objects
     /// </summary>
-    public class RatEyeEngine
+    public class RatEyeEngine : System.IDisposable
     {
+        private bool _disposed;
+
         /// <summary>
         /// The config which is used for this <see cref="RatEyeEngine"/>
         /// </summary>
@@ -57,6 +59,19 @@ namespace RatEye
         public Inventory NewInventory(Bitmap image)
         {
             return new Inventory(image, Config);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            Config.IconManager?.Dispose();
+            Config.ProcessingConfig.InspectionConfig.TesseractEngine?.Dispose();
+            Config.ProcessingConfig.IconConfig.TesseractEngine?.Dispose();
+            Config.ProcessingConfig.InspectionConfig.Marker?.Dispose();
+            _disposed = true;
+            System.GC.SuppressFinalize(this);
         }
     }
 }

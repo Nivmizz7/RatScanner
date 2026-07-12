@@ -86,7 +86,8 @@ namespace RatEye.Processing
         {
             SatisfyState(State.Default);
 
-            var markers = GetMarkerPositions(GetScaledMarker());
+            using Bitmap marker = GetScaledMarker();
+            var markers = GetMarkerPositions(marker);
             var threshold = InspectionConfig.MarkerThreshold;
             _inspections = markers.Select(marker => new Inspection(_image, _config, marker, threshold)).ToList();
         }
@@ -124,8 +125,16 @@ namespace RatEye.Processing
         /// <returns>A rescaled and alpha blended version of <see cref="Config.Processing.Inspection.Marker"/></returns>
         private Bitmap GetScaledMarker()
         {
-            var output = InspectionConfig.Marker.Rescale(InspectionConfig.MarkerItemScale * ProcessingConfig.Scale);
-            return output.TransparentToColor(InspectionConfig.MarkerBackgroundColor);
+            Bitmap output = InspectionConfig.Marker.Rescale(InspectionConfig.MarkerItemScale * ProcessingConfig.Scale);
+            try
+            {
+                return output.TransparentToColor(InspectionConfig.MarkerBackgroundColor);
+            }
+            finally
+            {
+                if (!ReferenceEquals(output, InspectionConfig.Marker))
+                    output.Dispose();
+            }
         }
     }
 }

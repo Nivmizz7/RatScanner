@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -67,8 +66,7 @@ public class RatScannerMain : INotifyPropertyChanged
         Logger.Clear();
 
         Logger.LogInfo("----- RatScanner " + RatConfig.Version + " -----");
-        Logger.LogInfo("Checking for updates...");
-        CheckForUpdates();
+        _ = CheckForUpdatesAsync();
 
         Logger.LogInfo(
             $"Screen Info: {RatConfig.ScreenWidth}x{RatConfig.ScreenHeight} at {RatConfig.ScreenScale * 100}%"
@@ -140,83 +138,30 @@ public class RatScannerMain : INotifyPropertyChanged
         }).Start();
     }
 
-    private static void CheckForUpdates()
+    private static async Task CheckForUpdatesAsync()
     {
-        string mostRecentVersion = ApiManager.GetResource(ApiManager.ResourceType.ClientVersion);
-        if (!IsNewerVersionAvailable(RatConfig.Version, mostRecentVersion))
+        Logger.LogInfo("Checking the maintained fork for updates...");
+        GitHubUpdateService.LatestRelease? release = await GitHubUpdateService
+            .TryGetLatestReleaseAsync()
+            .ConfigureAwait(false);
+        if (release == null || !GitHubUpdateService.IsNewerVersion(RatConfig.Version, release.Version))
             return;
-        Logger.LogInfo("A new version is available: " + mostRecentVersion);
+        Logger.LogInfo("A new version is available: " + release.Version);
 
-        string forceVersions = ApiManager.GetResource(ApiManager.ResourceType.ClientForceUpdateVersions);
-        if (forceVersions.Contains($"[{RatConfig.Version}]"))
-        {
-            UpdateRatScanner();
-            return;
-        }
-
-        string message = "Version " + mostRecentVersion + " is available!\n";
+        string message = "Version " + release.Version + " is available!\n";
         message += "You are using: " + RatConfig.Version + "\n\n";
         message += "Do you want to install it now?";
-        MessageBoxResult result = MessageBox.Show(message, "Rat Scanner Updater", MessageBoxButton.YesNo);
-        if (result == MessageBoxResult.Yes)
-            UpdateRatScanner();
-    }
+        MessageBoxResult result = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            MessageBox.Show(message, "RatScanner update", MessageBoxButton.YesNo, MessageBoxImage.Information)
+        );
+        if (result != MessageBoxResult.Yes)
+            return;
 
-    private static bool IsNewerVersionAvailable(string currentVersion, string availableVersion)
-    {
-        if (
-            TryParseVersion(currentVersion, out Version? current)
-            && TryParseVersion(availableVersion, out Version? available)
-        )
-        {
-            return available > current;
-        }
-
-        // If parsing fails, don't prompt for update to avoid false positives
-        return false;
-    }
-
-    private static readonly SearchValues<char> VersionSuffixChars = SearchValues.Create("-+");
-
-    private static bool TryParseVersion(string versionText, [NotNullWhen(true)] out Version? version)
-    {
-        version = new Version(0, 0);
-        if (string.IsNullOrWhiteSpace(versionText))
-            return false;
-
-        string cleaned = versionText.Trim();
-        if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
-            cleaned = cleaned[1..];
-
-        int cut = cleaned.AsSpan().IndexOfAny(VersionSuffixChars);
-        if (cut >= 0)
-            cleaned = cleaned[..cut];
-
-        return Version.TryParse(cleaned, out version);
-    }
-
-    private static void UpdateRatScanner()
-    {
-        if (!File.Exists(RatConfig.Paths.Updater))
-        {
-            Logger.LogWarning(RatConfig.Paths.Updater + " could not be found!");
-            try
-            {
-                string updaterLink = ApiManager.GetResource(ApiManager.ResourceType.UpdaterLink);
-                ApiManager.DownloadFile(updaterLink, RatConfig.Paths.Updater);
-            }
-            catch (Exception e)
-            {
-                Logger.LogError("Unable to download updater, please update manually.", e);
-                return;
-            }
-        }
-
-        ProcessStartInfo startInfo = new(RatConfig.Paths.Updater) { UseShellExecute = true };
-        startInfo.ArgumentList.Add("--start");
-        startInfo.ArgumentList.Add("--update");
-        Process.Start(startInfo);
-        Environment.Exit(0);
+        bool started = await Task.Run(() => GitHubUpdateService.TryApplyUpdate(release)).ConfigureAwait(false);
+        if (started)
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current.Shutdown()
+            );
     }
 
     [MemberNotNull(nameof(RatEyeEngine))]
@@ -225,7 +170,18 @@ public class RatScannerMain : INotifyPropertyChanged
         Config.LogDebug = RatConfig.LogDebug;
         Config.Path.LogFile = "RatEyeLog.txt";
         Config.Path.TesseractLibSearchPath = AppDomain.CurrentDomain.BaseDirectory;
-        RatEyeEngine = new RatEyeEngine(GetRatEyeConfig(), RatStashDatabaseFromTarkovDev());
+        RatEyeEngine replacement = new(GetRatEyeConfig(), RatStashDatabaseFromTarkovDev());
+        RatEyeEngine? previous = null;
+        lock (NameScanLock)
+        {
+            lock (IconScanLock)
+            {
+                if (RatEyeEngine is not null)
+                    previous = RatEyeEngine;
+                RatEyeEngine = replacement;
+            }
+        }
+        previous?.Dispose();
     }
 
     private static RatEye.Config GetRatEyeConfig(bool highlighted = true)
@@ -239,6 +195,7 @@ public class RatScannerMain : INotifyPropertyChanged
             },
             ProcessingConfig = new Config.Processing()
             {
+                UseCache = RatConfig.IconScan.UseCachedIcons,
                 Scale = Config.Processing.Resolution2Scale(RatConfig.ScreenWidth, RatConfig.ScreenHeight),
                 Language = RatConfig.NameScan.Language,
                 IconConfig = new Config.Processing.Icon()
@@ -261,28 +218,33 @@ public class RatScannerMain : INotifyPropertyChanged
         }
 
         foreach (TarkovDev.GraphQL.Item i in items)
-        {
-            rsItems.Add(
-                new RatStash.Item()
-                {
-                    Id = i.Id,
-                    Name = i.Name,
-                    ShortName = i.ShortName,
-                }
-            );
-        }
+            rsItems.Add(ToRatStashItem(i));
         return RatStash.Database.FromItems(rsItems);
+    }
+
+    internal static RatStash.Item ToRatStashItem(TarkovDev.GraphQL.Item item)
+    {
+        _ = Enum.TryParse(item.BackgroundColor, ignoreCase: true, out TaxonomyColor backgroundColor);
+        return new RatStash.Item
+        {
+            Id = item.Id,
+            Name = item.Name,
+            ShortName = item.ShortName,
+            Width = Math.Max(1, item.Width),
+            Height = Math.Max(1, item.Height),
+            BackgroundColor = backgroundColor,
+        };
     }
 
     private void SeedInitialItem()
     {
         if (TarkovDevAPI.TryGetCachedItems(out TarkovItem[] items) && items.Length > 0)
         {
-            ItemScans.Enqueue(new DefaultItemScan(items[new Random().Next(items.Length)]));
+            ItemScans.Enqueue(new DefaultItemScan(items[Random.Shared.Next(items.Length)], isSeed: true));
             return;
         }
 
-        ItemScans.Enqueue(new DefaultItemScan(CreatePlaceholderItem()));
+        ItemScans.Enqueue(new DefaultItemScan(CreatePlaceholderItem(), isSeed: true));
         _ = Task.Run(() => WaitForItemsAndSeedAsync(TimeSpan.FromSeconds(30)));
     }
 
@@ -293,7 +255,7 @@ public class RatScannerMain : INotifyPropertyChanged
         {
             if (TarkovDevAPI.TryGetCachedItems(out TarkovItem[] items) && items.Length > 0)
             {
-                ItemScans.Enqueue(new DefaultItemScan(items[new Random().Next(items.Length)]));
+                ItemScans.Enqueue(new DefaultItemScan(items[Random.Shared.Next(items.Length)], isSeed: true));
                 Logger.LogInfo("Items cache ready; reinitializing RatEye...");
                 SetupRatEye();
                 return;
@@ -340,7 +302,7 @@ public class RatScannerMain : INotifyPropertyChanged
 
             position -= new Vector2(markerScanSize / 2, markerScanSize / 2);
 
-            Bitmap screenshot = GetScreenshot(position, new Size(sizeWidth, sizeHeight));
+            using Bitmap screenshot = GetScreenshot(position, new Size(sizeWidth, sizeHeight));
 
             // Scan the item
             RatEye.Processing.Inspection inspection = RatEyeEngine.NewInspection(screenshot);
@@ -372,7 +334,7 @@ public class RatScannerMain : INotifyPropertyChanged
             Rectangle bounds = Screen.AllScreens.First(screen => screen.Bounds.Contains(mousePosition)).Bounds;
 
             Vector2 position = new(bounds.X, bounds.Y);
-            Bitmap screenshot = GetScreenshot(position, bounds.Size);
+            using Bitmap screenshot = GetScreenshot(position, bounds.Size);
 
             // Scan the item
             RatEye.Processing.MultiInspection multiInspection = RatEyeEngine.NewMultiInspection(screenshot);
@@ -410,10 +372,10 @@ public class RatScannerMain : INotifyPropertyChanged
 
             Vector2 screenshotPosition = new(x, y);
             Size size = new(RatConfig.IconScan.ScanWidth, RatConfig.IconScan.ScanHeight);
-            Bitmap screenshot = GetScreenshot(screenshotPosition, size);
+            using Bitmap screenshot = GetScreenshot(screenshotPosition, size);
 
             // Scan the item
-            RatEye.Processing.Inventory inventory = RatEyeEngine.NewInventory(screenshot);
+            using RatEye.Processing.Inventory inventory = RatEyeEngine.NewInventory(screenshot);
             RatEye.Processing.Icon? icon = inventory.LocateIcon();
 
             if (icon?.DetectionConfidence <= 0 || icon?.Item == null)

@@ -24,8 +24,9 @@
         <MudStack Row="true" Justify="Justify.FlexEnd">
             <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.End" Spacing="0">
                 <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Center" Spacing="0">
-                    <MudAvatar Image="@Task.Trader?.ImageLink"
-                               Size="Size.Large" Style="float: left;" Square="true" Variant="Variant.Outlined" />
+                    <MudAvatar Size="Size.Large" Style="float: left;" Square="true" Variant="Variant.Outlined">
+                        <MudImage Src="@Task.Trader?.ImageLink" Alt="" />
+                    </MudAvatar>
                 </MudStack>
             </MudStack>
         </MudStack>
@@ -43,13 +44,6 @@
                         <MudIcon Icon="@Constants.Icon.TaskObjective.FromType(objective.Type)" />
                         <MudText Class="flex-1">@objective.Description</MudText>
                     </MudStack>
-                    @if (HasMapForObjective(objective)) {
-                        <MudIconButton Icon="@Icons.Material.Filled.Map" 
-                                      Size="Size.Small" 
-                                      Color="Color.Primary"
-                                      Title="View on map"
-                                      OnClick="@(() => OnMapClick.InvokeAsync((Task, objective)))" />
-                    }
                 </MudStack>
             }
         </MudStack>
@@ -71,20 +65,6 @@
 
     [Parameter]
     public bool IsExpanded { get; set; }
-
-    [Parameter]
-    public EventCallback<(TTask task, ITaskObjective objective)> OnMapClick { get; set; }
-
-    private bool HasMapForObjective(ITaskObjective objective) {
-        // Check if objective has zones with positions
-        if (objective is TaskObjectiveBasic basicObj && basicObj.Zones != null && basicObj.Zones.Any(z => z?.Position != null)) return true;
-        if (objective is TaskObjectiveItem itemObj && itemObj.Zones != null && itemObj.Zones.Any(z => z?.Position != null)) return true;
-        if (objective is TaskObjectiveMark markObj && markObj.Zones != null && markObj.Zones.Any(z => z?.Position != null)) return true;
-        if (objective is TaskObjectiveQuestItem questItemObj && questItemObj.Zones != null && questItemObj.Zones.Any(z => z?.Position != null)) return true;
-        if (objective is TaskObjectiveUseItem useItemObj && useItemObj.Zones != null && useItemObj.Zones.Any(z => z?.Position != null)) return true;
-        
-        return false;
-    }
 
     private void OpenURL(string? url) {
         if (string.IsNullOrEmpty(url)) return;

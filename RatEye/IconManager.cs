@@ -13,7 +13,7 @@ using Color = RatStash.Color;
 
 namespace RatEye
 {
-    internal class IconManager
+    internal class IconManager : IDisposable
     {
         private enum IconType
         {
@@ -89,6 +89,9 @@ namespace RatEye
         /// Reader / Writer lock of <see cref="_dynamicCorrelationDataLock"/>
         /// </summary>
         private readonly ReaderWriterLockSlim _dynamicCorrelationDataLock = new();
+        private readonly object _staticIconLoadLock = new();
+        private readonly HashSet<Vector2> _loadedStaticIconSizes = new();
+        private bool _disposed;
 
         /// <summary>
         /// Constructor for icon manager object
@@ -101,36 +104,43 @@ namespace RatEye
 
             var iconConfig = _config.ProcessingConfig.IconConfig;
             if (iconConfig.UseStaticIcons)
-                LoadStaticIcons();
+                LoadStaticCorrelationData();
         }
 
         #region Icon loading
 
-        private void LoadStaticIcons()
+        internal void EnsureStaticIconsLoaded(Vector2 slotSize)
         {
-            LoadStaticCorrelationData();
+            lock (_staticIconLoadLock)
+            {
+                if (_loadedStaticIconSizes.Contains(slotSize))
+                    return;
 
-            var newIcons = LoadNewIcons(_config.PathConfig.StaticIcons, IconType.Static);
-            StaticIconsLock.EnterWriteLock();
-            try
-            {
-                foreach (var icons in newIcons)
+                var newIcons = LoadNewIcons(_config.PathConfig.StaticIcons, IconType.Static, slotSize);
+                StaticIconsLock.EnterWriteLock();
+                try
                 {
-                    if (!StaticIcons.ContainsKey(icons.Key))
-                        StaticIcons.Add(icons.Key, new Dictionary<string, Mat>());
-                    foreach (var icon in icons.Value)
-                        StaticIcons[icons.Key].Add(icon.Key, icon.Value);
+                    foreach (var icons in newIcons)
+                    {
+                        if (!StaticIcons.ContainsKey(icons.Key))
+                            StaticIcons.Add(icons.Key, new Dictionary<string, Mat>());
+                        foreach (var icon in icons.Value)
+                            StaticIcons[icons.Key].Add(icon.Key, icon.Value);
+                    }
+
+                    _loadedStaticIconSizes.Add(slotSize);
                 }
-            }
-            finally
-            {
-                StaticIconsLock.ExitWriteLock();
+                finally
+                {
+                    StaticIconsLock.ExitWriteLock();
+                }
             }
         }
 
         private Dictionary<Vector2, Dictionary<string, Mat>> LoadNewIcons(
             string folderPath,
             IconType iconType,
+            Vector2 slotSizeFilter = null,
             int retryCount = 0
         )
         {
@@ -167,6 +177,8 @@ namespace RatEye
                             var item = GetItemUnsafe(iconKey);
                             if (item == null)
                                 return;
+                            if (slotSizeFilter != null && new Vector2(item.GetSlotSize()) != slotSizeFilter)
+                                return;
 
                             // Skip existing icons
                             if (iconType == IconType.Static && StaticIcons.Any(x => x.Value.ContainsKey(iconKey)))
@@ -180,7 +192,7 @@ namespace RatEye
 
                             iconPath = cacheHit ? cacheIconPath : iconPath;
 
-                            var icon = new Mat();
+                            Mat icon;
                             if (cacheHit)
                             {
                                 icon = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
@@ -193,7 +205,10 @@ namespace RatEye
 
                             // Do not add the icon to the list, if its size cannot be converted to slots
                             if (!IsValidPixelSize(icon.Width) || !IsValidPixelSize(icon.Height))
+                            {
+                                icon.Dispose();
                                 return;
+                            }
 
                             // Add the icon to the cache if caching is enabled and doesn't already contain it
                             if (useCache && !cacheHit)
@@ -234,7 +249,7 @@ namespace RatEye
                 if (retryCount > 0)
                 {
                     Thread.Sleep(100);
-                    return LoadNewIcons(folderPath, iconType, retryCount - 1);
+                    return LoadNewIcons(folderPath, iconType, slotSizeFilter, retryCount - 1);
                 }
             }
 
@@ -253,8 +268,10 @@ namespace RatEye
             var black = new Scalar(0, 0, 0, 255);
             using var background = new Mat(transparentIcon.Size(), MatType.CV_8UC4).SetTo(black);
 
-            var gridCell = new Bitmap(new MemoryStream(Resources.cell_full_border)).ToMat();
-            gridCell = gridCell.Repeat(
+            using var cellStream = new MemoryStream(Resources.cell_full_border);
+            using var cellBitmap = new Bitmap(cellStream);
+            using var baseGridCell = cellBitmap.ToMat();
+            using var gridCell = baseGridCell.Repeat(
                 PixelsToSlots(transparentIcon.Width),
                 PixelsToSlots(transparentIcon.Height),
                 -1,
@@ -275,7 +292,7 @@ namespace RatEye
             using var tmp1 = gridCell.AlphaBlend(background).RemoveTransparency();
             using var tmp2 = gridColor.AlphaBlend(tmp1);
             using var tmp3 = border.AlphaBlend(tmp2);
-            var result = transparentIcon.AlphaBlend(tmp3);
+            using var result = transparentIcon.AlphaBlend(tmp3);
 
             // Add weapon mod icon
             if (item is WeaponMod)
@@ -286,7 +303,8 @@ namespace RatEye
                     var top = result.Height - weaponModIcon.Height - 2;
                     var right = result.Width - weaponModIcon.Width - 2;
                     using var weaponModIconPadded = weaponModIcon.AddPadding(2, top, right, 2);
-                    result = weaponModIconPadded.AlphaBlend(result);
+                    using var resultWithMod = weaponModIconPadded.AlphaBlend(result);
+                    return resultWithMod.CvtColor(ColorConversionCodes.BGRA2BGR, 3);
                 }
             }
 
@@ -296,25 +314,27 @@ namespace RatEye
 
         private Mat GetWeaponModIcon(Item item)
         {
-            using var bg = GetWeaponModIconBackground(item);
+            var bg = GetWeaponModIconBackground(item);
             using var fg = GetWeaponModIconForeground(item);
             if (fg == null)
                 return bg;
 
-            using var paddedBg = bg.AddPadding(bg.Width, bg.Height, bg.Width, bg.Height);
+            using (bg)
+            {
+                using var paddedBg = bg.AddPadding(bg.Width, bg.Height, bg.Width, bg.Height);
 
-            var hPadding = (bg.Width * 3) - fg.Width;
-            var vPadding = (bg.Height * 3) - fg.Height;
+                var hPadding = (bg.Width * 3) - fg.Width;
+                var vPadding = (bg.Height * 3) - fg.Height;
 
-            var left = hPadding / 2 + hPadding % 2;
-            var top = vPadding / 2 + vPadding % 2;
-            var right = hPadding / 2;
-            var bottom = vPadding / 2;
-            using var paddedFg = fg.AddPadding(left, top, right, bottom);
+                var left = hPadding / 2 + hPadding % 2;
+                var top = vPadding / 2 + vPadding % 2;
+                var right = hPadding / 2;
+                var bottom = vPadding / 2;
+                using var paddedFg = fg.AddPadding(left, top, right, bottom);
 
-            using var blended = paddedFg.AlphaBlend(paddedBg);
-            var croppedBlended = blended.RemovePadding(bg.Width, bg.Height, bg.Width, bg.Height);
-            return croppedBlended;
+                using var blended = paddedFg.AlphaBlend(paddedBg);
+                return blended.RemovePadding(bg.Width, bg.Height, bg.Width, bg.Height);
+            }
         }
 
         private Mat GetWeaponModIconBackground(Item item)
@@ -328,7 +348,9 @@ namespace RatEye
             };
             if (background == null)
                 return null;
-            return new Bitmap(new MemoryStream(background)).ToMat();
+            using var stream = new MemoryStream(background);
+            using var bitmap = new Bitmap(stream);
+            return bitmap.ToMat();
         }
 
         private Mat GetWeaponModIconForeground(Item item)
@@ -359,7 +381,9 @@ namespace RatEye
             };
             if (foreground == null)
                 return null;
-            return new Bitmap(new MemoryStream(foreground)).ToMat();
+            using var stream = new MemoryStream(foreground);
+            using var bitmap = new Bitmap(stream);
+            return bitmap.ToMat();
         }
 
         #endregion
@@ -556,7 +580,7 @@ namespace RatEye
         /// <returns>Hash as hex string</returns>
         private string GetConfigHash()
         {
-            return new Config()
+            string configHash = new Config()
             {
                 ProcessingConfig = new Config.Processing()
                 {
@@ -571,6 +595,7 @@ namespace RatEye
                     },
                 },
             }.GetHash();
+            return ("template-v2:" + configHash).SHA256Hash();
         }
 
         /// <summary>
@@ -604,6 +629,35 @@ namespace RatEye
             using var fileStream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var textReader = new StreamReader(fileStream);
             return textReader.ReadToEnd();
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            StaticIconsLock.EnterWriteLock();
+            DynamicIconsLock.EnterWriteLock();
+            try
+            {
+                foreach (Mat icon in StaticIcons.Values.SelectMany(group => group.Values))
+                    icon.Dispose();
+                foreach (Mat icon in DynamicIcons.Values.SelectMany(group => group.Values))
+                    icon.Dispose();
+                StaticIcons.Clear();
+                DynamicIcons.Clear();
+            }
+            finally
+            {
+                DynamicIconsLock.ExitWriteLock();
+                StaticIconsLock.ExitWriteLock();
+            }
+
+            StaticIconsLock.Dispose();
+            DynamicIconsLock.Dispose();
+            _staticCorrelationDataLock.Dispose();
+            _dynamicCorrelationDataLock.Dispose();
+            _disposed = true;
         }
     }
 }

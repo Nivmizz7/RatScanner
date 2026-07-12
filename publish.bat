@@ -8,9 +8,11 @@ rmdir /s /q publish
 echo Publishing RatScanner project...
 dotnet publish RatScanner/RatScanner.csproj -c Release -o publish --runtime win-x64 -p:PublishSingleFile=true --self-contained true
 
-:: Download Updater
-echo Adding latest updater build...
-curl -L "https://github.com/RatScanner/RatUpdater/releases/latest/download/RatUpdater.exe" --output "publish/RatUpdater.exe"
+:: Include runtime data
+echo Adding latest RatScanner data...
+curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
+powershell -NoProfile -Command "Expand-Archive -LiteralPath 'publish\Data.zip' -DestinationPath 'publish\Data' -Force"
+del "publish\Data.zip"
 
 :: Zip
 where 7z

@@ -143,10 +143,19 @@ try {
     Write-Host "Raw benchmark: $outputPath"
 }
 finally {
+    $treeIds = Get-ProcessTreeIds -RootProcessId $root.Id
     if (-not $root.HasExited) {
         [void]$root.CloseMainWindow()
         if (-not $root.WaitForExit(5000)) {
             Stop-Process -Id $root.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    # WebView2 child processes can outlive their WPF parent. Only stop processes
+    # captured from this benchmark's tree so unrelated WebView sessions are untouched.
+    foreach ($processId in $treeIds) {
+        if ($processId -ne $root.Id) {
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
         }
     }
 }

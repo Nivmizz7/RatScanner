@@ -37,9 +37,7 @@
                             <ItemSearchResult Item="@item" IsExpanded="@(i == 0)" />
                         } 
                         else if (searchResult.Data is TTask task) {
-                            <TaskSearchResult Task="@task" 
-                                            IsExpanded="@(i == 0)" 
-                                            OnMapClick="@((tuple) => OpenMapForObjective(tuple.task, tuple.objective))" />
+                            <TaskSearchResult Task="@task" IsExpanded="@(i == 0)" />
                         } 
                         @* TODO: Re-enable map search results when MapViewer is fixed
                         else if (searchResult.Data is Map map) {
@@ -69,12 +67,6 @@
     private IEnumerable<SearchResult> _searchResults { get; set; } = new List<SearchResult>();
     private readonly SearchService _searchService = new();
 
-    // Map viewer state
-    private Map? _selectedMap = null;
-    private TTask? _selectedTask = null;
-    private ITaskObjective? _selectedObjective = null;
-    private List<TaskZone?>? _selectedObjectiveZones = null;
-
     private async void ExecuteSearch(string value) {
         var sanitizedValue = _searchService.SanitizeSearch(value);
         var results = Enumerable.Empty<SearchResult>();
@@ -85,49 +77,6 @@
         results = results.Where(result => result != null && result.Data != null);
         results = results.OrderBy(result => result.Score).Take(4);
         _searchResults = results;
-    }
-
-    private void OpenMapForObjective(TTask task, ITaskObjective objective) {
-        // TODO: Re-enable when MapViewer is fixed
-        return;
-        
-        // Get zones from the objective
-        ICollection<TaskZone?>? zones = null;
-        
-        if (objective is TaskObjectiveBasic basicObj) zones = basicObj.Zones;
-        else if (objective is TaskObjectiveItem itemObj) zones = itemObj.Zones;
-        else if (objective is TaskObjectiveMark markObj) zones = markObj.Zones;
-        else if (objective is TaskObjectiveQuestItem questItemObj) zones = questItemObj.Zones;
-        else if (objective is TaskObjectiveUseItem useItemObj) zones = useItemObj.Zones;
-        
-        if (zones == null || !zones.Any()) return;
-        
-        // Get the first zone with a position
-        TaskZone? zone = zones.FirstOrDefault(z => z?.Position != null);
-        
-        // Find the matching map
-        if (zone?.Map?.Id == null) return;
-        Map? map = TarkovDevAPI.GetMaps().FirstOrDefault(m => m.Id == zone.Map.Id);
-        
-        if (map == null) return;
-        
-        _selectedTask = task;
-        _selectedObjective = objective;
-        _selectedObjectiveZones = zones.Where(z => z?.Position != null).ToList();
-        OpenMapViewer(map);
-    }
-
-    private void OpenMapViewer(Map map) {
-        _selectedMap = map;
-        StateHasChanged();
-    }
-
-    private void CloseMapViewer() {
-        _selectedMap = null;
-        _selectedTask = null;
-        _selectedObjective = null;
-        _selectedObjectiveZones = null;
-        StateHasChanged();
     }
 
     [JSInvokable]

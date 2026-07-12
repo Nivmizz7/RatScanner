@@ -7,7 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Windows;
+using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 
 namespace RatScanner;
@@ -21,8 +21,6 @@ internal static class GitHubUpdateService
 {
     internal const string Owner = "tarkovtracker-org";
     internal const string Repo = "RatScanner";
-    internal const string UpdaterExeName = "RatUpdater.exe";
-
     private const string LatestReleaseApi = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
     private const string AssetZipName = "RatScanner.zip";
 
@@ -53,18 +51,18 @@ internal static class GitHubUpdateService
     /// <summary>
     /// Returns latest published release with a RatScanner.zip asset, or null on failure / no asset.
     /// </summary>
-    internal static LatestRelease? TryGetLatestRelease()
+    internal static async Task<LatestRelease?> TryGetLatestReleaseAsync()
     {
         try
         {
-            using HttpResponseMessage response = Http.GetAsync(LatestReleaseApi).GetAwaiter().GetResult();
+            using HttpResponseMessage response = await Http.GetAsync(LatestReleaseApi).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogWarning($"GitHub release check failed: HTTP {(int)response.StatusCode}");
                 return null;
             }
 
-            string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             JObject root = JObject.Parse(json);
 
             string? tag = root["tag_name"]?.Value<string>();
@@ -90,8 +88,8 @@ internal static class GitHubUpdateService
 
             if (string.IsNullOrEmpty(zipUrl))
             {
-                // Fallback to the conventional latest-download URL.
-                zipUrl = $"https://github.com/{Owner}/{Repo}/releases/latest/download/{AssetZipName}";
+                Logger.LogWarning($"Latest GitHub release does not contain {AssetZipName}.");
+                return null;
             }
 
             return new LatestRelease
@@ -179,11 +177,17 @@ internal static class GitHubUpdateService
             ProcessStartInfo psi = new()
             {
                 FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{applyScript}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = stagingRoot,
             };
+            psi.ArgumentList.Add("-NoProfile");
+            psi.ArgumentList.Add("-ExecutionPolicy");
+            psi.ArgumentList.Add("Bypass");
+            psi.ArgumentList.Add("-WindowStyle");
+            psi.ArgumentList.Add("Hidden");
+            psi.ArgumentList.Add("-File");
+            psi.ArgumentList.Add(applyScript);
             Process.Start(psi);
             return true;
         }
@@ -225,7 +229,7 @@ internal static class GitHubUpdateService
     private static void WriteApplyScript(string scriptPath, string installDir, string payloadDir, int appPid)
     {
         // Keep user config and local caches; only replace app binaries/assets from the zip.
-        string[] preserveNames = { "config.cfg", "RatScannerLog.txt", "RatEyeLog.txt" };
+        string[] preserveNames = { "config.cfg", "Log.txt", "RatScannerLog.txt", "RatEyeLog.txt" };
 
         StringBuilder sb = new();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
@@ -252,7 +256,9 @@ internal static class GitHubUpdateService
 
             # Give the main process a moment to call Environment.Exit.
             Start-Sleep -Milliseconds 500
-            [void](Wait-ProcessExit -ProcessId $appPid)
+            if (-not (Wait-ProcessExit -ProcessId $appPid)) {
+                throw "RatScanner did not exit before the update timeout."
+            }
 
             # Extra wait: single-file publish can hold locks briefly.
             Start-Sleep -Seconds 1

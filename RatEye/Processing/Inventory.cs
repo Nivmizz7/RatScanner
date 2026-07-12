@@ -9,7 +9,7 @@ namespace RatEye.Processing
     /// <summary>
     /// Represents a grid style inventory which can contain multiple <see cref="RatEye.Processing.Icon"/>
     /// </summary>
-    public class Inventory
+    public class Inventory : IDisposable
     {
         private readonly Config _config;
         private readonly Mat _image;
@@ -17,6 +17,7 @@ namespace RatEye.Processing
         private Mat _vertGrid;
         private List<Rect> _boundingBoxes = new();
         private List<Icon> _icons = new();
+        private bool _disposed;
 
         private Config.Processing ProcessingConfig => _config.ProcessingConfig;
 
@@ -403,7 +404,8 @@ namespace RatEye.Processing
                 topLeft -= scaledSlotSizeVec / 8;
                 size += scaledSlotSizeVec / 4;
 
-                var icon = _image.ToBitmap().Crop(topLeft.X, topLeft.Y, size.X, size.Y);
+                using var image = _image.ToBitmap();
+                var icon = image.Crop(topLeft.X, topLeft.Y, size.X, size.Y);
                 _icons.Add(new Icon(icon, topLeft, size, _config));
                 return true;
             }
@@ -487,7 +489,8 @@ namespace RatEye.Processing
                     Logger.LogDebugMat(debugMat, "inventory/icon");
                 }
 
-                var iconImage = _image.ToBitmap().Crop(bb.X, bb.Y, bb.Width, bb.Height);
+                using var image = _image.ToBitmap();
+                var iconImage = image.Crop(bb.X, bb.Y, bb.Width, bb.Height);
                 var icon = new Icon(iconImage, new(bb.X, bb.Y), new(bb.Width, bb.Height), _config);
                 _icons = new List<Icon> { icon };
                 return icon;
@@ -498,11 +501,18 @@ namespace RatEye.Processing
         /// <summary>
         /// Inventory destructor
         /// </summary>
-        ~Inventory()
+        public void Dispose()
         {
-            _image?.Dispose();
+            if (_disposed)
+                return;
+
+            foreach (Icon icon in _icons)
+                icon.Dispose();
+            _image.Dispose();
             _grid?.Dispose();
             _vertGrid?.Dispose();
+            _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

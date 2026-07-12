@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -15,7 +16,8 @@ internal static class Logger
 {
     private static readonly object SyncObject = new();
 
-    private static readonly Queue<string> Backlog = new();
+    private static readonly ConcurrentQueue<string> Backlog = new();
+    private static int _processingBacklog;
 
     private static bool Crashed = false;
 
@@ -142,7 +144,8 @@ internal static class Logger
     {
         string text = "[" + DateTime.UtcNow.ToUniversalTime().TimeOfDay + "] > " + content + "\n";
         Backlog.Enqueue(text);
-        Task.Run(() => ProcessBacklog());
+        if (Interlocked.CompareExchange(ref _processingBacklog, 1, 0) == 0)
+            _ = Task.Run(ProcessBacklog);
     }
 
     private static void AppendToLogRaw(string text)
@@ -153,16 +156,26 @@ internal static class Logger
 
     private static void ProcessBacklog()
     {
-        lock (SyncObject)
+        while (true)
         {
-            for (int i = 0; i < Backlog.Count; i++)
-                AppendToLogRaw(Backlog.Dequeue());
+            lock (SyncObject)
+            {
+                while (Backlog.TryDequeue(out string? entry))
+                    AppendToLogRaw(entry);
+            }
+
+            Interlocked.Exchange(ref _processingBacklog, 0);
+            if (Backlog.IsEmpty || Interlocked.CompareExchange(ref _processingBacklog, 1, 0) != 0)
+                return;
         }
     }
 
     internal static void Clear()
     {
-        File.Delete(RatConfig.Paths.LogFile);
+        lock (SyncObject)
+        {
+            File.Delete(RatConfig.Paths.LogFile);
+        }
     }
 
     internal static void ClearMats(string pattern = "*.png")
@@ -191,11 +204,7 @@ internal static class Logger
 
     private static void OpenFAQ(string message)
     {
-        // Remove everything after ':' which is commonly a path
-        message = message.Split(':')[0];
-        string url = ApiManager.GetResource(ApiManager.ResourceType.FAQLink);
-        url += "#:~:text=" + WebUtility.HtmlEncode(message);
-        OpenURL(url);
+        OpenURL(Constants.Links.FAQ);
     }
 
     private static void CreateGitHubIssue(string message, Exception? e)
@@ -212,7 +221,7 @@ internal static class Logger
 
         string labels = "bug";
 
-        string url = ApiManager.GetResource(ApiManager.ResourceType.GithubLink);
+        string url = Constants.Links.GitHub;
         url += "/issues/new";
         url += "?body=" + WebUtility.UrlEncode(body);
         url += "&title=" + WebUtility.UrlEncode(title);

@@ -29,10 +29,7 @@ public class ItemQueue : IEnumerable<ItemScan>
     }
 
     internal long? GetNextExpiration(long now) =>
-        queue
-            .Where(scan => scan.DissapearAt > now)
-            .Select(scan => (long?)scan.DissapearAt)
-            .Min();
+        queue.Where(scan => scan.DissapearAt > now).Select(scan => (long?)scan.DissapearAt).Min();
 
     public virtual void Enqueue(ItemScan item)
     {

@@ -54,8 +54,9 @@
                     var bestTrader = Item.GetBestTraderOffer();
                     var traderImage = Item.GetBestTraderOfferVendor()?.Trader?.ImageLink;
                 }
-                <MudAvatar Image="@traderImage"
-                           Size="Size.Medium" Style="float: left;" Square="true" Variant="Variant.Outlined" />
+                <MudAvatar Size="Size.Medium" Style="float: left;" Square="true" Variant="Variant.Outlined">
+                    <MudImage Src="@traderImage" Alt="" />
+                </MudAvatar>
                 <MudText Typo="Typo.subtitle2" Style="float: right;">@bestTrader?.PriceRub.AsRubs()</MudText>
             </MudStack>
         </MudStack>
@@ -68,9 +69,9 @@
             <MudTable T="Item" Items="@Item.GetAmmoOfSameCaliber()" Dense="true" FixedHeader="true" Elevation="0" Striped="true" Style="max-height: 300px; overflow-y: auto;" RowStyleFunc="@((ctx, _) => ctx.Id == Item.Id ? "background: #FFFF8040;" : "")">
                 <HeaderContent>
                     <MudTh Style="">Name</MudTh>
-                    <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<Item, object>(x=>x.Avg24HPrice)">Price</MudTableSortLabel></MudTh>
-                    <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<Item, object>(x=>(x.Properties as ItemPropertiesAmmo).Damage)">Damage</MudTableSortLabel></MudTh>
-                    <MudTh Style="text-align:right"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<Item, object>(x=>(x.Properties as ItemPropertiesAmmo).PenetrationPower)">Pen</MudTableSortLabel></MudTh>
+                    <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<Item, object>(x => x.Avg24HPrice ?? 0)">Price</MudTableSortLabel></MudTh>
+                    <MudTh Style="text-align:right"><MudTableSortLabel SortBy="new Func<Item, object>(x => x.Properties is ItemPropertiesAmmo ammo ? ammo.Damage ?? 0 : 0)">Damage</MudTableSortLabel></MudTh>
+                    <MudTh Style="text-align:right"><MudTableSortLabel InitialDirection="SortDirection.Ascending" SortBy="new Func<Item, object>(x => x.Properties is ItemPropertiesAmmo ammo ? ammo.PenetrationPower ?? 0 : 0)">Pen</MudTableSortLabel></MudTh>
                     <MudTh Style="text-align:right">Frag %</MudTh>
                     <MudTh Style="text-align:center">Armor Pen</MudTh>
                 </HeaderContent>

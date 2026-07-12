@@ -25,6 +25,8 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore Dependencies
         run: dotnet restore
+      - name: Test
+        run: dotnet test RatScanner.sln -c Release --no-restore
       - name: Publish
         run: dotnet publish RatScanner/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained
       - name: Include Data
@@ -32,8 +34,6 @@ jobs:
           curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
           7z x publish/Data.zip -opublish/Data
           Remove-Item publish/Data.zip
-      - name: Include Updater
-        run: curl -L "https://github.com/RatScanner/RatUpdater/releases/latest/download/RatUpdater.exe" --output "publish/RatUpdater.exe"
       - name: Zip Content
         run: 7z a -r RatScanner.zip ./publish/*
       - uses: actions/upload-artifact@v4
@@ -41,7 +41,7 @@ jobs:
           name: RatScanner
           path: ./publish/
       - name: Draft Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: RatScanner.zip
           draft: true

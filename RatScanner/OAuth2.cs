@@ -107,15 +107,13 @@ internal static class OAuth2
     {
         Logger.LogInfo("Exchanging code for tokens...");
 
-        FormUrlEncodedContent content = new(
-            [
-                new("grant_type", "authorization_code"),
-                new("code", code),
-                new("redirect_uri", client.RedirectUri),
-                new("client_id", client.Id),
-                new("code_verifier", codeVerifier),
-            ]
-        );
+        FormUrlEncodedContent content = new([
+            new("grant_type", "authorization_code"),
+            new("code", code),
+            new("redirect_uri", client.RedirectUri),
+            new("client_id", client.Id),
+            new("code_verifier", codeVerifier),
+        ]);
         return await RequestTokensAsync(client, content);
     }
 
@@ -123,9 +121,11 @@ internal static class OAuth2
     {
         Logger.LogInfo("Exchanging refresh token for tokens...");
 
-        FormUrlEncodedContent content = new(
-            [new("grant_type", "refresh_token"), new("refresh_token", token.RefreshToken), new("client_id", client.Id)]
-        );
+        FormUrlEncodedContent content = new([
+            new("grant_type", "refresh_token"),
+            new("refresh_token", token.RefreshToken),
+            new("client_id", client.Id),
+        ]);
         return await RequestTokensAsync(client, content);
     }
 

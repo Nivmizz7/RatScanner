@@ -15,7 +15,7 @@ namespace RatEye.Processing
     /// <summary>
     /// Represents an icon in the inventory
     /// </summary>
-    public class Icon
+    public class Icon : IDisposable
     {
         private readonly Config _config;
         private readonly Bitmap _icon;
@@ -26,6 +26,7 @@ namespace RatEye.Processing
         private Vector2 _itemPosition;
         private bool _rotated;
         private string _ocrTitle = "";
+        private bool _disposed;
 
         private Config.Processing ProcessingConfig => _config.ProcessingConfig;
         private Config.Path PathConfig => _config.PathConfig;
@@ -208,6 +209,7 @@ namespace RatEye.Processing
             var slotSize = rotated ? new Vector2(iconSlotSize.Y, iconSlotSize.X) : iconSlotSize;
             if (IconConfig.UseStaticIcons)
             {
+                iconManager.EnsureStaticIconsLoaded(slotSize);
                 if (iconManager.StaticIcons.ContainsKey(slotSize))
                 {
                     iconManager.StaticIconsLock.EnterReadLock();
@@ -289,8 +291,9 @@ namespace RatEye.Processing
             var leftCutoff = 4;
 
             // Setup tesseract
-            Logger.LogDebugMat(_scaledIcon.ToMat());
-            var topText = _scaledIcon.Crop(leftCutoff, topCutoff, _scaledIcon.Width - leftCutoff, 24);
+            using var scaledIconMat = _scaledIcon.ToMat();
+            Logger.LogDebugMat(scaledIconMat);
+            using var topText = _scaledIcon.Crop(leftCutoff, topCutoff, _scaledIcon.Width - leftCutoff, 24);
             using var topTextMat = topText.ToMat();
 
             // Gray scale image
@@ -309,33 +312,43 @@ namespace RatEye.Processing
                 new Scalar(113 * (255f / 180f), 24, 217)
             );
 
-            Cv2.MorphologyEx(colorFilter, colorFilter, MorphTypes.Close, Mat.Ones(2, 2));
+            using var morphologyStructure = Mat.Ones(MatType.CV_8U, new[] { 2, 2 }).ToMat();
+            Cv2.MorphologyEx(colorFilter, colorFilter, MorphTypes.Close, morphologyStructure);
             Cv2.BitwiseNot(colorFilter, colorFilter);
             Logger.LogDebugMat(colorFilter);
 
-            using var final = colorFilter.ToBitmap().Rescale(2);
-            Logger.LogDebugBitmap(final);
-
-            // Convert to Pix
-            using var pix = PixConverter.ToPix(final);
-
-            // OCR
-            Logger.LogDebug("Applying OCR...");
-            using var result = GetTesseractEngine().Process(pix);
-            var text = result.GetText();
-
-            var r = result.GetSegmentedRegions(PageIteratorLevel.TextLine);
-            foreach (var x in r)
+            using var filteredBitmap = colorFilter.ToBitmap();
+            Bitmap final = filteredBitmap.Rescale(2);
+            try
             {
-                Logger.LogDebug("TEXT: " + x);
-            }
-            Logger.LogDebugMat(topTextMat, "lalalla");
+                Logger.LogDebugBitmap(final);
 
-            var rgx = new Regex("[^a-zA-Z0-9 -\\.]");
-            _itemPosition = Vector2.Zero;
-            _ocrTitle = rgx.Replace(text.CyrillicToLatin().Trim(), "").Trim();
-            Logger.LogDebug("Read: " + _ocrTitle);
-            SetOCRItem();
+                // Convert to Pix
+                using var pix = PixConverter.ToPix(final);
+
+                // OCR
+                Logger.LogDebug("Applying OCR...");
+                using var result = GetTesseractEngine().Process(pix);
+                var text = result.GetText();
+
+                var r = result.GetSegmentedRegions(PageIteratorLevel.TextLine);
+                foreach (var x in r)
+                {
+                    Logger.LogDebug("TEXT: " + x);
+                }
+                Logger.LogDebugMat(topTextMat, "lalalla");
+
+                var rgx = new Regex("[^a-zA-Z0-9 -\\.]");
+                _itemPosition = Vector2.Zero;
+                _ocrTitle = rgx.Replace(text.CyrillicToLatin().Trim(), "").Trim();
+                Logger.LogDebug("Read: " + _ocrTitle);
+                SetOCRItem();
+            }
+            finally
+            {
+                if (!ReferenceEquals(final, filteredBitmap))
+                    final.Dispose();
+            }
         }
 
         /// <summary>
@@ -402,6 +415,18 @@ namespace RatEye.Processing
             };
 
             return IconConfig.TesseractEngine;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            if (_scaledIcon != null && !ReferenceEquals(_scaledIcon, _icon))
+                _scaledIcon.Dispose();
+            _icon.Dispose();
+            _disposed = true;
+            GC.SuppressFinalize(this);
         }
     }
 }

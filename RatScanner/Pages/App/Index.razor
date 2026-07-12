@@ -17,7 +17,12 @@
     </div>
 
     @if (_recent.Count > 0) { <section class="recent" aria-label="Recent scans"><span>Recent scans</span>@foreach (ItemScan scan in _recent) { <button class="thumb @(_result?.Item.Id == scan.Item.Id ? "selected" : null)" title="@scan.Item.Name" @onclick="() => SelectRecent(scan)"><img src="@scan.Item.IconLink" alt="" /></button> }</section> }
-    @if (_result is not null) {
+    @if (_result is null) {
+    <section class="empty-state" aria-live="polite">
+        <MudIcon Icon="@Icons.Material.Filled.CenterFocusWeak" />
+        <div><strong>Ready to scan</strong><span>Inspect or click an item in Escape from Tarkov, or search above.</span></div>
+    </section>
+    } else {
     @if (!IsScannerActive) { <section class="state-banner"><strong>Scanner paused</strong><span>Enable name or icon scanning in Settings to resume.</span></section> }
     @if (_result.Recognition.Confidence is < .7f) { <section class="state-banner warning"><strong>This match may be incorrect.</strong><span>Search for a different item if the detected result is wrong.</span></section> }
     <article class="result-card" aria-live="polite" aria-label="Current scan result">
@@ -50,12 +55,12 @@
     private int? Difference => _result?.Pricing.FleaPrice is int flea && _result.Trader?.TotalPrice is int trader ? flea - trader : null;
     private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
 
-    protected override void OnInitialized() { RefreshResult(); if (History.Selected is not null) { _result = History.Selected; History.Selected = null; } AddRecent(MenuVM.LastItemScan); MenuVM.PropertyChanged += OnResultChanged; }
-    private void RefreshResult() => _result = ScanResultAdapter.Map(MenuVM);
-    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) => await InvokeAsync(() => { RefreshResult(); if (e.PropertyName == nameof(RatScannerMain.ItemScans)) AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
-    private void AddRecent(ItemScan scan) { _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id); _recent.Insert(0, scan); if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6); History.Record(ScanResultAdapter.Map(scan, MenuVM, false)); }
+    protected override void OnInitialized() { RefreshResult(); if (History.Selected is not null) { _result = History.Selected; History.Selected = null; } if (!MenuVM.LastItemScan.IsSeed) AddRecent(MenuVM.LastItemScan); MenuVM.PropertyChanged += OnResultChanged; }
+    private void RefreshResult() => _result = MenuVM.LastItemScan.IsSeed ? null : ScanResultAdapter.Map(MenuVM);
+    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) => await InvokeAsync(() => { RefreshResult(); if (e.PropertyName == nameof(RatScannerMain.ItemScans) && !MenuVM.LastItemScan.IsSeed) AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
+    private void AddRecent(ItemScan scan) { if (scan.IsSeed) return; _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id); _recent.Insert(0, scan); if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6); History.Record(ScanResultAdapter.Map(scan, MenuVM, false)); }
     private void SelectRecent(ItemScan scan) => _result = ScanResultAdapter.Map(scan, MenuVM, true);
-    private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value) { _items ??= TarkovDevAPI.GetItems().ToList(); return System.Threading.Tasks.Task.FromResult(_items.Where(i => string.IsNullOrWhiteSpace(value) || (i.Name?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false) || (i.ShortName?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)).Take(8)); }
+    private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value) { if (_items is null || _items.Count == 0) { List<Item> available = TarkovDevAPI.GetItems().ToList(); if (available.Count > 0) _items = available; } return System.Threading.Tasks.Task.FromResult((_items ?? []).Where(i => string.IsNullOrWhiteSpace(value) || (i.Name?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false) || (i.ShortName?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)).Take(8)); }
     private void SelectItem(Item item) { if (item is not null) MenuVM.ItemScans.Enqueue(new DefaultItemScan(item)); }
     private string FormatDifference() => Difference is int value ? $"{(value > 0 ? "+" : string.Empty)}{value:N0} ₽" : "Unavailable";
     private static string RequirementTitle(RequirementViewModel value) => value.Status == RequirementStatus.Required ? $"Needed: {value.RemainingRequired}" : value.Status == RequirementStatus.NotRequired ? "Not required" : "Unavailable";

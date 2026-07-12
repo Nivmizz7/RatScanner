@@ -25,7 +25,10 @@ internal sealed record ScanItemViewModel(
     int Quantity,
     int Width,
     int Height
-) { public int SlotCount => Math.Max(1, Width * Height); }
+)
+{
+    public int SlotCount => Math.Max(1, Width * Height);
+}
 
 internal sealed record RecognitionViewModel(float? Confidence, string Label, bool IsManualSelection);
 
@@ -38,9 +41,28 @@ internal sealed record PricingViewModel(
 
 internal sealed record TraderViewModel(string? Name, string? ImageUrl, int? TotalPrice, int? PricePerSlot);
 
-internal enum RecommendationType { KeepForQuest, KeepForHideout, SellOnFlea, SellToTrader, PriceUnavailable }
-internal sealed record RecommendationViewModel(RecommendationType Type, string Title, string Explanation, int? DifferenceAmount, int? DifferencePercent);
+internal enum RecommendationType
+{
+    KeepForQuest,
+    KeepForHideout,
+    SellOnFlea,
+    SellToTrader,
+    PriceUnavailable,
+}
 
-internal enum RequirementStatus { NotRequired, Required, Unavailable }
+internal sealed record RecommendationViewModel(
+    RecommendationType Type,
+    string Title,
+    string Explanation,
+    int? DifferenceAmount,
+    int? DifferencePercent
+);
+
+internal enum RequirementStatus
+{
+    NotRequired,
+    Required,
+    Unavailable,
+}
 
 internal sealed record RequirementViewModel(RequirementStatus Status, int? RemainingRequired);

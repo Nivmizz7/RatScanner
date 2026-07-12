@@ -21,7 +21,12 @@ internal static class RatConfig
     private static extern IntPtr MonitorFromPoint([In] Point pt, [In] uint dwFlags);
 
     [DllImport("Shcore.dll")]
-    private static extern IntPtr GetDpiForMonitor([In] IntPtr hmonitor, [In] DpiType dpiType, [Out] out uint dpiX, [Out] out uint dpiY);
+    private static extern IntPtr GetDpiForMonitor(
+        [In] IntPtr hmonitor,
+        [In] DpiType dpiType,
+        [Out] out uint dpiX,
+        [Out] out uint dpiY
+    );
 
     // Version
     public static string Version => Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion ?? "Unknown";

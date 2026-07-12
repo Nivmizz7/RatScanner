@@ -160,7 +160,8 @@ namespace RatEye.Processing
         {
             SatisfyState(State.Default);
 
-            var (confidence, position) = GetMarkerPosition(GetScaledMarker());
+            using Bitmap marker = GetScaledMarker();
+            var (confidence, position) = GetMarkerPosition(marker);
             MarkerConfidence = confidence;
             MarkerPosition = position;
         }
@@ -202,7 +203,7 @@ namespace RatEye.Processing
             position.X += GetHorizontalTitleSearchOffset();
 
             // Find end of the title bar
-            var scaledMarker = GetScaledMarker();
+            using Bitmap scaledMarker = GetScaledMarker();
             var closeBtnCenterHeight = MarkerPosition.Y + (scaledMarker.Height / 2);
             var lowC = InspectionConfig.CloseButtonColorLowerBound;
             var upC = InspectionConfig.CloseButtonColorUpperBound;
@@ -227,13 +228,20 @@ namespace RatEye.Processing
             }
 
             // Crop image to title search box
-            var searchBox = _image.Crop(position.X, position.Y, width, height);
+            using Bitmap searchBox = _image.Crop(position.X, position.Y, width, height);
 
             // Rescale title search box to 4k, adjusting the font size to the training data
             // We multiply the inverse scale with 2f to rescale to 4k instead of 1080p
-            var rescaledSearchBox = searchBox.Rescale(ProcessingConfig.InverseScale * 2f);
-
-            Title = OCR(rescaledSearchBox);
+            Bitmap rescaledSearchBox = searchBox.Rescale(ProcessingConfig.InverseScale * 2f);
+            try
+            {
+                Title = OCR(rescaledSearchBox);
+            }
+            finally
+            {
+                if (!ReferenceEquals(rescaledSearchBox, searchBox))
+                    rescaledSearchBox.Dispose();
+            }
         }
 
         /// <summary>
@@ -248,14 +256,15 @@ namespace RatEye.Processing
 
             // Gray scale image
             Logger.LogDebug("Gray scaling...");
-            var cvu83 = mat.CvtColor(ColorConversionCodes.BGR2GRAY, 1);
+            using var grayscale = mat.CvtColor(ColorConversionCodes.BGR2GRAY, 1);
 
             // Binarize image
             Logger.LogDebug("Binarizing...");
-            cvu83 = cvu83.Threshold(120, 255, ThresholdTypes.BinaryInv);
+            using var binary = grayscale.Threshold(120, 255, ThresholdTypes.BinaryInv);
 
             // Convert to Pix
-            using var pix = PixConverter.ToPix(cvu83.ToBitmap());
+            using Bitmap binaryBitmap = binary.ToBitmap();
+            using var pix = PixConverter.ToPix(binaryBitmap);
 
             // OCR
             Logger.LogDebug("Applying OCR...");
@@ -320,8 +329,16 @@ namespace RatEye.Processing
         /// <returns>A rescaled and alpha blended version of <see cref="Config.Processing.Inspection.Marker"/></returns>
         private Bitmap GetScaledMarker()
         {
-            var output = InspectionConfig.Marker.Rescale(InspectionConfig.MarkerItemScale * ProcessingConfig.Scale);
-            return output.TransparentToColor(InspectionConfig.MarkerBackgroundColor);
+            Bitmap output = InspectionConfig.Marker.Rescale(InspectionConfig.MarkerItemScale * ProcessingConfig.Scale);
+            try
+            {
+                return output.TransparentToColor(InspectionConfig.MarkerBackgroundColor);
+            }
+            finally
+            {
+                if (!ReferenceEquals(output, InspectionConfig.Marker))
+                    output.Dispose();
+            }
         }
 
         /// <summary>
@@ -331,7 +348,8 @@ namespace RatEye.Processing
         /// <returns>The distance between the right edge of the marker and the beginning of the title search box</returns>
         private int GetHorizontalTitleSearchOffset()
         {
-            var width = GetScaledMarker().Width;
+            using Bitmap marker = GetScaledMarker();
+            var width = marker.Width;
             return (int)(width * InspectionConfig.HorizontalTitleSearchOffsetFactor);
         }
 

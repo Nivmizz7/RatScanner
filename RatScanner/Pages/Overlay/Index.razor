@@ -19,8 +19,8 @@
             {
                 var leftPos = iconScan.GetToolTipPosition().X - VirtualScreenOffset.XOffset;
                 var topPos = iconScan.GetToolTipPosition().Y - VirtualScreenOffset.YOffset;
-                var width = iconScan.Icon.ItemSize.X;
-                var height = iconScan.Icon.ItemSize.Y;
+                var width = iconScan.ItemSize.X;
+                var height = iconScan.ItemSize.Y;
 
                 <div style="font-size: smaller; position: absolute; left: @(leftPos)px; top: @(topPos)px; width: @(width)px; height: @(height)px; ">
                     <div style="position: relative; width: 100%; height: 100%;
@@ -48,8 +48,9 @@
                             {
                                 <div class="d-flex align-center stroke">
                                     @item.GetBestTraderOffer()?.PriceRub.ToShortString().AsRubs()
-                                    <MudAvatar Image="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)"
-                                               Size="Size.Small" Style="float: right;" Class="ml-1" />
+                                    <MudAvatar Size="Size.Small" Style="float: right;" Class="ml-1">
+                                        <MudImage Src="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)" Alt="" />
+                                    </MudAvatar>
                                 </div>
                             }
 
@@ -85,8 +86,9 @@
                     {
                         <div class="d-flex align-center stroke">
                             @item.GetBestTraderOffer()?.PriceRub.ToShortString().AsRubs()
-                            <MudAvatar Image="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)"
-                                       Size="Size.Small" Style="float: right;" Class="ml-1" />
+                            <MudAvatar Size="Size.Small" Style="float: right;" Class="ml-1">
+                                <MudImage Src="@(item.GetBestTraderOfferVendor()?.Trader?.ImageLink)" Alt="" />
+                            </MudAvatar>
                         </div>
                     }
 

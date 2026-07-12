@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using RatScanner.FetchModels.TarkovTracker;
 using RatScanner.TarkovDev.GraphQL;
@@ -67,14 +68,13 @@ public static class ItemExtensions
                     if (!showNonFir && !oGiveItem.FoundInRaid)
                         continue; // Skip if item is not FIR
                     needed = oGiveItem.Count;
-                    if (task.KappaRequired == true)
-                        kappaCount += oGiveItem.Count;
                     // Subtract amount of already collected items
                     List<Progress> objectiveProgress = progress
                         .TaskObjectives.Where(p => p.Id == objective.Id)
                         .ToList();
                     foreach (Progress p in objectiveProgress)
                         needed -= p.Complete ? oGiveItem.Count : p.Count;
+                    needed = Math.Max(0, needed);
                     count += needed;
                     if (task.KappaRequired == true)
                         kappaCount += needed;
@@ -91,6 +91,7 @@ public static class ItemExtensions
                         .ToList();
                     foreach (Progress p in objectiveProgress)
                         needed -= p.Complete ? oPlantItem.Count : p.Count;
+                    needed = Math.Max(0, needed);
                     count += needed;
                     if (task.KappaRequired == true)
                         kappaCount += needed;
@@ -107,6 +108,7 @@ public static class ItemExtensions
                         .ToList();
                     foreach (Progress p in objectiveProgress)
                         needed -= 1;
+                    needed = Math.Max(0, needed);
                     count += needed;
                     if (task.KappaRequired == true)
                         kappaCount += needed;
@@ -123,6 +125,7 @@ public static class ItemExtensions
                         .ToList();
                     foreach (Progress p in objectiveProgress)
                         needed -= 1;
+                    needed = Math.Max(0, needed);
                     count += needed;
                     if (task.KappaRequired == true)
                         kappaCount += needed;
@@ -159,12 +162,13 @@ public static class ItemExtensions
                     if (requiredItem?.Item?.Id != item.Id)
                         continue;
 
-                    count += requiredItem.Count;
+                    int remaining = requiredItem.Count;
                     List<Progress> objectiveProgress = progress
                         .HideoutParts.Where(p => p.Id == requiredItem.Id)
                         .ToList();
                     foreach (Progress p in objectiveProgress)
-                        count -= p.Complete ? requiredItem.Count : p.Count;
+                        remaining -= p.Complete ? requiredItem.Count : p.Count;
+                    count += Math.Max(0, remaining);
                 }
             }
         }
@@ -174,7 +178,7 @@ public static class ItemExtensions
     public static int GetAvg24hMarketPricePerSlot(this Item item)
     {
         int price = item.Avg24HPrice ?? 0;
-        int size = item.Width * item.Height;
+        int size = Math.Max(1, item.Width * item.Height);
         return price / size;
     }
 

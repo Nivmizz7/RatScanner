@@ -1,6 +1,3 @@
-[*.{cs,csx}]
-indent_size=4
-tab_width=4
 # Re-enable CS8618 for real source after .globalconfig silences pathless generated trees.
 dotnet_diagnostic.CS8618.severity = warning
 
@@ -36,3 +33,8 @@ dotnet_style_require_accessibility_modifiers=for_non_interface_members:hint
 # ReSharper properties
 resharper_csharp_empty_block_style=together_same_line
 resharper_place_expr_method_on_single_line=true
+
+[*.{cs,csx}]
+indent_style=space
+indent_size=4
+tab_width=4

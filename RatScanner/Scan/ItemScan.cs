@@ -13,6 +13,8 @@ public abstract class ItemScan
 
     public long DissapearAt { get; set; } = 0;
 
+    public bool IsSeed { get; init; }
+
     // Scan tooltip location
     public abstract Vector2 GetToolTipPosition();
 }

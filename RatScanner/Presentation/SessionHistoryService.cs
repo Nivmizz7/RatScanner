@@ -13,6 +13,7 @@ internal sealed class SessionHistoryService
     {
         _items.RemoveAll(existing => existing.Item.Id == result.Item.Id);
         _items.Insert(0, result with { ScannedAt = DateTimeOffset.Now, IsHistoricalResult = true });
-        if (_items.Count > 50) _items.RemoveRange(50, _items.Count - 50);
+        if (_items.Count > 50)
+            _items.RemoveRange(50, _items.Count - 50);
     }
 }
