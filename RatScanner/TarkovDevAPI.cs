@@ -74,8 +74,7 @@ public static class TarkovDevAPI
     {
         MissingMemberHandling = MissingMemberHandling.Ignore,
         NullValueHandling = NullValueHandling.Ignore,
-        TypeNameHandling = TypeNameHandling.Auto,
-        TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
+        TypeNameHandling = TypeNameHandling.None,
     };
 
     private static async Task<string> GetResponseString(string query)
@@ -404,13 +403,22 @@ public static class TarkovDevAPI
     /// </summary>
     public static async Task InitializeCache()
     {
-        await Task.WhenAll(
-                QueueRequest<Item>(ItemsQueryKey(), ItemsQuery, RatConfig.MediumTTL),
-                QueueRequest<TTask>(TasksQueryKey(), TasksQuery, RatConfig.LongTTL),
-                QueueRequest<HideoutStation>(HideoutStationsQueryKey(), HideoutStationsQuery, RatConfig.LongTTL),
-                QueueRequest<Map>(MapsQueryKey(), MapsQuery, RatConfig.LongTTL)
-            )
-            .ConfigureAwait(false);
+        long now = DateTimeOffset.Now.ToUnixTimeSeconds();
+        List<Task> refreshes = [];
+
+        if (IsCacheExpired(ItemsQueryKey(), now))
+            refreshes.Add(QueueRequest<Item>(ItemsQueryKey(), ItemsQuery, RatConfig.MediumTTL));
+        if (IsCacheExpired(TasksQueryKey(), now))
+            refreshes.Add(QueueRequest<TTask>(TasksQueryKey(), TasksQuery, RatConfig.LongTTL));
+        if (IsCacheExpired(HideoutStationsQueryKey(), now))
+            refreshes.Add(
+                QueueRequest<HideoutStation>(HideoutStationsQueryKey(), HideoutStationsQuery, RatConfig.LongTTL)
+            );
+        if (IsCacheExpired(MapsQueryKey(), now))
+            refreshes.Add(QueueRequest<Map>(MapsQueryKey(), MapsQuery, RatConfig.LongTTL));
+
+        if (refreshes.Count > 0)
+            await Task.WhenAll(refreshes).ConfigureAwait(false);
     }
 
     public static Item[] GetItems(LanguageCode language, GameMode gameMode) =>
@@ -458,68 +466,46 @@ public static class TarkovDevAPI
 
     private static string ItemsQuery() => ItemsQuery(RatConfig.NameScan.Language.ToTarkovDevType(), RatConfig.GameMode);
 
-    private static string ItemsQuery(LanguageCode language, GameMode gameMode)
+    internal static string ItemsQuery(LanguageCode language, GameMode gameMode)
     {
         return new QueryQueryBuilder()
             .WithItems(
                 new ItemQueryBuilder()
-                    .WithAllScalarFields()
+                    .WithId()
+                    .WithName()
+                    .WithShortName()
+                    .WithUpdated()
+                    .WithWidth()
+                    .WithHeight()
+                    .WithWikiLink()
+                    .WithLink()
+                    .WithIconLink()
+                    .WithBaseImageLink()
+                    .WithAvg24HPrice()
+                    .WithTypes()
                     .WithProperties(
                         new ItemPropertiesQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithItemPropertiesAmmoFragment(new ItemPropertiesAmmoQueryBuilder().WithAllScalarFields())
-                            .WithItemPropertiesFoodDrinkFragment(
-                                new ItemPropertiesFoodDrinkQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithStimEffects(new StimEffectQueryBuilder().WithAllScalarFields())
-                            )
-                            .WithItemPropertiesStimFragment(
-                                new ItemPropertiesStimQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithStimEffects(new StimEffectQueryBuilder().WithAllScalarFields())
-                            )
-                            .WithItemPropertiesMedicalItemFragment(
-                                new ItemPropertiesMedicalItemQueryBuilder().WithAllScalarFields()
-                            )
-                            .WithItemPropertiesMedKitFragment(
-                                new ItemPropertiesMedKitQueryBuilder().WithAllScalarFields()
+                            .WithItemPropertiesAmmoFragment(
+                                new ItemPropertiesAmmoQueryBuilder()
+                                    .WithCaliber()
+                                    .WithDamage()
+                                    .WithPenetrationPower()
+                                    .WithFragmentationChance()
                             )
                     )
                     .WithSellFor(
                         new ItemPriceQueryBuilder()
-                            .WithAllScalarFields()
+                            .WithPriceRub()
                             .WithVendor(
                                 new VendorQueryBuilder()
-                                    .WithAllScalarFields()
                                     .WithTraderOfferFragment(
                                         new TraderOfferQueryBuilder()
-                                            .WithAllScalarFields()
-                                            .WithTrader(new TraderQueryBuilder().WithId())
+                                            .WithName()
+                                            .WithNormalizedName()
+                                            .WithTrader(new TraderQueryBuilder().WithId().WithImageLink())
                                     )
                             )
-                    )
-                    .WithBuyFor(
-                        new ItemPriceQueryBuilder()
-                            .WithAllScalarFields()
-                            .WithVendor(
-                                new VendorQueryBuilder()
-                                    .WithAllScalarFields()
-                                    .WithTraderOfferFragment(
-                                        new TraderOfferQueryBuilder()
-                                            .WithAllScalarFields()
-                                            .WithTrader(new TraderQueryBuilder().WithId())
-                                    )
-                            )
-                    )
-                    .WithCategory(new ItemCategoryQueryBuilder().WithAllScalarFields())
-                    .WithCategories(new ItemCategoryQueryBuilder().WithAllScalarFields())
-                    .WithUsedInTasks(new TaskQueryBuilder().WithId())
-                    .WithReceivedFromTasks(new TaskQueryBuilder().WithId())
-                    .WithBartersFor(new BarterQueryBuilder().WithId())
-                    .WithBartersUsing(new BarterQueryBuilder().WithId())
-                    .WithCraftsFor(new CraftQueryBuilder().WithId())
-                    .WithCraftsUsing(new CraftQueryBuilder().WithId())
-                    .WithTypes(),
+                    ),
                 alias: "data",
                 lang: language,
                 gameMode: gameMode

@@ -1,6 +1,7 @@
 using System;
 using RatScanner.Presentation;
 using RatScanner.Scan;
+using RatScanner.TarkovDev.GraphQL;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -76,5 +77,22 @@ public class ItemQueueTests
         }
 
         public override RatEye.Vector2 GetToolTipPosition() => RatEye.Vector2.Zero;
+    }
+}
+
+public class TarkovDevApiTests
+{
+    [Fact]
+    public void ItemsQuery_requests_only_fields_used_by_the_application()
+    {
+        string query = TarkovDevAPI.ItemsQuery(LanguageCode.En, GameMode.Regular);
+
+        Assert.Contains("avg24hPrice", query);
+        Assert.Contains("sellFor", query);
+        Assert.Contains("properties", query);
+        Assert.DoesNotContain("buyFor", query);
+        Assert.DoesNotContain("bartersFor", query);
+        Assert.DoesNotContain("craftsUsing", query);
+        Assert.DoesNotContain("historicalPrices", query);
     }
 }
