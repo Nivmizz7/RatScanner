@@ -139,7 +139,7 @@ internal class MenuVM : INotifyPropertyChanged
 
     public void ModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        OnPropertyChanged();
+        OnPropertyChanged(e.PropertyName);
     }
 
     // Still used in minimal menu

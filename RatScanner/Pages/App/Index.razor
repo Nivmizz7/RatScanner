@@ -4,6 +4,7 @@
 @using RatScanner.Scan
 @using RatScanner.TarkovDev.GraphQL
 @using System.Diagnostics
+@using System.ComponentModel
 @inject MenuVM MenuVM
 @inject SessionHistoryService History
 @inject NavigationManager Navigation
@@ -51,7 +52,7 @@
 
     protected override void OnInitialized() { RefreshResult(); if (History.Selected is not null) { _result = History.Selected; History.Selected = null; } AddRecent(MenuVM.LastItemScan); MenuVM.PropertyChanged += OnResultChanged; }
     private void RefreshResult() => _result = ScanResultAdapter.Map(MenuVM);
-    private async void OnResultChanged(object? sender, EventArgs e) => await InvokeAsync(() => { RefreshResult(); AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
+    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) => await InvokeAsync(() => { RefreshResult(); if (e.PropertyName == nameof(RatScannerMain.ItemScans)) AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
     private void AddRecent(ItemScan scan) { _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id); _recent.Insert(0, scan); if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6); History.Record(ScanResultAdapter.Map(scan, MenuVM, false)); }
     private void SelectRecent(ItemScan scan) => _result = ScanResultAdapter.Map(scan, MenuVM, true);
     private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value) { _items ??= TarkovDevAPI.GetItems().ToList(); return System.Threading.Tasks.Task.FromResult(_items.Where(i => string.IsNullOrWhiteSpace(value) || (i.Name?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false) || (i.ShortName?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)).Take(8)); }

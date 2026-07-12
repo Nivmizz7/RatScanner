@@ -31,6 +31,7 @@ public class RatScannerMain : INotifyPropertyChanged
 
     private Timer? _tarkovTrackerDBRefreshTimer;
     private Timer? _scanRefreshTimer;
+    private readonly object _scanRefreshTimerLock = new();
 
     /// <summary>
     /// Lock for name scanning
@@ -59,6 +60,8 @@ public class RatScannerMain : INotifyPropertyChanged
     public RatScannerMain()
     {
         _instance = this;
+        _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
+        ItemScans.Changed += OnItemScansChanged;
 
         // Remove old log
         Logger.Clear();
@@ -130,8 +133,6 @@ public class RatScannerMain : INotifyPropertyChanged
                 RatConfig.Tracking.TarkovTracker.RefreshTime,
                 Timeout.Infinite
             );
-            _scanRefreshTimer = new Timer(RefreshOverlay, null, 1000, 100);
-
             Logger.LogInfo("Enabling hotkeys...");
             HotkeyManager.RegisterHotkeys();
 
@@ -295,7 +296,6 @@ public class RatScannerMain : INotifyPropertyChanged
                 ItemScans.Enqueue(new DefaultItemScan(items[new Random().Next(items.Length)]));
                 Logger.LogInfo("Items cache ready; reinitializing RatEye...");
                 SetupRatEye();
-                RefreshOverlay();
                 return;
             }
             await Task.Delay(500).ConfigureAwait(false);
@@ -357,8 +357,6 @@ public class RatScannerMain : INotifyPropertyChanged
             ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration);
 
             ItemScans.Enqueue(tempNameScan);
-
-            RefreshOverlay();
         }
     }
 
@@ -394,7 +392,6 @@ public class RatScannerMain : INotifyPropertyChanged
 
                 ItemScans.Enqueue(tempNameScan);
             }
-            RefreshOverlay();
         }
     }
 
@@ -429,7 +426,6 @@ public class RatScannerMain : INotifyPropertyChanged
             ItemIconScan tempIconScan = new(icon, toolTipPosition, RatConfig.ToolTip.Duration);
 
             ItemScans.Enqueue(tempIconScan);
-            RefreshOverlay();
         }
     }
 
@@ -455,12 +451,35 @@ public class RatScannerMain : INotifyPropertyChanged
     {
         Logger.LogInfo("Refreshing TarkovTracker DB...");
         TarkovTrackerDB.Init();
+        OnPropertyChanged(nameof(TarkovTrackerDB));
         _tarkovTrackerDBRefreshTimer?.Change(RatConfig.Tracking.TarkovTracker.RefreshTime, Timeout.Infinite);
+    }
+
+    private void OnItemScansChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(ItemScans));
+        ScheduleNextOverlayRefresh();
+    }
+
+    private void ScheduleNextOverlayRefresh()
+    {
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        long? nextExpiration = ItemScans.GetNextExpiration(now);
+        int dueTime = nextExpiration is long expiration
+            ? (int)Math.Clamp(expiration - now, 1, int.MaxValue)
+            : Timeout.Infinite;
+
+        lock (_scanRefreshTimerLock)
+        {
+            _scanRefreshTimer?.Change(dueTime, Timeout.Infinite);
+        }
     }
 
     private void RefreshOverlay(object? o = null)
     {
-        OnPropertyChanged();
+        ItemScans.PruneExpired(DateTimeOffset.Now.ToUnixTimeMilliseconds());
+        OnPropertyChanged(nameof(ItemScans));
+        ScheduleNextOverlayRefresh();
     }
 
     protected virtual void OnPropertyChanged(string? propertyName = null)
