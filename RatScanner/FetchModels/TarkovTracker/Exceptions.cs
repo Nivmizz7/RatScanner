@@ -3,23 +3,27 @@
 namespace RatScanner.FetchModels.TarkovTracker;
 
 // Exception for when TarkovTracker rate limiting is hit
-public class RateLimitExceededException : Exception {
-	public RateLimitExceededException() : base("Rate limit exceeded") { }
+public class RateLimitExceededException : Exception
+{
+    public RateLimitExceededException()
+        : base("Rate limit exceeded") { }
 
-	public RateLimitExceededException(string message)
-		: base(message) { }
+    public RateLimitExceededException(string message)
+        : base(message) { }
 
-	public RateLimitExceededException(string message, Exception inner)
-		: base(message, inner) { }
+    public RateLimitExceededException(string message, Exception inner)
+        : base(message, inner) { }
 }
 
 // Exception for when TarkovTracker rate limiting is hit
-public class UnauthorizedTokenException : Exception {
-	public UnauthorizedTokenException() : base("Unauthorized token") { }
+public class UnauthorizedTokenException : Exception
+{
+    public UnauthorizedTokenException()
+        : base("Unauthorized token") { }
 
-	public UnauthorizedTokenException(string message)
-		: base(message) { }
+    public UnauthorizedTokenException(string message)
+        : base(message) { }
 
-	public UnauthorizedTokenException(string message, Exception inner)
-		: base(message, inner) { }
+    public UnauthorizedTokenException(string message, Exception inner)
+        : base(message, inner) { }
 }

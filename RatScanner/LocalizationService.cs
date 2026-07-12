@@ -51,7 +51,7 @@ public class LocalizationService {
 
 	public void SetLanguage(UiLanguage language) {
 		try {
-			var filePath = Path.Combine(RatConfig.Paths.i18nDir, language.GetTranslationFileName());
+			var filePath = Path.Combine(RatConfig.Paths.I18nDir, language.GetTranslationFileName());
 			if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) {
 				Logger.LogWarning($"Translation file not found: {filePath}");
 			}

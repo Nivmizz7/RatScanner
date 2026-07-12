@@ -5,6 +5,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Shell;
+using System.Windows.Media;
+using Microsoft.Win32;
 using ContextMenuStrip = System.Windows.Forms.ContextMenuStrip;
 using NotifyIcon = System.Windows.Forms.NotifyIcon;
 
@@ -14,8 +16,10 @@ namespace RatScanner;
 /// Interaction logic for PageSwitcher.xaml
 /// </summary>
 public partial class PageSwitcher : Window {
-	public const int DefaultWidth = 280;
-	public const int DefaultHeight = 450;
+	public const int DefaultWidth = 1080;
+	public const int DefaultHeight = 720;
+	public const int MinimumWidth = 900;
+	public const int MinimumHeight = 640;
 
 	private NotifyIcon _notifyIcon = null!;
 	private ContextMenuStrip _contextMenuStrip = new();
@@ -31,6 +35,8 @@ public partial class PageSwitcher : Window {
 			RatConfig.LoadConfig();
 
 			InitializeComponent();
+			ApplyWindowsTheme();
+			SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 			ResetWindowSize();
 			Navigate(BlazorUI.Instance);
 			AddJumpList();
@@ -49,13 +55,13 @@ public partial class PageSwitcher : Window {
 
 	internal void ResetWindowSize() {
 		SizeToContent = SizeToContent.Manual;
+		ResizeMode = ResizeMode.CanResize;
+		MinWidth = MinimumWidth;
+		MinHeight = MinimumHeight;
+		MaxWidth = double.PositiveInfinity;
+		MaxHeight = double.PositiveInfinity;
 		Width = DefaultWidth;
 		Height = DefaultHeight;
-
-		if (RatConfig.Tracking.ShowKappaNeeds) Height += 35;
-
-		// Avoid window stretching when using minimal menu
-		MaxWidth = DefaultWidth;
 	}
 
 	internal void Navigate(UserControl nextControl, object? state = null) {
@@ -82,6 +88,7 @@ public partial class PageSwitcher : Window {
 	}
 
 	protected override void OnClosed(EventArgs e) {
+		SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
 		if (_notifyIcon != null) {
 			_notifyIcon.Visible = false;
 			_notifyIcon.Dispose();
@@ -89,6 +96,22 @@ public partial class PageSwitcher : Window {
 
 		base.OnClosed(e);
 		ExitApplication();
+	}
+
+	private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e) {
+		Dispatcher.Invoke(ApplyWindowsTheme);
+	}
+
+	private void ApplyWindowsTheme() {
+		bool useLightTheme = true;
+		using RegistryKey? personalize = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+		if (personalize?.GetValue("AppsUseLightTheme") is int value) useLightTheme = value != 0;
+
+		Application.Current.Resources["NativeTitleBarBackgroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(useLightTheme ? "#FFFFFF" : "#101620"));
+		Application.Current.Resources["NativeTitleBarForegroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(useLightTheme ? "#111318" : "#F4F7FA"));
+		Application.Current.Resources["NativeTitleBarInactiveForegroundBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(useLightTheme ? "#777777" : "#778291"));
+		Application.Current.Resources["NativeTitleBarHoverBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(useLightTheme ? "#E5E5E5" : "#202A36"));
+		Application.Current.Resources["NativeTitleBarPressedBrush"] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(useLightTheme ? "#CACACA" : "#293341"));
 	}
 
 	private void AddJumpList() {
@@ -170,6 +193,9 @@ public partial class PageSwitcher : Window {
 	internal void ShowMinimalUI() {
 		RatConfig.LastWindowMode = RatConfig.WindowMode.Minimal;
 		CollapseTitleBar();
+		ResizeMode = ResizeMode.NoResize;
+		MinWidth = 0;
+		MinHeight = 0;
 		SizeToContent = SizeToContent.WidthAndHeight;
 		SetBackgroundOpacity(RatConfig.MinimalUi.Opacity / 100f);
 		Navigate(MinimalMenu.Instance);

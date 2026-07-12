@@ -1,6 +1,5 @@
-﻿@inherits LayoutComponentBase
-@layout MainLayout
+@inherits LayoutComponentBase
+@layout AppLayout
 @using RatScanner.Pages.App.Settings
 
-@Body
-<SettingsSave/>
+<div class="settings-shell"><aside><h1>Settings</h1><nav aria-label="Settings sections"><NavLink href="/app/settings/general">General</NavLink><NavLink href="/app/settings/scanning">Scanning</NavLink><NavLink href="/app/settings/tracking">Tracking</NavLink><NavLink href="/app/settings/minimal">Appearance</NavLink><NavLink href="/app/settings/interactableOverlay">Overlay</NavLink></nav></aside><section class="settings-content">@Body<SettingsSave /></section></div>

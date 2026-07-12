@@ -1,0 +1,10 @@
+@page "/app/history"
+@using RatScanner.Presentation
+@inject SessionHistoryService SessionHistory
+@inject NavigationManager Navigation
+
+<div class="history-page"><header><div><h1>History</h1><p>Items scanned during this session.</p></div><MudIcon Icon="@Icons.Material.Filled.History" /></header>
+@if (SessionHistory.Items.Count == 0) { <section class="empty"><strong>No scan history yet</strong><span>Scanned and manually selected items will appear here.</span></section> }
+else { <section class="history-list">@foreach (ScanResultViewModel result in SessionHistory.Items) { <button class="history-row" @onclick="() => OpenResult(result)"><img src="@result.Item.ImageUrl" alt="" /><div><strong>@result.Item.Name</strong><span>@result.Recommendation.Title</span></div><div><strong>@PriceFormatter.Format(result.Pricing.FleaPrice)</strong><span>@result.ScannedAt?.ToString("t")</span></div></button> }</section> }
+</div>
+@code { private void OpenResult(ScanResultViewModel result) { SessionHistory.Selected = result; Navigation.NavigateTo("/app"); } }

@@ -14,7 +14,7 @@ The overall flow of Gitflow is:
 
 ## Versioning
 
-This project will try its best to adhere to [semver](http://semver.org/) i.e, a codified guide to versioning software. When a new feature is developed or a bug is fixed the version will need to be bumped to signify the change. 
+This project will try its best to adhere to [semver](http://semver.org/) i.e, a codified guide to versioning software. When a new feature is developed or a bug is fixed the version will need to be bumped to signify the change.
 
 The semver string is built like this:
 

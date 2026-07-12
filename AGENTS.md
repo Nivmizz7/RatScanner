@@ -15,9 +15,23 @@ RatScanner is a Windows-only .NET WPF application for Escape from Tarkov that sc
 dotnet restore RatScanner.sln        # restore NuGet packages
 dotnet build RatScanner.sln          # build (debug)
 dotnet build -c Release RatScanner.sln  # build (release)
+dotnet test RatScanner.sln           # unit tests (RatScanner.Tests)
 ```
 
-There is no test project. Verify changes by building and running the app.
+Verify changes by building (and running tests when behavior is covered). GraphQL models come from the `GraphQlClientGenerator` source generator at build time — do not check in generated client sources under `obj/`.
+
+### GraphQL ambiguity / "already contains a definition" flood
+
+If the IDE or build reports thousands of errors like `Ambiguity between 'Item.Id' and 'Item.Id'` or `namespace 'RatScanner.TarkovDev.GraphQL' already contains a definition`, stale emitted sources under `RatScanner/obj/generated/` are almost always the cause (duplicate of the live generator output). Fix:
+
+```sh
+dotnet clean RatScanner.sln
+# if obj\generated still exists:
+# Remove-Item -Recurse -Force RatScanner\obj\generated
+dotnet build RatScanner.sln
+```
+
+Do not try to "fix" hand-written call sites for these ambiguity errors.
 
 ## Repository Layout
 

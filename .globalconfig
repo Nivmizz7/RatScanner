@@ -1,0 +1,8 @@
+# Source-generated syntax trees (GraphQlClientGenerator, etc.) often have no
+# durable disk path, so path-based .editorconfig sections cannot match them.
+# is_global rules apply to those trees. Real source re-enables CS8618 in
+# .editorconfig [*.{cs,csx}], so this is NOT a project-wide NoWarn.
+is_global = true
+
+# GraphQlClientGenerator emits many CS8618 warnings for non-nullable props without ctors
+dotnet_diagnostic.CS8618.severity = none

@@ -5,7 +5,7 @@
 @inject LocalizationService Localizer;
 @implements IDisposable
 
-<MudGrid Class="px-2 my-2" Spacing="0" Style="position: fixed; bottom: 0">
+<MudGrid Class="px-2 my-2 settings-actions" Spacing="0">
     <MudItem xs="6" Class="d-flex justify-start pr-1">
         <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Class="light-green darken-3" FullWidth="true" OnClick="SaveSettings">@Localizer["SaveButton"]</MudButton>
     </MudItem>

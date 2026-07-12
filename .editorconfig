@@ -1,6 +1,13 @@
-[*.{cs}]
+[*.{cs,csx}]
 indent_size=4
 tab_width=4
+# Re-enable CS8618 for real source after .globalconfig silences pathless generated trees.
+dotnet_diagnostic.CS8618.severity = warning
+
+# On-disk GraphQlClientGenerator output under obj/ is also opened by the IDE;
+# path-based rules override the re-enable above so those trees stay quiet.
+[**/GraphQlClientGenerator/**/*.cs]
+dotnet_diagnostic.CS8618.severity = none
 
 [*.{appxmanifest,build,config,csproj,dbml,discomap,dtd,json,jsproj,lsproj,njsproj,nuspec,proj,props,resjson,resw,resx,StyleCop,targets,tasks,vbproj,xaml,xamlx,xml,xoml,xsd}]
 indent_size=2

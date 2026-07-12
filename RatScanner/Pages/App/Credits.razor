@@ -1,0 +1,119 @@
+@page "/app/credits"
+@using System.Diagnostics
+@inject MenuVM MenuVM
+@inject LocalizationService Localizer
+
+<div>
+    <MudGrid Class="pa-0 ma-0" Spacing="0" Style="height: 100%;">
+        <MudItem xs="12">
+            <div class="d-flex align-center justify-center mx-2 mb-1">
+                <MudText Typo="Typo.subtitle1" Color="Color.Inherit">@Localizer["CreditsTitle"]</MudText>
+            </div>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3 mx-2 mb-2" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">@Constants.Branding.Name</MudText>
+                <MudText Typo="Typo.caption" Style="opacity: 0.75;" Class="mb-1">@Constants.Branding.ForkLabel</MudText>
+                <MudText Typo="Typo.body2" Style="opacity: 0.85;">
+                    @Localizer["CreditsMaintainedBy"]
+                </MudText>
+                <MudText Typo="Typo.caption" Style="opacity: 0.7;" Class="mt-1">
+                    v@(MenuVM.GetType().Assembly.GetName().Version!.ToString(3))
+                </MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3 mx-2 mb-2" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">@Localizer["CreditsOriginalTitle"]</MudText>
+                <MudText Typo="Typo.body2" Style="opacity: 0.85;" Class="mb-2">
+                    @Localizer["CreditsOriginalBody"]
+                </MudText>
+                <MudStack Spacing="1">
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Custom.Brands.GitHub"
+                               FullWidth="true"
+                               OnClick="@(() => OpenURL(Constants.Links.OriginalGitHub))">
+                        @Localizer["CreditsOriginalRepo"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               FullWidth="true"
+                               OnClick="@(() => OpenURL(Constants.Links.OriginalAuthorGitHub))">
+                        @Constants.Branding.OriginalAuthor
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3 mx-2 mb-2" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Class="mb-1">@Localizer["CreditsDataTitle"]</MudText>
+                <MudText Typo="Typo.body2" Style="opacity: 0.85;" Class="mb-2">
+                    @Localizer["CreditsDataBody"]
+                </MudText>
+                <MudButton Variant="Variant.Outlined"
+                           Size="Size.Small"
+                           Color="Color.Info"
+                           OnClick="@(() => OpenURL(Constants.Links.TarkovDev))">
+                    tarkov.dev
+                </MudButton>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3 mx-2 mb-2" Elevation="2">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["CreditsLinksTitle"]</MudText>
+                <MudStack Spacing="1">
+                    <MudButton Variant="Variant.Filled"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Custom.Brands.GitHub"
+                               FullWidth="true"
+                               OnClick="@(() => OpenURL(Constants.Links.GitHub))">
+                        @Localizer["CreditsThisFork"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Size="Size.Small"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Custom.Brands.Discord"
+                               FullWidth="true"
+                               Style="background-color: #5865f2;"
+                               OnClick="@(() => OpenURL(Constants.Links.Discord))">
+                        Discord
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Size="Size.Small"
+                               Color="Color.Info"
+                               FullWidth="true"
+                               OnClick="@(() => OpenURL(Constants.Links.FAQ))">
+                        FAQ
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3 mx-2 mb-2" Elevation="2">
+                <MudText Typo="Typo.caption" Style="opacity: 0.65;">
+                    @Localizer["CreditsLicenseNote"]
+                </MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</div>
+
+@code {
+    private static void OpenURL(string url)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = url,
+            UseShellExecute = true,
+        });
+    }
+}

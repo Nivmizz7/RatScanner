@@ -5,6 +5,11 @@
 						 xmlns:local="clr-namespace:RatScanner"
              StartupUri="PageSwitcher.xaml">
 	<Application.Resources>
+		<SolidColorBrush x:Key="NativeTitleBarBackgroundBrush" Color="#FFFFFF" />
+		<SolidColorBrush x:Key="NativeTitleBarForegroundBrush" Color="#000000" />
+		<SolidColorBrush x:Key="NativeTitleBarInactiveForegroundBrush" Color="#777777" />
+		<SolidColorBrush x:Key="NativeTitleBarHoverBrush" Color="#E5E5E5" />
+		<SolidColorBrush x:Key="NativeTitleBarPressedBrush" Color="#CACACA" />
 		<view:IntToLongPriceConverter x:Key="IntToLongPriceConverter" />
 
 		<Style x:Key="FocusVisual">
@@ -59,7 +64,7 @@
 		<Style x:Key="TitleBarButtonStyle"
 		       TargetType="Button">
 			<Setter Property="Foreground"
-			        Value="#000000" />
+			        Value="{DynamicResource NativeTitleBarForegroundBrush}" />
 			<Setter Property="Padding"
 			        Value="0" />
 			<Setter Property="WindowChrome.IsHitTestVisibleInChrome"
@@ -85,19 +90,19 @@
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="#E5E5E5" />
+								        Value="{DynamicResource NativeTitleBarHoverBrush}" />
 							</Trigger>
 							<Trigger Property="IsPressed"
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="#CACACA" />
+								        Value="{DynamicResource NativeTitleBarPressedBrush}" />
 							</Trigger>
 							<DataTrigger
 								Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
 								Value="False">
 								<Setter Property="Foreground"
-								        Value="#999999" />
+								        Value="{DynamicResource NativeTitleBarInactiveForegroundBrush}" />
 							</DataTrigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>
@@ -108,7 +113,7 @@
 		<Style x:Key="TitleBarCloseButtonStyle"
 		       TargetType="Button">
 			<Setter Property="Foreground"
-			        Value="#000000" />
+			        Value="{DynamicResource NativeTitleBarForegroundBrush}" />
 			<Setter Property="Padding"
 			        Value="0" />
 			<Setter Property="WindowChrome.IsHitTestVisibleInChrome"
@@ -150,7 +155,7 @@
 								Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
 								Value="False">
 								<Setter Property="Foreground"
-								        Value="#999999" />
+								        Value="{DynamicResource NativeTitleBarInactiveForegroundBrush}" />
 							</DataTrigger>
 						</ControlTemplate.Triggers>
 					</ControlTemplate>

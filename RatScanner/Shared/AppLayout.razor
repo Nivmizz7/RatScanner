@@ -1,70 +1,41 @@
-﻿@using System.Diagnostics
 @inherits LayoutComponentBase
 @layout MainLayout
-@inject MenuVM MenuVM;
-@inject IJSRuntime JSRuntime;
-@inject LocalizationService Localizer;
+@inject MenuVM MenuVM
+@inject LocalizationService Localizer
 
-<div style="width: 100%; height: 100%">
-	<MudLayout>
-		<MudAppBar Elevation="1" Bottom="false" Dense="true">
-			<MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer"/>
-			RatScanner
-			<MudSpacer/>
-			<MudIconButton Icon="@Icons.Custom.Brands.GitHub" Color="Color.Inherit" Edge="Edge.End" OnClick="@(() => OpenURL(MenuVM.GithubLink))"/>
-			<MudIconButton Icon="@Constants.Icon.Discord" Edge="Edge.End" OnClick="@(() => OpenURL(MenuVM.DiscordLink))" Style="color: #5865f2"/>
-			<MudIconButton Icon="@Constants.Icon.Patreon" Edge="Edge.End" OnClick="@(() => OpenURL(MenuVM.PatreonLink))" Style="color: #FF424D"/>
-		</MudAppBar>
-		<MudDrawer @bind-Open="@drawerOpen" Elevation="1" Anchor="Anchor.Left" Variant="@DrawerVariant.Responsive">
-			<MudDrawerHeader LinkToIndex="true">
-				<div>
-					<img src="RatLogoMedium.png" width="20%" style="vertical-align: middle;"/>
-					<span style="font-size: 150%; vertical-align: bottom;">
-						Rat Scanner
-						<span style="font-size: 50%;">
-							<text>v</text>@MenuVM.GetType().Assembly.GetName().Version.ToString(3)
-						</span>
-					</span>
-				</div>
-			</MudDrawerHeader>
-			<MudNavMenu>
-				<MudNavLink Href="/app" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@Localizer["DashboardNav"]</MudNavLink>
-				<MudNavGroup Title="@Localizer["SettingsNavGroup"]" Expanded="true" HideExpandIcon="true" Icon="@Icons.Material.Filled.Settings">
-					<MudNavLink Href="/app/settings/general">@Localizer["GeneralNav"]</MudNavLink>
-					<MudNavLink Href="/app/settings/scanning">@Localizer["ScanningNav"]</MudNavLink>
-					<MudNavLink Href="/app/settings/tracking">@Localizer["TrackingNav"]</MudNavLink>
-                    <MudNavLink Href="/app/settings/minimal">@Localizer["MinimalNav"]</MudNavLink>
-                    <MudNavLink Href="/app/settings/interactableOverlay">@Localizer["OverlayNav"]</MudNavLink>
-                    @*<MudNavLink Href="/app/settings/hotkeys">Hotkeys</MudNavLink>*@
-				</MudNavGroup>
-			</MudNavMenu>
-		</MudDrawer>
-        <MudMainContent Class="mt-2">
-			@Body
-		</MudMainContent>
-	</MudLayout>
+<div class="app-shell">
+    <header class="compact-bar">
+        <button class="icon-button" aria-label="Open navigation" @onclick="OpenDrawer"><MudIcon Icon="@Icons.Material.Filled.Menu" /></button>
+        <span>@Constants.Branding.Name</span>
+    </header>
+    <aside class="sidebar @(_drawerOpen ? "open" : null)" @onkeydown="HandleKey">
+        <div class="product-identity">
+            <img src="RatLogoMedium.png" alt="" />
+            <strong>@Constants.Branding.Name</strong>
+            <span>@Localizer["TarkovTrackerEdition"]</span>
+            <small>v@(MenuVM.Version)</small>
+        </div>
+        <nav aria-label="Primary navigation">
+            <NavLink href="/app" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>Scan</span></NavLink>
+            <NavLink href="/app/history"><MudIcon Icon="@Icons.Material.Filled.History" /> <span>History</span></NavLink>
+            <NavLink href="/app/settings/general"><MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>Settings</span></NavLink>
+            <NavLink href="/app/credits"><MudIcon Icon="@Icons.Material.Filled.Info" /> <span>About</span></NavLink>
+        </nav>
+        <div class="sidebar-spacer"></div>
+        <section class="scanner-card @(!IsScannerActive ? "paused" : null)" aria-label="Scanner status" aria-live="polite">
+            <div><span class="status-dot" aria-hidden="true"></span><strong>@(IsScannerActive ? "Scanner active" : "Scanner paused")</strong></div>
+            <span>@(IsScannerActive ? "Waiting for an item" : "Enable scanning in Settings")</span>
+        </section>
+        <footer><span>TarkovTracker.org Fork</span><a href="https://github.com/RatScanner/RatScanner" target="_blank" rel="noopener">Support the original project</a></footer>
+    </aside>
+    @if (_drawerOpen) { <button class="scrim" aria-label="Close navigation" @onclick="CloseDrawer"></button> }
+    <main class="main-content">@Body</main>
 </div>
 
 @code {
-
-	[CascadingParameter]
-	public Error Error { get; set; }
-
-	bool drawerOpen = true;
-
-	private void OpenURL(string url)
-	{
-		var psi = new ProcessStartInfo
-		{
-			FileName = url,
-			UseShellExecute = true,
-		};
-		Process.Start(psi);
-	}
-
-	void ToggleDrawer()
-	{
-		drawerOpen = !drawerOpen;
-	}
-
+    private bool _drawerOpen;
+    private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
+    private void OpenDrawer() => _drawerOpen = true;
+    private void CloseDrawer() => _drawerOpen = false;
+    private void HandleKey(KeyboardEventArgs e) { if (e.Key == "Escape") CloseDrawer(); }
 }
