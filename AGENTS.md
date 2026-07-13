@@ -130,7 +130,7 @@ New worktrees are created under `C:/Users/Dysekt/orca/workspaces/RatScanner/` an
 
 - Follow the existing code style — check surrounding code before editing.
 - The project uses git flow historically (`develop` branch, feature branches from develop) but the maintained fork works directly on `master`.
-- Versioning follows semver (`Major.Minor.Patch`) — bump in `src/App/RatScanner.csproj`.
+- **Versioning (TarkovTracker Edition):** independent semver line starting at **4.0.0** (upstream used 3.x). Bump `<Version>` only in `src/App/RatScanner.csproj`. Git tags: `vMAJOR.MINOR.PATCH` (e.g. `v4.0.0`). Do **not** mirror upstream tag numbers — reports/logs/UIs must make fork vs original obvious at a glance (`v4.x.x · TT`).
 - Nullable reference types are enabled — handle nulls explicitly.
 - Cache freshness is based on file modification time (see `RatConfig.cs`).
 - API calls go through `TarkovDevAPI.cs` which handles rate limiting, dedup, and exponential backoff — do not bypass it with raw HTTP calls.

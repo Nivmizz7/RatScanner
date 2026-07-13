@@ -63,12 +63,15 @@ public static class TarkovDevAPI
         // Some upstreams reject requests without a user-agent.
         try
         {
-            client.DefaultRequestHeaders.UserAgent.ParseAdd($"RatScanner/{RatConfig.Version}");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd($"RatScanner-TT/{RatConfig.Version}");
         }
         catch (Exception e)
         {
-            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner user-agent.", e);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("RatScanner");
+            Logger.LogWarning(
+                "Failed to set user-agent header; falling back to default RatScanner-TT user-agent.",
+                e
+            );
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("RatScanner-TT");
         }
         return client;
     }

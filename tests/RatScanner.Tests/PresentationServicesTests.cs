@@ -37,6 +37,23 @@ public class PresentationServicesTests
                 new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero)
             )
         );
+
+    [Fact]
+    public void HigherFleaValueUsesActionableExplanation()
+    {
+        RecommendationViewModel result = RecommendationSelector.Select(10000, 5000, "Mechanic", 0, 0);
+        Assert.Equal(RecommendationType.SellOnFlea, result.Type);
+        Assert.Equal($"{PriceFormatter.Format(5000)} more than Mechanic.", result.Explanation);
+    }
+
+    [Theory]
+    [InlineData("ammoBox", "Ammunition container")]
+    [InlineData("gun", "Weapon")]
+    [InlineData("meds", "Medical item")]
+    [InlineData(null, "Item")]
+    [InlineData("customThing", "Custom Thing")]
+    public void ItemTypeLabelMapsDeveloperNames(string raw, string expected) =>
+        Assert.Equal(expected, ItemTypeLabel.Format(raw));
 }
 
 public class ItemQueueTests
@@ -358,13 +375,17 @@ public class TarkovDevApiTests
 public class GitHubUpdateServiceTests
 {
     [Theory]
-    [InlineData("3.9.3", "v3.9.4", true)]
-    [InlineData("3.9.3+build.1", "3.9.3", false)]
-    [InlineData("3.10.0-beta.1", "3.9.9", false)]
-    [InlineData("3.9.3", "3.9.4-beta.1", false)]
-    [InlineData("3.9.4-beta.1", "3.9.4", true)]
-    [InlineData("3.9.4-beta.1", "3.9.5-beta.1", true)]
-    [InlineData("unknown", "3.9.4", false)]
+    // TarkovTracker Edition uses its own 4.x line; comparisons stay pure semver.
+    [InlineData("4.0.0", "v4.0.1", true)]
+    [InlineData("4.0.0+build.1", "4.0.0", false)]
+    [InlineData("4.1.0-beta.1", "4.0.9", false)]
+    [InlineData("4.0.0", "4.0.1-beta.1", false)]
+    [InlineData("4.0.1-beta.1", "4.0.1", true)]
+    [InlineData("4.0.1-beta.1", "4.0.2-beta.1", true)]
+    [InlineData("unknown", "4.0.1", false)]
+    // Upstream-style 3.x would always be older than a 4.x fork install (and vice versa).
+    [InlineData("4.0.0", "v3.9.3", false)]
+    [InlineData("3.9.3", "v4.0.0", true)]
     public void IsNewerVersion_handles_release_tag_formats(string current, string available, bool expected) =>
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));
 }

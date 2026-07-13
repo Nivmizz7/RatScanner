@@ -13,7 +13,7 @@
         <MudText Typo="Typo.subtitle2" Class="about-card-title">@Constants.Branding.Name</MudText>
         <MudText Typo="Typo.caption" Class="about-muted">@Constants.Branding.ForkLabel</MudText>
         <MudText Typo="Typo.body2" Class="about-body">@Localizer["CreditsMaintainedBy"]</MudText>
-        <MudText Typo="Typo.caption" Class="about-muted">v@(MenuVM.GetType().Assembly.GetName().Version!.ToString(3))</MudText>
+        <MudText Typo="Typo.caption" Class="about-muted">@MenuVM.VersionDisplay</MudText>
         <MudText Typo="Typo.caption" Class="about-modified">@Localizer["CreditsModifiedNotice"]</MudText>
     </section>
 

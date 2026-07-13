@@ -6,7 +6,11 @@ public static class Constants
     {
         public const string Name = "RatScanner";
         public const string ForkLabel = "TarkovTracker Edition";
+        /// <summary>Short product id used in logs, dialogs, and bug reports (not upstream).</summary>
+        public const string ProductName = "RatScanner TarkovTracker Edition";
         public const string OriginalAuthor = "Moritz / Blightbuster";
+        /// <summary>Short edition token for compact UI (e.g. sidebar footer).</summary>
+        public const string EditionToken = "TT";
     }
 
     public static class Links

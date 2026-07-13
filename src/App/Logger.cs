@@ -56,7 +56,7 @@ internal static class Logger
 
         try
         {
-            string title = "RatScanner " + RatConfig.Version;
+            string title = RatConfig.FullVersionLabel;
             string faqBoxMessage = message + "\n\nThe FAQ will probably help with that.\nDo you want to open it now?";
             if (
                 MessageBox.Show(faqBoxMessage, title, MessageBoxButton.YesNo, MessageBoxImage.Error)
@@ -108,7 +108,7 @@ internal static class Logger
         LogInfo(message);
         MessageBox.Show(
             message,
-            title ?? "Rat Scanner " + RatConfig.Version,
+            title ?? RatConfig.FullVersionLabel,
             MessageBoxButton.OK,
             MessageBoxImage.Information
         );
@@ -119,7 +119,7 @@ internal static class Logger
         LogWarning(message);
         MessageBox.Show(
             message,
-            title ?? "Rat Scanner " + RatConfig.Version,
+            title ?? RatConfig.FullVersionLabel,
             MessageBoxButton.OK,
             MessageBoxImage.Warning
         );
@@ -242,7 +242,11 @@ internal static class Logger
 
     private static void CreateGitHubIssue(string message, Exception? e)
     {
-        string body = "**Error**\n" + message + "\n";
+        // Lead with edition + version so fork vs upstream is obvious in the issue list.
+        string body = "**Build**\n";
+        body += RatConfig.FullVersionLabel + "\n";
+        body += "Repo: " + Constants.Links.GitHub + "\n\n";
+        body += "**Error**\n" + message + "\n";
         if (e != null)
             body += "```\n" + LimitLength(e.ToString(), 1000) + "\n```\n";
 
@@ -250,7 +254,7 @@ internal static class Logger
         body += LimitLength(ReadAll(), 3000);
         body += "\n```\n</details>";
 
-        string title = message;
+        string title = $"[{Constants.Branding.EditionToken} {RatConfig.VersionDisplay}] {message}";
 
         string labels = "bug";
 

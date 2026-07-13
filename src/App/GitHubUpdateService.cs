@@ -32,8 +32,9 @@ internal static class GitHubUpdateService
             new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate }
         );
         // GitHub API requires a User-Agent.
+        // UA identifies the fork edition so API traffic is not confused with upstream.
         client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            $"RatScanner/{RatConfig.Version} (+https://github.com/{Owner}/{Repo})"
+            $"RatScanner-TT/{RatConfig.Version} (+https://github.com/{Owner}/{Repo})"
         );
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         client.Timeout = TimeSpan.FromMinutes(10);

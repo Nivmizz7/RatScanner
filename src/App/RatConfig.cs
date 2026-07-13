@@ -19,8 +19,19 @@ internal static class RatConfig
     private static readonly TimeSpan GameDisplayRefreshInterval = TimeSpan.FromSeconds(5);
     private static DateTimeOffset _lastGameDisplayRefresh = DateTimeOffset.MinValue;
 
-    // Version
-    public static string Version => Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion ?? "Unknown";
+    /// <summary>
+    /// Numeric / informational product version from assembly metadata (csproj <c>Version</c>).
+    /// TarkovTracker Edition uses its own major line (4.x+) — never matches upstream 3.x tags.
+    /// </summary>
+    public static string Version =>
+        Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion?.Trim() ?? "Unknown";
+
+    /// <summary>Compact display form, e.g. <c>v4.0.0</c>.</summary>
+    public static string VersionDisplay =>
+        Version.StartsWith('v') || Version.StartsWith('V') ? Version : "v" + Version;
+
+    /// <summary>Full branded label for logs/dialogs, e.g. <c>RatScanner TarkovTracker Edition v4.0.0</c>.</summary>
+    public static string FullVersionLabel => $"{Constants.Branding.ProductName} {VersionDisplay}";
 
     public const string SINGLE_INSTANCE_GUID = "{a057bb64-c126-4ef4-a4ed-3037c2e7bc89}";
 

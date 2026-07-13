@@ -97,7 +97,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // Remove old log
         Logger.Clear();
 
-        Logger.LogInfo("----- RatScanner " + RatConfig.Version + " -----");
+        Logger.LogInfo("----- " + RatConfig.FullVersionLabel + " -----");
         _ = CheckForUpdatesAsync();
 
         Logger.LogInfo(
@@ -229,10 +229,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         Logger.LogInfo("A new version is available: " + release.Version);
 
         string message = "Version " + release.Version + " is available!\n";
-        message += "You are using: " + RatConfig.Version + "\n\n";
+        message += "You are using: " + RatConfig.FullVersionLabel + "\n\n";
         message += "Do you want to install it now?";
         MessageBoxResult result = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            MessageBox.Show(message, "RatScanner update", MessageBoxButton.YesNo, MessageBoxImage.Information)
+            MessageBox.Show(
+                message,
+                Constants.Branding.ProductName + " update",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information
+            )
         );
         if (result != MessageBoxResult.Yes)
             return;
