@@ -34,9 +34,11 @@ public static class MapDataLoader
             var mapsData =
                 JsonConvert.DeserializeObject<List<InteractiveMapData>>(json) ?? new List<InteractiveMapData>();
 
-            // Build the map ID cache
-            _mapsByIdCache = BuildMapIdCache(mapsData);
+            // Build the map ID cache. Empty catalog = not ready yet; keep retryable until loaded.
+            if (!TryBuildMapIdCache(mapsData, out Dictionary<string, InteractiveMapData.Map> cache))
+                return cache;
 
+            _mapsByIdCache = cache;
             Logger.LogInfo($"Loaded {_mapsByIdCache.Count} maps from maps.json");
             return _mapsByIdCache;
         }
@@ -50,12 +52,22 @@ public static class MapDataLoader
     }
 
     /// <summary>
-    /// Builds a dictionary mapping map IDs to their InteractiveMapData
+    /// Builds a dictionary mapping map IDs to their InteractiveMapData.
+    /// Returns false when the Tarkov.dev map catalog is not loaded yet so callers do not pin an empty cache.
     /// </summary>
-    private static Dictionary<string, InteractiveMapData.Map> BuildMapIdCache(List<InteractiveMapData> mapsData)
+    private static bool TryBuildMapIdCache(
+        List<InteractiveMapData> mapsData,
+        out Dictionary<string, InteractiveMapData.Map> cache
+    )
     {
-        Dictionary<string, InteractiveMapData.Map> cache = new();
+        cache = new();
         TarkovDevMap[] tarkovDevMaps = TarkovDevAPI.GetMaps();
+        // Maps are loaded lazily/background; empty catalog means "not ready", not "missing map".
+        if (tarkovDevMaps.Length == 0)
+        {
+            Logger.LogInfo("Tarkov.dev map catalog not loaded yet; interactive map id matching deferred.");
+            return false;
+        }
 
         foreach (InteractiveMapData mapData in mapsData)
         {
@@ -79,7 +91,7 @@ public static class MapDataLoader
             }
         }
 
-        return cache;
+        return true;
     }
 
     /// <summary>

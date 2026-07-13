@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -17,12 +18,13 @@ namespace RatScanner;
 
 /// <summary>
 /// Fetches and caches bulk game data from <c>json.tarkov.dev</c> (static JSON API).
-/// GraphQL is intentionally not used for catalog/tasks/hideout/maps — field selection
+/// GraphQL is intentionally not used for catalog/tasks/hideout — field selection
 /// was less valuable than dropping the generator surface and heavy POST query composition.
 ///
 /// Prices (avg24h / trader sells) ship with the items document and share MediumTTL.
-/// Future craft/barter indexes and FIR-aware recommendations can load
-/// <c>/barters</c> and <c>/crafts</c> without bringing GraphQL back.
+/// Crafts/barters load with LongTTL into product indexes for acquisition hints.
+/// Maps are optional (not on the cold-start critical path) because
+/// <c>/maps</c> is a multi-megabyte blob mostly of mob/loot placement data.
 /// </summary>
 public static class TarkovDevAPI
 {
@@ -405,6 +407,8 @@ public static class TarkovDevAPI
             RatConfig.LongTTL,
             json => JsonConvert.DeserializeObject<HideoutStation[]>(json, JsonSettings)
         );
+        // Maps are optional: projected offline files are tiny, but first network fetch
+        // of json.tarkov.dev/.../maps is ~9MB of mostly unused placement data.
         bool mapsLoaded = TryLoadFromOfflineCache(
             MapsQueryKey(),
             RatConfig.LongTTL,
@@ -433,10 +437,11 @@ public static class TarkovDevAPI
             }
         );
 
-        bool allLoaded = itemsLoaded && tasksLoaded && hideoutLoaded && mapsLoaded;
+        // Scanner-critical caches only. Maps are deferred; craft/barter chips degrade if missing.
+        bool allLoaded = itemsLoaded && tasksLoaded && hideoutLoaded;
         if (allLoaded)
             Logger.LogInfo(
-                $"Core API caches loaded from offline storage (crafts: {craftsLoaded}, barters: {bartersLoaded})"
+                $"Core API caches loaded from offline storage (maps: {mapsLoaded}, crafts: {craftsLoaded}, barters: {bartersLoaded})"
             );
         else
             Logger.LogWarning(
@@ -449,10 +454,10 @@ public static class TarkovDevAPI
     internal static bool AnyCacheExpired()
     {
         long time = DateTimeOffset.Now.ToUnixTimeSeconds();
+        // Maps excluded: they are lazy/background and must not force a 9MB fetch on every stale-cache cycle.
         return IsCacheExpired(ItemsQueryKey(), time)
             || IsCacheExpired(TasksQueryKey(), time)
             || IsCacheExpired(HideoutStationsQueryKey(), time)
-            || IsCacheExpired(MapsQueryKey(), time)
             || IsCacheExpired(CraftsQueryKey(), time)
             || IsCacheExpired(BartersQueryKey(), time);
     }
@@ -467,23 +472,25 @@ public static class TarkovDevAPI
     public static async Task InitializeCache()
     {
         long now = DateTimeOffset.Now.ToUnixTimeSeconds();
-        List<Task> refreshes = [];
+        List<Task> coreRefreshes = [];
 
         if (IsCacheExpired(ItemsQueryKey(), now))
-            refreshes.Add(QueueRequest(ItemsQueryKey(), FetchItemsAsync, RatConfig.MediumTTL, isItems: true));
+            coreRefreshes.Add(QueueRequest(ItemsQueryKey(), FetchItemsAsync, RatConfig.MediumTTL, isItems: true));
         if (IsCacheExpired(TasksQueryKey(), now))
-            refreshes.Add(QueueRequest(TasksQueryKey(), FetchTasksAsync, RatConfig.LongTTL));
+            coreRefreshes.Add(QueueRequest(TasksQueryKey(), FetchTasksAsync, RatConfig.LongTTL));
         if (IsCacheExpired(HideoutStationsQueryKey(), now))
-            refreshes.Add(QueueRequest(HideoutStationsQueryKey(), FetchHideoutAsync, RatConfig.LongTTL));
-        if (IsCacheExpired(MapsQueryKey(), now))
-            refreshes.Add(QueueRequest(MapsQueryKey(), FetchMapsAsync, RatConfig.LongTTL));
+            coreRefreshes.Add(QueueRequest(HideoutStationsQueryKey(), FetchHideoutAsync, RatConfig.LongTTL));
         if (IsCacheExpired(CraftsQueryKey(), now))
-            refreshes.Add(QueueRequest(CraftsQueryKey(), FetchAndIndexCraftsAsync, RatConfig.LongTTL));
+            coreRefreshes.Add(QueueRequest(CraftsQueryKey(), FetchAndIndexCraftsAsync, RatConfig.LongTTL));
         if (IsCacheExpired(BartersQueryKey(), now))
-            refreshes.Add(QueueRequest(BartersQueryKey(), FetchAndIndexBartersAsync, RatConfig.LongTTL));
+            coreRefreshes.Add(QueueRequest(BartersQueryKey(), FetchAndIndexBartersAsync, RatConfig.LongTTL));
 
-        if (refreshes.Count > 0)
-            await Task.WhenAll(refreshes).ConfigureAwait(false);
+        if (coreRefreshes.Count > 0)
+            await Task.WhenAll(coreRefreshes).ConfigureAwait(false);
+
+        // Maps only matter for MapDataLoader / (disabled) map overlay. Never block cold start.
+        if (IsCacheExpired(MapsQueryKey(), DateTimeOffset.Now.ToUnixTimeSeconds()))
+            _ = QueueRequest(MapsQueryKey(), FetchMapsAsync, RatConfig.LongTTL);
     }
 
     public static Item[] GetItems(string locale, GameMode gameMode) =>
@@ -889,16 +896,13 @@ public static class TarkovDevAPI
     private static async Task<object> FetchMapsAsync(string locale, GameMode gameMode)
     {
         string mode = GameModePath(gameMode);
+        // The /maps document is ~9MB raw (mostly mobs/loot). Stream-project only the maps map.
         Task<string> dataTask = GetJsonString($"{mode}/maps");
         Task<string> localeTask = GetJsonString($"{mode}/maps_{locale}");
         await Task.WhenAll(dataTask, localeTask).ConfigureAwait(false);
 
-        var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<JsonApiModels.MapsPayload>>(
-            dataTask.Result,
-            JsonSettings
-        );
         Dictionary<string, string>? localeMap = ParseLocaleMap(localeTask.Result);
-        Dictionary<string, JsonApiModels.RawMap>? rawMaps = envelope?.Data?.Maps;
+        Dictionary<string, JsonApiModels.RawMap>? rawMaps = ExtractMapsDictionary(dataTask.Result);
         if (rawMaps == null || rawMaps.Count == 0)
             throw new Exception("Maps JSON contained no data");
 
@@ -918,6 +922,37 @@ public static class TarkovDevAPI
         }
 
         return projected.ToArray();
+    }
+
+    /// <summary>
+    /// Walks the JSON token stream until <c>data.maps</c> and deserializes only that object graph,
+    /// so sibling keys (mobs, loot containers, …) are skipped without materializing into dictionaries.
+    /// </summary>
+    internal static Dictionary<string, JsonApiModels.RawMap>? ExtractMapsDictionary(string json)
+    {
+        using StringReader stringReader = new(json);
+        using JsonTextReader reader = new(stringReader);
+        JsonSerializer serializer = JsonSerializer.Create(JsonSettings);
+
+        while (reader.Read())
+        {
+            if (reader.TokenType != JsonToken.PropertyName || !string.Equals(reader.Value as string, "maps", StringComparison.Ordinal))
+                continue;
+
+            // Require depth 2: { "data": { "maps": { … } } }
+            if (reader.Depth != 2)
+                continue;
+
+            if (!reader.Read())
+                return null;
+
+            if (reader.TokenType == JsonToken.Null)
+                return null;
+
+            return serializer.Deserialize<Dictionary<string, JsonApiModels.RawMap>>(reader);
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string>? ParseLocaleMap(string json)
@@ -946,12 +981,9 @@ public static class TarkovDevAPI
 
     #endregion
 
-    #region Future: crafts / barters (not loaded on startup)
+    #region Craft / barter document fetch
 
-    /// <summary>
-    /// Planned: load craft recipes so the UI can say "craftable (always FIR)" and
-    /// cross-check hideout progress via TarkovTracker. Not called on startup today.
-    /// </summary>
+    /// <summary>Loads craft recipes used to index craftable product item ids.</summary>
     internal static async Task<Craft[]> FetchCraftsAsync(GameMode gameMode = GameMode.Regular)
     {
         string json = await GetJsonString($"{GameModePath(gameMode)}/crafts").ConfigureAwait(false);
@@ -979,10 +1011,7 @@ public static class TarkovDevAPI
             .ToArray();
     }
 
-    /// <summary>
-    /// Planned: load barters so the UI can surface "can be bartered for" vs FIR quest needs.
-    /// Not called on startup today.
-    /// </summary>
+    /// <summary>Loads barters used to index barterable product item ids.</summary>
     internal static async Task<Barter[]> FetchBartersAsync(GameMode gameMode = GameMode.Regular)
     {
         string json = await GetJsonString($"{GameModePath(gameMode)}/barters").ConfigureAwait(false);

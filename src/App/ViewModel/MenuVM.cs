@@ -47,7 +47,14 @@ internal class MenuVM : INotifyPropertyChanged
     public string VersionDisplay => $"{RatConfig.VersionDisplay} · {Constants.Branding.EditionToken}";
 
     public string Updated =>
-        DateTime.Parse(LastItem.Updated ?? string.Empty).ToLocalTime().ToString(CultureInfo.CurrentCulture);
+        DateTime.TryParse(
+            LastItem.Updated,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTime updated
+        )
+            ? updated.ToLocalTime().ToString(CultureInfo.CurrentCulture)
+            : string.Empty;
 
     public TimeSpan? DataAge
     {

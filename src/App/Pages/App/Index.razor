@@ -306,6 +306,8 @@
 @code {
     private ScanResultViewModel? _result;
     private List<Item>? _items;
+    private string? _itemsLocale;
+    private TarkovDev.GameMode? _itemsGameMode;
     private readonly List<ItemScan> _recent = new();
     private MudAutocomplete<Item>? _search;
     private bool _detailsOpen;
@@ -461,11 +463,22 @@
 
     private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value)
     {
-        if (_items is null || _items.Count == 0)
+        string locale = RatConfig.NameScan.Language.ToTarkovDevLocale();
+        TarkovDev.GameMode gameMode = RatConfig.GameMode;
+        if (
+            _items is null
+            || _items.Count == 0
+            || !string.Equals(_itemsLocale, locale, StringComparison.Ordinal)
+            || _itemsGameMode != gameMode
+        )
         {
             List<Item> available = TarkovDevAPI.GetItems().ToList();
             if (available.Count > 0)
+            {
                 _items = available;
+                _itemsLocale = locale;
+                _itemsGameMode = gameMode;
+            }
         }
 
         return System.Threading.Tasks.Task.FromResult(
