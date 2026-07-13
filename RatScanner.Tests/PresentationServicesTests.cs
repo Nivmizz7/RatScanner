@@ -91,6 +91,40 @@ public class ItemQueueTests
     }
 }
 
+public class SessionHistoryServiceTests
+{
+    [Fact]
+    public void Queue_changes_are_recorded_without_a_page_component()
+    {
+        ItemQueue queue = new();
+        using SessionHistoryService history = new(
+            queue,
+            scan => ScanResultAdapter.Map(scan, questRemaining: 0, hideoutRemaining: 0, false)
+        );
+        int changed = 0;
+        history.Changed += (_, _) => changed++;
+
+        queue.Enqueue(new DefaultItemScan(CreateItem("seed"), isSeed: true));
+        queue.Enqueue(new DefaultItemScan(CreateItem("scanned")));
+
+        ScanResultViewModel result = Assert.Single(history.Items);
+        Assert.Equal("scanned", result.Item.Id);
+        Assert.True(result.IsHistoricalResult);
+        Assert.NotNull(result.ScannedAt);
+        Assert.Equal(1, changed);
+    }
+
+    private static Item CreateItem(string id) =>
+        new()
+        {
+            Id = id,
+            Name = id,
+            ShortName = id,
+            Width = 1,
+            Height = 1,
+        };
+}
+
 public class SimpleConfigTests
 {
     [Fact]

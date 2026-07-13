@@ -57,8 +57,8 @@
 
     protected override void OnInitialized() { RefreshResult(); if (History.Selected is not null) { _result = History.Selected; History.Selected = null; } if (!MenuVM.LastItemScan.IsSeed) AddRecent(MenuVM.LastItemScan); MenuVM.PropertyChanged += OnResultChanged; }
     private void RefreshResult() => _result = MenuVM.LastItemScan.IsSeed ? null : ScanResultAdapter.Map(MenuVM);
-    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) => await InvokeAsync(() => { RefreshResult(); if (e.PropertyName == nameof(RatScannerMain.ItemScans) && !MenuVM.LastItemScan.IsSeed) AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
-    private void AddRecent(ItemScan scan) { if (scan.IsSeed) return; _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id); _recent.Insert(0, scan); if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6); History.Record(ScanResultAdapter.Map(scan, MenuVM, false)); }
+    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) => await InvokeAsync(() => { RefreshResult(); if (!MenuVM.LastItemScan.IsSeed) AddRecent(MenuVM.LastItemScan); StateHasChanged(); });
+    private void AddRecent(ItemScan scan) { if (scan.IsSeed) return; _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id); _recent.Insert(0, scan); if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6); }
     private void SelectRecent(ItemScan scan) => _result = ScanResultAdapter.Map(scan, MenuVM, true);
     private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value) { if (_items is null || _items.Count == 0) { List<Item> available = TarkovDevAPI.GetItems().ToList(); if (available.Count > 0) _items = available; } return System.Threading.Tasks.Task.FromResult((_items ?? []).Where(i => string.IsNullOrWhiteSpace(value) || (i.Name?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false) || (i.ShortName?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)).Take(8)); }
     private void SelectItem(Item item) { if (item is not null) MenuVM.ItemScans.Enqueue(new DefaultItemScan(item)); }
