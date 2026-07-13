@@ -43,7 +43,7 @@ internal static class RecommendationSelector
             int? percent = trader is > 0 ? (int)Math.Round((double)difference!.Value / trader.Value * 100) : null;
             string explanation = difference is null
                 ? "No comparable trader offer is available."
-                : $"Market value is {PriceFormatter.Format(difference)} above {traderName ?? "the best trader"}.";
+                : $"{PriceFormatter.Format(difference)} more than {traderName ?? "the best trader"}.";
             return new(RecommendationType.SellOnFlea, "Sell on Flea Market", explanation, difference, percent);
         }
         return new(
@@ -76,5 +76,61 @@ internal static class FreshnessFormatter
         if (age.TotalDays < 1)
             return $"Updated {(int)age.TotalHours} hr ago";
         return $"Updated {Math.Max(1, (int)age.TotalDays)} days ago";
+    }
+}
+
+/// <summary>Maps GraphQL ItemType enum names to user-facing labels.</summary>
+internal static class ItemTypeLabel
+{
+    internal static string Format(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return "Item";
+
+        return raw switch
+        {
+            "ammo" => "Ammunition",
+            "ammoBox" => "Ammunition container",
+            "armor" => "Armor",
+            "armorPlate" => "Armor plate",
+            "backpack" => "Backpack",
+            "barter" => "Barter item",
+            "container" => "Container",
+            "glasses" => "Eyewear",
+            "grenade" => "Grenade",
+            "gun" => "Weapon",
+            "headphones" => "Headset",
+            "helmet" => "Helmet",
+            "injectors" => "Injector",
+            "keys" => "Key",
+            "markedOnly" => "Marked only",
+            "meds" => "Medical item",
+            "mods" => "Modification",
+            "noFlea" => "Not flea-listed",
+            "pistolGrip" => "Pistol grip",
+            "preset" => "Weapon preset",
+            "provisions" => "Provision",
+            "rig" => "Tactical rig",
+            "suppressor" => "Suppressor",
+            "wearable" => "Wearable",
+            _ => SplitCamelCase(raw),
+        };
+    }
+
+    private static string SplitCamelCase(string value)
+    {
+        if (value.Length == 0)
+            return value;
+
+        System.Text.StringBuilder builder = new(value.Length + 8);
+        builder.Append(char.ToUpperInvariant(value[0]));
+        for (int i = 1; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (char.IsUpper(c) && !char.IsUpper(value[i - 1]))
+                builder.Append(' ');
+            builder.Append(c);
+        }
+        return builder.ToString();
     }
 }
