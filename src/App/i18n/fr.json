@@ -104,6 +104,7 @@
   "CreditsOriginalBody": "Créé à l'origine par Moritz / Blightbuster. Les liens ci-dessous sont une attribution historique uniquement—pas le support de cette édition TarkovTracker.",
   "CreditsOriginalRepo": "Dépôt original (historique)",
   "CreditsThisFork": "Ce dépôt (GitHub)",
+  "CreditsThisForkShort": "Dépôt",
   "CreditsDataTitle": "Données de jeu",
   "CreditsDataBody": "Les prix et données d'objets sont fournis par tarkov.dev.",
   "CreditsLinksTitle": "Support et liens (cette version)",

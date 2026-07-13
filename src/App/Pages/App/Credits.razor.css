@@ -1,0 +1,205 @@
+.about-page {
+    padding: 8px 12px 16px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.about-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.about-card {
+    background: var(--rs-surface);
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius);
+    padding: 14px 14px 12px;
+    margin-bottom: 10px;
+}
+
+.about-card-attribution {
+    background: var(--rs-surface-2);
+    border-color: var(--rs-border-subtle);
+}
+
+.about-card-title {
+    margin: 0 0 4px;
+    color: var(--rs-text);
+}
+
+.about-card-title-dim {
+    color: var(--rs-text-2);
+}
+
+.about-muted {
+    display: block;
+    color: var(--rs-muted);
+    margin: 0 0 6px;
+}
+
+.about-body {
+    color: var(--rs-text-2);
+    margin: 0 0 10px;
+    line-height: 1.4;
+}
+
+.about-body-dim {
+    color: var(--rs-muted);
+}
+
+.about-modified {
+    display: block;
+    color: var(--rs-muted);
+    margin-top: 8px;
+}
+
+.about-license {
+    display: block;
+    color: var(--rs-muted);
+    margin-top: 12px;
+    line-height: 1.35;
+}
+
+/* Responsive equal-ish button grid:
+   - wide: 4 primary links share a row
+   - medium: 2x2
+   - narrow: stack full width */
+.about-btn-grid {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+}
+
+.about-btn-grid-primary {
+    grid-template-columns: 1fr;
+}
+
+.about-btn-grid-secondary {
+    grid-template-columns: 1fr;
+}
+
+.about-btn-grid-single {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 220px;
+}
+
+@media (min-width: 420px) {
+    .about-btn-grid-primary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .about-btn-grid-secondary {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (min-width: 640px) {
+    .about-btn-grid-primary {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+.about-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--rs-radius-sm);
+    border: 1px solid var(--rs-border);
+    background: var(--rs-elevated);
+    color: var(--rs-text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.about-btn:hover {
+    background: var(--rs-surface-2);
+    border-color: var(--rs-purple);
+    color: var(--rs-text);
+}
+
+.about-btn:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+}
+
+.about-btn ::deep .mud-icon-root,
+.about-btn ::deep .mud-svg-icon {
+    flex: none;
+    font-size: 18px;
+}
+
+/* Primary support actions — clearly button-like fills */
+.about-btn-repo {
+    background: #24292f;
+    border-color: #3d444d;
+    color: #f0f3f6;
+}
+
+.about-btn-repo:hover {
+    background: #32383f;
+    border-color: #6e7681;
+    color: #fff;
+}
+
+.about-btn-discord {
+    background: #5865f2;
+    border-color: #6e79f5;
+    color: #fff;
+}
+
+.about-btn-discord:hover {
+    background: #4752c4;
+    border-color: #7983f5;
+    color: #fff;
+}
+
+.about-btn-site {
+    background: var(--rs-purple-surface);
+    border-color: rgba(146, 114, 248, 0.55);
+    color: var(--rs-text);
+}
+
+.about-btn-site:hover {
+    background: rgba(146, 114, 248, 0.28);
+    border-color: var(--rs-purple);
+}
+
+.about-btn-faq,
+.about-btn-data {
+    background: rgba(104, 167, 244, 0.12);
+    border-color: rgba(104, 167, 244, 0.45);
+    color: var(--rs-text);
+}
+
+.about-btn-faq:hover,
+.about-btn-data:hover {
+    background: rgba(104, 167, 244, 0.22);
+    border-color: var(--rs-info);
+}
+
+/* Historical attribution — still clearly clickable, less dominant */
+.about-btn-secondary {
+    background: transparent;
+    border-color: var(--rs-border);
+    color: var(--rs-text-2);
+    font-weight: 500;
+}
+
+.about-btn-secondary:hover {
+    background: var(--rs-surface);
+    border-color: var(--rs-border);
+    color: var(--rs-text);
+}

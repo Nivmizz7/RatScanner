@@ -104,6 +104,7 @@
   "CreditsOriginalBody": "Изначально создан Moritz / Blightbuster. Ссылки ниже — только историческое указание авторства, не поддержка этой сборки TarkovTracker Edition.",
   "CreditsOriginalRepo": "Оригинальный репозиторий (исторический)",
   "CreditsThisFork": "Этот репозиторий (GitHub)",
+  "CreditsThisForkShort": "Репо",
   "CreditsDataTitle": "Игровые данные",
   "CreditsDataBody": "Цены и данные предметов предоставляет tarkov.dev.",
   "CreditsLinksTitle": "Поддержка и ссылки (эта сборка)",

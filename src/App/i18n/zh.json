@@ -104,6 +104,7 @@
   "CreditsOriginalBody": "最初由 Moritz / Blightbuster 创建。下方链接仅用于历史署名——不是此 TarkovTracker 版本的支持渠道。",
   "CreditsOriginalRepo": "原仓库（历史）",
   "CreditsThisFork": "本仓库（GitHub）",
+  "CreditsThisForkShort": "仓库",
   "CreditsDataTitle": "游戏数据",
   "CreditsDataBody": "物品价格与数据库数据由 tarkov.dev 提供。",
   "CreditsLinksTitle": "支持与链接（此版本）",
