@@ -1,9 +1,13 @@
 # Rat Scanner FAQ
 
-[![Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F4117180&style=for-the-badge&logo=patreon)](https://patreon.com/RatScanner)
-[![Discord](https://img.shields.io/discord/687549250435153930?label=Discord&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=for-the-badge)](https://discord.gg/aHZf7aP)
+**TarkovTracker Edition** — maintained by [TarkovTracker.org](https://tarkovtracker.org)
+
+[![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
+[![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/tarkovtracker)
 
 ![Rat Scanner logo](media/RatLogo.png)
+
+Originally created by Moritz / Blightbuster ([original repo](https://github.com/RatScanner/RatScanner)). This is a modified community fork.
 
 ## Table of Contents
 
@@ -107,7 +111,7 @@ Icon scanning still has some known issues, some which are not possible to fix.
 This currently leads to items like keys and small attachments matching wrong due to their simularity to other items.
 Also, when in the stash, the light bright in the top center of the screen interferes with the top left section of the stash which results in extremly bad results.
 
-[download-section]: https://github.com/Blightbuster/RatScanner#download
-[ratscanner-latest]: https://github.com/RatScanner/RatScanner/releases/latest/download/RatScanner.zip
+[download-section]: https://github.com/tarkovtracker-org/RatScanner#download
+[ratscanner-latest]: https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip
 [webview2-download]: https://go.microsoft.com/fwlink/p/?LinkId=2124703
 [windows-media-pack]: https://www.microsoft.com/en-us/software-download/mediafeaturepack

@@ -16,7 +16,8 @@ public static class Constants
         public const string OriginalAuthorGitHub = "https://github.com/Blightbuster";
         public const string Discord = "https://discord.gg/tarkovtracker";
         public const string TarkovDev = "https://tarkov.dev";
-        public const string FAQ = "https://github.com/tarkovtracker-org/RatScanner#faq";
+        public const string FAQ = "https://github.com/tarkovtracker-org/RatScanner/blob/master/FAQ.md";
+        public const string TarkovTracker = "https://tarkovtracker.org";
     }
 
     public static class Icon

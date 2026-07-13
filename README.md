@@ -2,113 +2,121 @@
 
 ![RatScanner logo](media/RatLogo.png)
 
-[![Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F4117180&style=for-the-badge&logo=patreon)](https://patreon.com/RatScanner)
-[![Discord](https://img.shields.io/discord/687549250435153930?label=Discord&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=for-the-badge)](https://discord.gg/aHZf7aP)
-[![Download](https://img.shields.io/static/v1?&label=&message=Download&color=4FBD54&style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAsMCwxMDI0LDEwMjQiPgoJPGRlc2M+ZmlsZV9kb3dubG9hZCBpY29uIC0gTGljZW5zZWQgdW5kZXIgQXBhY2hlIExpY2Vuc2UgdjIuMCAoaHR0cDovL3d3dy5hcGFjaGUub3JnL2xpY2Vuc2VzL0xJQ0VOU0UtMi4wKSAtIENyZWF0ZWQgd2l0aCBJY29uZnUuY29tIC0gRGVyaXZhdGl2ZSB3b3JrIG9mIE1hdGVyaWFsIGljb25zIChDb3B5cmlnaHQgR29vZ2xlIEluYy4pPC9kZXNjPgoJPGcgZmlsbD0iI2ZmZmZmZiIgZmlsbC1ydWxlPSJub256ZXJvIiBzdHlsZT0ibWl4LWJsZW5kLW1vZGU6IG5vcm1hbCI+CgkJPHBhdGggZD0iTTUxMiw2ODIuNjdsLTI5OC42NywtMjk4LjY3aDE3MC42N3YtMjU2aDI1NnYyNTZoMTcwLjY3ek04MTAuNjcsNzY4djg1LjMzaC01OTcuMzR2LTg1LjMzeiIvPgoJPC9nPgo8L3N2Zz4=)](https://github.com/RatScanner/RatScanner/releases/latest/download/RatScanner.zip)
+**TarkovTracker Edition** — community-maintained fork by [TarkovTracker.org][tarkovtracker].
 
-Rat Scanner is a open source tool for [Escape from Tarkov][escape-from-tarkov].
+[![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
+[![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/tarkovtracker)
+[![Download](https://img.shields.io/static/v1?&label=&message=Download&color=4FBD54&style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAsMCwxMDI0LDEwMjQiPgoJPGRlc2M+ZmlsZV9kb3dubG9hZCBpY29uIC0gTGljZW5zZWQgdW5kZXIgQXBhY2hlIExpY2Vuc2UgdjIuMCAoaHR0cDovL3d3dy5hcGFjaGUub3JnL2xpY2Vuc2VzL0xJQ0VOU0UtMi4wKSAtIENyZWF0ZWQgd2l0aCBJY29uZnUuY29tIC0gRGVyaXZhdGl2ZSB3b3JrIG9mIE1hdGVyaWFsIGljb25zIChDb3B5cmlnaHQgR29vZ2xlIEluYy4pPC9kZXNjPgoJPGcgZmlsbD0iI2ZmZmZmZiIgZmlsbC1ydWxlPSJub256ZXJvIiBzdHlsZT0ibWl4LWJsZW5kLW1vZGU6IG5vcm1hbCI+CgkJPHBhdGggZD0iTTUxMiw2ODIuNjdsLTI5OC42NywtMjk4LjY3aDE3MC42N3YtMjU2aDI1NnYyNTZoMTcwLjY3ek04MTAuNjcsNzY4djg1LjMzaC01OTcuMzR2LTg1LjMzeiIvPgoJPC9nPgo8L3N2Zz4=)](https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip)
 
-Please consider [supporting](#support-the-project) the project to help finance the backend server as well as the [API][tarkov-dev].
+Rat Scanner is an external tool for [Escape from Tarkov][escape-from-tarkov] that scans items from screenshots and shows pricing, quest, and hideout-related info using the [tarkov.dev][tarkov-dev] API.
 
-[Tutorial / Demo Video][demo-video] - [Frequently asked Questions][faq-page]
+This repository is a **modified fork**. It is maintained by TarkovTracker for deeper TarkovTracker.org integration and active development without putting that load on the original author.
+
+[Tutorial / Demo Video][demo-video] · [FAQ][faq-page]
+
+## Attribution & license
+
+Originally created by **Moritz / Blightbuster** — [original RatScanner repository][original-repo].
+
+This software is modified from that work. See [`LICENSE`](LICENSE) (Elastic License 2.0–based). Important terms in plain language:
+
+- You may use, copy, and distribute the software under the license terms.
+- Commercial resale / selling the software is prohibited.
+- Anyone you give a copy to must also get the license terms.
+- Modified copies must include a clear notice that the software was modified (this README and the in-app credits serve that purpose).
+
+Item market data is provided by [tarkov.dev][tarkov-dev]. Battlestate Games is not affiliated with this project.
 
 ## Can I get banned for using Rat Scanner?
 
-While Battlestate Games does not support nor is affiliated with this project, it has existed over 5 years with over 1.000 players using it every day in their games. So far there has not been a single instance in which RatScanner was proven to have caused any ban.
+While Battlestate Games does not support nor is affiliated with this project, the original tool has existed for years with many players using it daily. So far there has not been a single instance in which RatScanner was proven to have caused any ban. Use at your own risk.
 
 ## What it does
 
-Rat Scanner allows you to scan items in the game and provides you with data about items (average price, value per slot, ...).
-
-The information is taken from a [third-party API][tarkov-dev] which takes the data directly from the game.
+Rat Scanner lets you scan items in-game and shows data such as average price, value per slot, and (when connected) quest / hideout relevance.
 
 ## How it works
 
-The tool is entirely external. This means it is not accessing any memory of the game, like cheats do.
+The tool is entirely external. It does not read game memory.
 
-Instead, when you want to scan a item, a screenshot is taken and image processing is applied to identify the clicked item. The item is then looked up in the database and information is displayed in the window and with a overlayed tooltip.
+When you scan an item, a screenshot is taken and image processing identifies the item. The result is looked up in the database and shown in the main window and overlay tooltip.
 
 ## How to use
 
 Your game may need to be in either `Borderless` or `Windowed` mode for the overlay to work.
 
-There are currently two types of item scan methods
-
 ### Name scanning
 
-_Name scanning refers to scanning the inspection name of a item._
+_Name scanning refers to scanning the inspection name of an item._
 
-- Simply left click onto the magnifier icon inside the inspect window
+- Left-click the magnifier icon inside the inspect window
 
-Limitations
+Limitations:
 
 - Uses / durability is always assumed at 100%
-- Weapons and other modable items will only show info of the base item
+- Weapons and other modable items only show info for the base item
 
 ![Name scanning demo](media/NameScan.gif)
 
 ### Icon scanning
 
-_Icon scanning refers to scanning the icon of a item._
+_Icon scanning refers to scanning the icon of an item._
 
-- Hold the modifier key down while left clicking on a item
-- The modifier key can be changed in the settings (default is `Shift`)
+- Hold the modifier key while left-clicking an item
+- The modifier key can be changed in settings (default is `Shift`)
 
-Limitations
+Limitations:
 
-- It is unfortunately no longer possible to scan weapons
+- Weapons can no longer be scanned by icon
 - Uses / durability is always assumed at 100%
-- Items which share a icon with other items (especially keys) will result in a uncertain match
-- There will be missmatches when scanning icons in the top left of the item stash since the bright light (top center of the screen) interferes with it
+- Items that share icons (especially keys) can match incorrectly
+- Stash lighting in the top center of the screen can interfere with the top-left stash area
 
 ![Icon scanning demo](media/IconScan.gif)
 
 ## Minimal UI
 
-Switch to the minimal ui by clicking the dedicated button inside the titlebar.
-Get back to the standard view by **double clicking** anywhere inside the window.
+Switch to the minimal UI via the title bar button. Return to the standard view by **double-clicking** inside the window.
 
-Background opacity as well as the data which is shown can be configured in the settings.
+Background opacity and which fields are shown can be configured in settings.
 
 ![Minimal UI how-to demo](media/MinimalUI-HowTo.gif)
 
 ## Download
 
-You can directly download the [latest RatScanner.zip release][latest-release] or choose a [specific version from the releases page][releases].
+Download the [latest RatScanner.zip from this fork][latest-release] or pick a [specific release][releases].
 
-After you downloaded the Zip-Archive (you only need `RatScanner.zip`) extract it anywhere on your PC and run `RatScanner.exe`.
+Extract the archive and run `RatScanner.exe`.
 
-Once it has launched, go into the settings menu (bottom right corner) and check that your resolution is set properly (default is FullHD).
+In settings, confirm your resolution (default is Full HD).
 
-If you have any problems with the process please checkout the [FAQ][faq-page] or join the [Discord][discord] if you need further help.
+Problems? See the [FAQ][faq-page] or join the [TarkovTracker Discord][discord].
 
-**Important:** If the tool does not seem to start, here's some [common issues][common-issues]
+**Important:** If the tool does not seem to start, check [common issues][common-issues].
 
 ## Setting up the repository for development
 
 Requirements: **Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
-1. Clone the repository.
-2. From the repo root, run **`dev.bat`** (first run downloads icons/OCR data and restores packages).
+1. Clone **this** repository: `https://github.com/tarkovtracker-org/RatScanner`
+2. From the repo root, run **`dev.bat`** (first run downloads icons/OCR data and restores packages)
 
-That’s it for day-to-day work.
-
-### Day-to-day coding (use this)
+### Day-to-day coding
 
 | What you want | Command |
 |---|---|
 | **Auto rebuild + restart on save** | `dev.bat` |
 | Run once (no watcher) | `dev.bat -Once` |
 | Re-download icons/OCR data | `dev.bat -ForceSetup` |
-| Release config (still local debug loop) | `dev.bat -Release` |
+| Release config (local debug loop) | `dev.bat -Release` |
 
 `dev.bat` wraps `scripts\dev.ps1` and will:
 
-1. Ensure `src\App\Data\` has icons + OCR data (via `scripts\setup-data.ps1`)
-2. `dotnet restore` if needed
-3. **`dotnet watch run`** so each save rebuilds and restarts the app
+1. Ensure `src\App\Data\` has icons + OCR data (`scripts\setup-data.ps1`)
+2. Restore NuGet packages if needed
+3. Run **`dotnet watch run`** so each save rebuilds and restarts the app
 
-**Hot reload reality check:** this is a WPF desktop app. True in-process hot reload for C#/XAML is limited and unreliable here. Best practice is **restart-on-save** (`dotnet watch`), which `dev.bat` does for you. You do **not** need to close the app or run publish after every edit—save the file and watch relaunches it.
+**Hot reload:** this is a WPF desktop app. True in-process hot reload is limited; restart-on-save is the reliable loop.
 
 ### Repository layout
 
@@ -119,13 +127,13 @@ tests/             # Unit tests
 scripts/           # dev + data setup
 ```
 
-Manual equivalents (if you prefer):
+Manual equivalents:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1   # once (or when data is missing)
+powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1
 dotnet restore RatScanner.sln
-dotnet watch --project src/App run --non-interactive             # iterative
-dotnet run --project src/App                                       # one-shot
+dotnet watch --project src/App run --non-interactive
+dotnet run --project src/App
 ```
 
 Or open `RatScanner.sln` in Visual Studio / Rider and press **F5**.
@@ -138,32 +146,37 @@ dotnet build RatScanner.sln
 
 ### Publishing (release package — slow; not for iteration)
 
-Use only when you need the shipping-style single-file package:
-
 ```sh
 publish.bat
 ```
 
 - Output: `publish\RatScanner.exe` and `RatScanner.zip`
-- Full Release self-contained publish + data download — minutes, not seconds
-- For normal coding, use **`dev.bat`** instead
+- Use **`dev.bat`** for normal coding
 
 ## Contributing
 
-Please read `CONTRIBUTING.md` before contributing.
+Please read `CONTRIBUTING.md` before contributing. PRs and issues go to **[tarkovtracker-org/RatScanner][fork-repo]**.
 
-## Support the project
+## Community & support
 
-This will help to finance the backend server as well as the [API][tarkov-dev] which provides the backend with data.
+This fork is maintained by **[TarkovTracker.org][tarkovtracker]** for integration and continued development.
 
-[![Patreon](https://img.shields.io/badge/dynamic/json?color=%23e85b46&label=Patreon&query=data.attributes.patron_count&suffix=%20patrons&url=https%3A%2F%2Fwww.patreon.com%2Fapi%2Fcampaigns%2F4117180&style=for-the-badge&logo=patreon)](https://patreon.com/RatScanner)
-[![PayPal](https://img.shields.io/static/v1?&label=PayPal&message=Donate&color=0079C1&style=for-the-badge&logo=paypal)](https://paypal.me/MoritzScheve)
+- App / site: [https://tarkovtracker.org][tarkovtracker]
+- Source & releases: [github.com/tarkovtracker-org/RatScanner][fork-repo]
+- Chat / help: [TarkovTracker Discord][discord]
 
-[common-issues]: https://github.com/RatScanner/RatScanner/blob/master/FAQ.md#program-issues-1
+Market data: [tarkov.dev][tarkov-dev].
+
+## Links
+
+[common-issues]: FAQ.md#program-issues
 [demo-video]: https://www.youtube.com/watch?v=tXoIkgXFmdA
-[discord]: https://discord.com/invite/aHZf7aP
+[discord]: https://discord.gg/tarkovtracker
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [faq-page]: FAQ.md
+[fork-repo]: https://github.com/tarkovtracker-org/RatScanner
 [latest-release]: https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip
+[original-repo]: https://github.com/RatScanner/RatScanner
 [releases]: https://github.com/tarkovtracker-org/RatScanner/releases/
 [tarkov-dev]: https://tarkov.dev/
+[tarkovtracker]: https://tarkovtracker.org
