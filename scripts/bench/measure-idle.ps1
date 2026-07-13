@@ -62,7 +62,7 @@ function Get-Percentile {
 }
 
 if ([string]::IsNullOrWhiteSpace($Executable)) {
-    $Executable = Join-Path $PSScriptRoot '..\..\RatScanner\bin\Release\net10.0-windows10.0.22621.0\RatScanner.exe'
+    $Executable = Join-Path $PSScriptRoot '..\..\src\App\bin\Release\net10.0-windows10.0.22621.0\RatScanner.exe'
 }
 
 $resolvedExecutable = (Resolve-Path -LiteralPath $Executable).Path

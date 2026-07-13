@@ -104,19 +104,28 @@ That’s it for day-to-day work.
 
 `dev.bat` wraps `scripts\dev.ps1` and will:
 
-1. Ensure `RatScanner\Data\` has icons + OCR data (via `scripts\setup-data.ps1`)
+1. Ensure `src\App\Data\` has icons + OCR data (via `scripts\setup-data.ps1`)
 2. `dotnet restore` if needed
 3. **`dotnet watch run`** so each save rebuilds and restarts the app
 
 **Hot reload reality check:** this is a WPF desktop app. True in-process hot reload for C#/XAML is limited and unreliable here. Best practice is **restart-on-save** (`dotnet watch`), which `dev.bat` does for you. You do **not** need to close the app or run publish after every edit—save the file and watch relaunches it.
+
+### Repository layout
+
+```
+src/App/           # Main WPF app
+src/ScanEngine/    # Scan / image-processing engine (historical RatEye; in-tree)
+tests/             # Unit tests
+scripts/           # dev + data setup
+```
 
 Manual equivalents (if you prefer):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1   # once (or when data is missing)
 dotnet restore RatScanner.sln
-dotnet watch --project RatScanner run --non-interactive          # iterative
-dotnet run --project RatScanner                                    # one-shot
+dotnet watch --project src/App run --non-interactive             # iterative
+dotnet run --project src/App                                       # one-shot
 ```
 
 Or open `RatScanner.sln` in Visual Studio / Rider and press **F5**.

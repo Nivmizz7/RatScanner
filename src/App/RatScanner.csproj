@@ -58,8 +58,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- In-repo image processing library (vendored RatEye; do not restore NuGet RatEye). -->
-		<ProjectReference Include="..\RatEye\RatEye.csproj" />
+		<!-- In-repo scan engine (vendored RatEye sources under src/ScanEngine; do not restore NuGet RatEye). -->
+		<ProjectReference Include="..\ScanEngine\RatEye.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

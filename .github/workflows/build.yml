@@ -28,7 +28,7 @@ jobs:
       - name: Test
         run: dotnet test RatScanner.sln -c Release --no-restore
       - name: Publish
-        run: dotnet publish RatScanner/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained
+        run: dotnet publish src/App/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained
       - name: Include Data
         run: |
           curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"

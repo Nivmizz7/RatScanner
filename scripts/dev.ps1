@@ -37,10 +37,10 @@ $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repositoryRoot
 
 $configuration = if ($Release) { 'Release' } else { 'Debug' }
-$project = Join-Path $repositoryRoot 'RatScanner\RatScanner.csproj'
+$project = Join-Path $repositoryRoot 'src\App\RatScanner.csproj'
 $solution = Join-Path $repositoryRoot 'RatScanner.sln'
 $setupScript = Join-Path $PSScriptRoot 'setup-data.ps1'
-$dataDir = Join-Path $repositoryRoot 'RatScanner\Data'
+$dataDir = Join-Path $repositoryRoot 'src\App\Data'
 
 function Assert-Command {
     param([string]$Name)

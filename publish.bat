@@ -8,7 +8,7 @@ if exist RatScanner.zip del /f /q RatScanner.zip
 
 :: Publish (matches CI: Release, win-x64, single-file, self-contained)
 echo Publishing RatScanner project...
-dotnet publish RatScanner/RatScanner.csproj -c Release -o publish --runtime win-x64 -p:PublishSingleFile=true --self-contained true
+dotnet publish src/App/RatScanner.csproj -c Release -o publish --runtime win-x64 -p:PublishSingleFile=true --self-contained true
 if errorlevel 1 (
 	echo Publish failed.
 	exit /b 1

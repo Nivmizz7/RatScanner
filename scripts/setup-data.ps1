@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$destination = Join-Path $repositoryRoot 'RatScanner\Data'
+$destination = Join-Path $repositoryRoot 'src\App\Data'
 $workRoot = Join-Path ([IO.Path]::GetTempPath()) ('RatScanner-data-' + [Guid]::NewGuid().ToString('N'))
 $archivePath = Join-Path $workRoot 'Data.zip'
 $extractPath = Join-Path $workRoot 'extract'
