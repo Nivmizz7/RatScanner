@@ -176,7 +176,8 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         BlazorInteractableOverlay?.Close();
         BlazorOverlay?.Close();
-        blazorWebView.WebView.Dispose();
+        // WebView may not be created if startup failed or exit happened before init.
+        blazorWebView?.WebView?.Dispose();
         Resources.Remove("services");
         _serviceProvider.Dispose();
         BlazorInteractableOverlay = null!;

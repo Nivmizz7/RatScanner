@@ -86,18 +86,58 @@ If you have any problems with the process please checkout the [FAQ][faq-page] or
 
 ## Setting up the repository for development
 
+Requirements: **Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
+
 1. Clone the repository.
-2. Run `powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1` to install item icons and OCR data.
-3. Run `dotnet restore RatScanner.sln`.
+2. From the repo root, run **`dev.bat`** (first run downloads icons/OCR data and restores packages).
 
-### Compiling
+That’s it for day-to-day work.
 
-- Run `dotnet build RatScanner.sln`, or open the solution in Visual Studio and select **Build → Build Solution**.
+### Day-to-day coding (use this)
 
-### Publishing
+| What you want | Command |
+|---|---|
+| **Auto rebuild + restart on save** | `dev.bat` |
+| Run once (no watcher) | `dev.bat -Once` |
+| Re-download icons/OCR data | `dev.bat -ForceSetup` |
+| Release config (still local debug loop) | `dev.bat -Release` |
 
-- Run the `publish.bat` script which is inside the repository root.
-- The output will be located in a folder called `publish` on the same level as the publish script.
+`dev.bat` wraps `scripts\dev.ps1` and will:
+
+1. Ensure `RatScanner\Data\` has icons + OCR data (via `scripts\setup-data.ps1`)
+2. `dotnet restore` if needed
+3. **`dotnet watch run`** so each save rebuilds and restarts the app
+
+**Hot reload reality check:** this is a WPF desktop app. True in-process hot reload for C#/XAML is limited and unreliable here. Best practice is **restart-on-save** (`dotnet watch`), which `dev.bat` does for you. You do **not** need to close the app or run publish after every edit—save the file and watch relaunches it.
+
+Manual equivalents (if you prefer):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1   # once (or when data is missing)
+dotnet restore RatScanner.sln
+dotnet watch --project RatScanner run --non-interactive          # iterative
+dotnet run --project RatScanner                                    # one-shot
+```
+
+Or open `RatScanner.sln` in Visual Studio / Rider and press **F5**.
+
+### Compiling only
+
+```sh
+dotnet build RatScanner.sln
+```
+
+### Publishing (release package — slow; not for iteration)
+
+Use only when you need the shipping-style single-file package:
+
+```sh
+publish.bat
+```
+
+- Output: `publish\RatScanner.exe` and `RatScanner.zip`
+- Full Release self-contained publish + data download — minutes, not seconds
+- For normal coding, use **`dev.bat`** instead
 
 ## Contributing
 

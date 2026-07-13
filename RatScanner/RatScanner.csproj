@@ -16,7 +16,8 @@
 		<nullable>Enable</nullable>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
-		<DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\generated\**</DefaultItemExcludes>
+		<!-- Exclude Data (thousands of icons) from item defaults / dotnet-watch so the file watcher is not flooded. -->
+		<DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\generated\**;$(MSBuildProjectDirectory)\Data\**</DefaultItemExcludes>
 		<GraphQlClientGenerator_Namespace>$(RootNamespace).TarkovDev.GraphQL</GraphQlClientGenerator_Namespace>
 		<GraphQlClientGenerator_IdTypeMapping>String</GraphQlClientGenerator_IdTypeMapping>
 		<GraphQlClientGenerator_DataClassMemberNullability>DefinedBySchema</GraphQlClientGenerator_DataClassMemberNullability>
@@ -71,7 +72,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="Data\**">
+		<!-- Explicit include so Data is still copied to bin/publish after DefaultItemExcludes removed it. -->
+		<!-- Watch=false: icon dumps must not restart the dev loop. -->
+		<Content Include="Data\**" Watch="false">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>

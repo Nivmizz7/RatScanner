@@ -9,6 +9,34 @@ RatScanner is a Windows-only .NET WPF application for Escape from Tarkov that sc
 - **Key deps:** in-repo RatEye (image processing), RatStash (item database NuGet), Tesseract (OCR), Newtonsoft.Json
 - **Platform:** Windows only — cannot be built or run in WSL/Linux
 
+## Local Development Loop
+
+**Day-to-day:** use `dev.bat` (or `scripts\dev.ps1`). Do **not** use `publish.bat` while iterating.
+
+```sh
+dev.bat                 # watch: auto rebuild + restart on save
+dev.bat -Once           # build + run once
+dev.bat -ForceSetup     # re-download RatScannerData icons/OCR
+```
+
+What `dev.bat` does:
+
+1. Ensures `RatScanner\Data\` exists (`scripts\setup-data.ps1`, skipped if already valid)
+2. Restores NuGet packages
+3. Runs `dotnet watch run` (restart-on-save)
+
+WPF does not get reliable full hot reload for C#/XAML. Best practice is **restart-on-save** via `dotnet watch`, which is what the script uses. Manual close/rebuild/`publish\` is unnecessary for normal work.
+
+One-time / manual data install:
+
+```sh
+powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1
+```
+
+The csproj copies `RatScanner\Data\**` to the output directory (`CopyToOutputDirectory=PreserveNewest`), so debug runs under `RatScanner\bin\...` pick up icons/OCR automatically.
+
+Shared zip helper: `scripts\Expand-Zip.ps1` (Expand-Archive → .NET ZipFile → python). Used by setup-data and `publish.bat` when PowerShell Archive is broken.
+
 ## Build Commands
 
 ```sh
@@ -16,6 +44,8 @@ dotnet restore RatScanner.sln        # restore NuGet packages
 dotnet build RatScanner.sln          # build (debug)
 dotnet build -c Release RatScanner.sln  # build (release)
 dotnet test RatScanner.sln           # unit tests (RatScanner.Tests)
+dev.bat                              # local watch loop (preferred while coding)
+publish.bat                          # release single-file package only
 ```
 
 Verify changes by building (and running tests when behavior is covered). GraphQL models come from the `GraphQlClientGenerator` source generator at build time — do not check in generated client sources under `obj/`.
@@ -45,8 +75,11 @@ Do not try to "fix" hand-written call sites for these ambiguity errors.
   - Sources from upstream `RatScanner/RatEye` tag `v4.0.1` (see `RatEye/VENDOR.md`)
   - Change scan/marker/OCR behavior here; ship with the app in one PR
 - `RatScanner.sln` — solution (RatScanner + RatEye)
-- `publish/` — publish assets
-- `publish.bat` — publish script
+- `publish/` — publish assets (gitignored; produced by `publish.bat`)
+- `publish.bat` — release single-file package (not for day-to-day)
+- `dev.bat` / `scripts\dev.ps1` — local watch loop (preferred while coding)
+- `scripts\setup-data.ps1` — download icons/OCR into `RatScanner\Data\`
+- `scripts\Expand-Zip.ps1` — robust zip extract helper
 - `media/` — README images
 - `examples/` — example files
 - `.github/` — GitHub Actions workflows
