@@ -414,6 +414,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <param name="position">Position on the screen at which to perform the scan</param>
     internal void NameScan(Vector2 position)
     {
+        RefreshGameDisplayForScan();
         lock (NameScanLock)
         {
             if (_disposed || !_ratEyeReady)
@@ -455,14 +456,19 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// </summary>
     internal void NameScanScreen(object? _ = null)
     {
+        RefreshGameDisplayForScan();
         lock (NameScanLock)
         {
             if (_disposed || !_ratEyeReady)
                 return;
 
             Logger.LogDebug("Name scanning screen");
-            Vector2 mousePosition = UserActivityHelper.GetMousePosition();
-            Rectangle bounds = Screen.AllScreens.First(screen => screen.Bounds.Contains(mousePosition)).Bounds;
+            Rectangle bounds = RatConfig.GameDisplayConfiguration.CaptureBounds;
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                Vector2 mousePosition = UserActivityHelper.GetMousePosition();
+                bounds = Screen.AllScreens.First(screen => screen.Bounds.Contains(mousePosition)).Bounds;
+            }
 
             Vector2 position = new(bounds.X, bounds.Y);
             using Bitmap screenshot = GetScreenshot(position, bounds.Size);
@@ -498,6 +504,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <returns><see langword="true"/> if a item was scanned successfully</returns>
     internal void IconScan(Vector2 position)
     {
+        RefreshGameDisplayForScan();
         lock (IconScanLock)
         {
             if (_disposed || !_ratEyeReady)
@@ -544,6 +551,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         }
 
         return bmp;
+    }
+
+    private void RefreshGameDisplayForScan()
+    {
+        if (RatConfig.RefreshGameDisplayConfiguration())
+            SetupRatEye();
     }
 
     private void RefreshTarkovTrackerDB(object? o = null)

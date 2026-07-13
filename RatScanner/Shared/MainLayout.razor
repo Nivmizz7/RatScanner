@@ -1,8 +1,16 @@
 @inherits LayoutComponentBase
+@using RatScanner.Display
+@inject NavigationManager Navigation
+@inject LocalizationService Localizer
+@inject ISnackbar Snackbar
+@implements IDisposable
 <MudThemeProvider Theme="_theme" />
 <MudDialogProvider /><MudSnackbarProvider />
 @Body
 @code {
+    private bool _receivesDisplayNotifications;
+    private string? _lastDisplayNotification;
+
     private readonly MudTheme _theme = new() {
         Typography = new Typography { Default = new Default { FontFamily = new[] { "Segoe UI", "system-ui", "sans-serif" } } },
         Palette = new PaletteDark {
@@ -14,4 +22,55 @@
             Divider = "#26303C", LinesDefault = "#293341", LinesInputs = "#293341", AppbarBackground = "#101620"
         }
     };
+
+    protected override void OnInitialized() {
+        string route = Navigation.ToBaseRelativePath(Navigation.Uri);
+        _receivesDisplayNotifications = route.StartsWith("app", StringComparison.OrdinalIgnoreCase);
+        if (_receivesDisplayNotifications)
+            RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
+    }
+
+    private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration) {
+        if (!configuration.RequiresAttention || configuration.NotificationKey == _lastDisplayNotification)
+            return;
+
+        _lastDisplayNotification = configuration.NotificationKey;
+        _ = InvokeAsync(() => Snackbar.Add(
+            FormatGameDisplayStatus(configuration),
+            configuration.StatusKind switch {
+                GameDisplayStatusKind.Error => Severity.Error,
+                GameDisplayStatusKind.Warning => Severity.Warning,
+                GameDisplayStatusKind.Success => Severity.Success,
+                _ => Severity.Info,
+            }
+        ));
+    }
+
+    private string FormatGameDisplayStatus(GameDisplayConfiguration configuration) {
+        GameDisplayInfo? active = configuration.ActiveDisplay;
+        string display = active is null
+            ? Localizer["UnknownDisplay"]
+            : Localizer.Format(
+                "GameDisplayOption",
+                active.DisplayNumber,
+                active.PhysicalResolution.Width,
+                active.PhysicalResolution.Height,
+                Math.Round(active.DpiScale * 100),
+                active.IsPrimary ? Localizer["PrimaryDisplaySuffix"] : ""
+            );
+        return configuration.StatusCode switch {
+            GameDisplayStatusCode.SavedDisplayUnavailable => Localizer.Format("GameDisplayStatusUnavailable", display),
+            GameDisplayStatusCode.GameWindowOnDifferentDisplay => Localizer.Format("GameDisplayStatusMoved", display),
+            GameDisplayStatusCode.GameWindowSpansDisplays => Localizer.Format("GameDisplayStatusSpanning", display),
+            GameDisplayStatusCode.DpiUnavailable => Localizer.Format("GameDisplayStatusDpi", display),
+            GameDisplayStatusCode.InvalidCustomConfiguration => Localizer["GameDisplayStatusInvalidCustom"],
+            GameDisplayStatusCode.NoDisplays => Localizer["GameDisplayStatusNone"],
+            _ => Localizer.Format("GameDisplayStatusFallback", display),
+        };
+    }
+
+    public void Dispose() {
+        if (_receivesDisplayNotifications)
+            RatConfig.GameDisplayConfigurationChanged -= OnGameDisplayConfigurationChanged;
+    }
 }

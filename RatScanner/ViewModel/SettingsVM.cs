@@ -1,12 +1,18 @@
 ﻿using System.ComponentModel;
 using System.Linq;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Threading.Tasks;
+using RatScanner.Display;
 using RatStash;
 
 namespace RatScanner.ViewModel;
 
-internal class SettingsVM : INotifyPropertyChanged
+internal class SettingsVM : INotifyPropertyChanged, IDisposable
 {
+    public sealed record GameDisplayOption(string Id, string Label);
+
     public bool EnableNameScan { get; set; }
     public bool EnableAutoNameScan { get; set; }
     public int NameScanLanguage { get; set; }
@@ -30,9 +36,131 @@ internal class SettingsVM : INotifyPropertyChanged
     public bool ShowQuestHideoutTeamTracker { get; set; }
     public int Opacity { get; set; }
 
-    public int ScreenWidth { get; set; }
-    public int ScreenHeight { get; set; }
-    public float ScreenScale { get; set; }
+    public int ScreenWidth { get; private set; }
+    public int ScreenHeight { get; private set; }
+    public float ScreenScale { get; private set; }
+    public IReadOnlyList<GameDisplayOption> GameDisplayOptions { get; private set; } = [];
+
+    private GameDisplayConfiguration _displayPreview = GameDisplayConfiguration.Empty;
+    private string _selectedGameDisplayId = "";
+    private bool _useCustomGameResolution;
+    private int _customGameWidth = 1920;
+    private int _customGameHeight = 1080;
+    private bool _useCustomDisplayScale;
+    private float _customDisplayScale = 1;
+
+    public string SelectedGameDisplayId
+    {
+        get => _selectedGameDisplayId;
+        set
+        {
+            if (_selectedGameDisplayId == value)
+                return;
+            _selectedGameDisplayId = value ?? "";
+            UpdateDisplayPreview();
+        }
+    }
+
+    public bool UseCustomGameResolution
+    {
+        get => _useCustomGameResolution;
+        set
+        {
+            if (_useCustomGameResolution == value)
+                return;
+            _useCustomGameResolution = value;
+            if (!value)
+                _useCustomDisplayScale = false;
+            UpdateDisplayPreview();
+        }
+    }
+
+    public int CustomGameWidth
+    {
+        get => _customGameWidth;
+        set
+        {
+            if (_customGameWidth == value)
+                return;
+            _customGameWidth = value;
+            UpdateDisplayPreview();
+        }
+    }
+
+    public int CustomGameHeight
+    {
+        get => _customGameHeight;
+        set
+        {
+            if (_customGameHeight == value)
+                return;
+            _customGameHeight = value;
+            UpdateDisplayPreview();
+        }
+    }
+
+    public bool UseCustomDisplayScale
+    {
+        get => _useCustomDisplayScale;
+        set
+        {
+            if (_useCustomDisplayScale == value)
+                return;
+            _useCustomDisplayScale = value;
+            UpdateDisplayPreview();
+        }
+    }
+
+    public float CustomDisplayScale
+    {
+        get => _customDisplayScale;
+        set
+        {
+            if (Math.Abs(_customDisplayScale - value) < 0.0001)
+                return;
+            _customDisplayScale = value;
+            UpdateDisplayPreview();
+        }
+    }
+
+    public bool CanSave =>
+        DisplaySelectionError is null && CustomResolutionError is null && CustomDisplayScaleError is null;
+
+    public string? DisplaySelectionError =>
+        GameDisplayOptions.Count == 0 || GameDisplayOptions.All(option => option.Id != SelectedGameDisplayId)
+            ? _localizationService["GameDisplayUnavailableError"]
+            : null;
+
+    public string? CustomResolutionError =>
+        UseCustomGameResolution && !GameDisplayValidation.IsValidResolution(CustomGameWidth, CustomGameHeight)
+            ? _localizationService.Format(
+                "CustomResolutionValidation",
+                GameDisplayValidation.MinimumWidth,
+                GameDisplayValidation.MinimumHeight,
+                GameDisplayValidation.MaximumWidth,
+                GameDisplayValidation.MaximumHeight
+            )
+            : null;
+
+    public string? CustomDisplayScaleError =>
+        UseCustomDisplayScale && !GameDisplayValidation.IsValidScale(CustomDisplayScale)
+            ? _localizationService.Format(
+                "CustomScaleValidation",
+                (int)(GameDisplayValidation.MinimumScale * 100),
+                (int)(GameDisplayValidation.MaximumScale * 100)
+            )
+            : null;
+
+    public GameDisplayStatusKind GameDisplayStatusKind => _displayPreview.StatusKind;
+    public string GameDisplayStatus => FormatGameDisplayStatus(_displayPreview);
+    public string PhysicalDisplayResolution => FormatSize(_displayPreview.ActiveDisplay?.PhysicalResolution);
+    public string LogicalDisplayResolution => FormatSize(_displayPreview.ActiveDisplay?.LogicalResolution);
+    public string GameViewportResolution => FormatSize(_displayPreview.GameViewport);
+    public string DisplayScaling => $"{Math.Round(_displayPreview.DisplayScale * 100):0}%";
+    public string CaptureRegion => FormatCaptureBounds(_displayPreview.CaptureBounds);
+    public string DisplayDetectionMode => _displayPreview.UsesCustomGameResolution || _displayPreview.UsesCustomDisplayScale
+        ? _localizationService["CustomMode"]
+        : _localizationService["AutomaticMode"];
     public TarkovDev.GraphQL.GameMode GameMode { get; set; }
     public bool MinimizeToTray { get; set; }
     public bool AlwaysOnTop { get; set; }
@@ -60,6 +188,7 @@ internal class SettingsVM : INotifyPropertyChanged
     internal SettingsVM(LocalizationService localizationService)
     {
         _localizationService = localizationService;
+        RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
         LoadSettings();
     }
 
@@ -88,9 +217,7 @@ internal class SettingsVM : INotifyPropertyChanged
         ShowUpdated = RatConfig.MinimalUi.ShowUpdated;
         Opacity = RatConfig.MinimalUi.Opacity;
 
-        ScreenWidth = RatConfig.ScreenWidth;
-        ScreenHeight = RatConfig.ScreenHeight;
-        ScreenScale = RatConfig.ScreenScale;
+        LoadDisplaySettings();
         GameMode = RatConfig.GameMode;
         MinimizeToTray = RatConfig.MinimizeToTray;
         AlwaysOnTop = RatConfig.AlwaysOnTop;
@@ -112,9 +239,13 @@ internal class SettingsVM : INotifyPropertyChanged
 
     public async Task SaveSettings()
     {
+        if (!CanSave)
+            throw new InvalidOperationException("The game display configuration is invalid.");
+
         bool updateTarkovTrackerToken = TarkovTrackerToken != RatConfig.Tracking.TarkovTracker.Token;
         bool updateTarkovTrackerBackend = TarkovTrackerBackend != RatConfig.Tracking.TarkovTracker.Backend;
-        bool updateResolution = ScreenWidth != RatConfig.ScreenWidth || ScreenHeight != RatConfig.ScreenHeight;
+        int previousScreenWidth = RatConfig.ScreenWidth;
+        int previousScreenHeight = RatConfig.ScreenHeight;
         bool updateLanguage = RatConfig.NameScan.Language != (Language)NameScanLanguage;
         bool updateUiLanguage = RatConfig.UserInterface.Language != UiLanguage;
         bool updateGameMode = GameMode != RatConfig.GameMode;
@@ -161,9 +292,11 @@ internal class SettingsVM : INotifyPropertyChanged
             RatConfig.Overlay.Search.BlurBehind = BlurBehindSearch;
             RatConfig.Overlay.Search.Hotkey = new Hotkey(InteractableOverlayHotkey);
 
-            RatConfig.ScreenWidth = ScreenWidth;
-            RatConfig.ScreenHeight = ScreenHeight;
-            RatConfig.ScreenScale = ScreenScale;
+            RatConfig.SetGameDisplayPreferences(CreateDraftDisplayPreferences());
+            RatConfig.RefreshGameDisplayConfiguration(force: true);
+            bool updateResolution =
+                previousScreenWidth != RatConfig.ScreenWidth || previousScreenHeight != RatConfig.ScreenHeight;
+            ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: false);
             RatConfig.GameMode = GameMode;
             RatConfig.MinimizeToTray = MinimizeToTray;
             RatConfig.AlwaysOnTop = AlwaysOnTop;
@@ -201,6 +334,154 @@ internal class SettingsVM : INotifyPropertyChanged
         }
 
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    }
+
+    public void RefreshGameDisplays()
+    {
+        bool updateResolution = RatConfig.RefreshGameDisplayConfiguration(force: true);
+        LoadDisplaySettings();
+        if (updateResolution)
+            RatScannerMain.Instance.SetupRatEye();
+    }
+
+    private void LoadDisplaySettings()
+    {
+        GameDisplayPreferences preferences = RatConfig.GetGameDisplayPreferences();
+        ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: true);
+
+        _useCustomGameResolution = preferences.UseCustomGameResolution;
+        _customGameWidth = preferences.CustomGameWidth;
+        _customGameHeight = preferences.CustomGameHeight;
+        _useCustomDisplayScale = preferences.UseCustomDisplayScale;
+        _customDisplayScale = (float)preferences.CustomDisplayScale;
+        UpdateDisplayPreview();
+    }
+
+    private void ApplyDisplayConfiguration(GameDisplayConfiguration configuration, bool resetDraft)
+    {
+        _displayPreview = configuration;
+        GameDisplayOptions = configuration.Displays
+            .Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
+            .ToArray();
+
+        if (resetDraft)
+        {
+            string preferredId = RatConfig.PreferredGameDisplayId;
+            _selectedGameDisplayId = GameDisplayOptions.Any(option => option.Id == preferredId)
+                ? preferredId
+                : configuration.ActiveDisplay?.StableId ?? "";
+        }
+
+        ScreenWidth = configuration.GameViewport.Width;
+        ScreenHeight = configuration.GameViewport.Height;
+        ScreenScale = (float)configuration.DisplayScale;
+    }
+
+    private void UpdateDisplayPreview()
+    {
+        _displayPreview = RatConfig.DetectGameDisplayConfiguration(CreateDraftDisplayPreferences());
+        GameDisplayOptions = _displayPreview.Displays
+            .Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
+            .ToArray();
+        ScreenWidth = _displayPreview.GameViewport.Width;
+        ScreenHeight = _displayPreview.GameViewport.Height;
+        ScreenScale = (float)_displayPreview.DisplayScale;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    }
+
+    private GameDisplayPreferences CreateDraftDisplayPreferences()
+    {
+        GameDisplayInfo? selectedDisplay = _displayPreview.Displays.FirstOrDefault(display =>
+            string.Equals(display.StableId, SelectedGameDisplayId, StringComparison.OrdinalIgnoreCase)
+        );
+        return new GameDisplayPreferences(
+            selectedDisplay?.StableId ?? SelectedGameDisplayId,
+            selectedDisplay?.DeviceName ?? "",
+            selectedDisplay?.PhysicalBounds,
+            UseCustomGameResolution,
+            CustomGameWidth,
+            CustomGameHeight,
+            UseCustomDisplayScale,
+            CustomDisplayScale
+        );
+    }
+
+    private string FormatGameDisplayOption(GameDisplayInfo display)
+    {
+        string primarySuffix = display.IsPrimary ? _localizationService["PrimaryDisplaySuffix"] : "";
+        return _localizationService.Format(
+            "GameDisplayOption",
+            display.DisplayNumber,
+            display.PhysicalResolution.Width,
+            display.PhysicalResolution.Height,
+            Math.Round(display.DpiScale * 100),
+            primarySuffix
+        );
+    }
+
+    private string FormatGameDisplayStatus(GameDisplayConfiguration configuration)
+    {
+        string display = configuration.ActiveDisplay is null
+            ? _localizationService["UnknownDisplay"]
+            : FormatGameDisplayOption(configuration.ActiveDisplay);
+        return configuration.StatusCode switch
+        {
+            GameDisplayStatusCode.GameWindowDetected => _localizationService.Format(
+                "GameDisplayStatusDetected",
+                display
+            ),
+            GameDisplayStatusCode.SavedDisplay => _localizationService.Format(
+                "GameDisplayStatusSaved",
+                display
+            ),
+            GameDisplayStatusCode.PrimaryFallback => _localizationService.Format(
+                "GameDisplayStatusPrimary",
+                display
+            ),
+            GameDisplayStatusCode.FirstAvailableFallback => _localizationService.Format(
+                "GameDisplayStatusFallback",
+                display
+            ),
+            GameDisplayStatusCode.SavedDisplayUnavailable => _localizationService.Format(
+                "GameDisplayStatusUnavailable",
+                display
+            ),
+            GameDisplayStatusCode.GameWindowOnDifferentDisplay => _localizationService.Format(
+                "GameDisplayStatusMoved",
+                display
+            ),
+            GameDisplayStatusCode.GameWindowSpansDisplays => _localizationService.Format(
+                "GameDisplayStatusSpanning",
+                display
+            ),
+            GameDisplayStatusCode.DpiUnavailable => _localizationService.Format(
+                "GameDisplayStatusDpi",
+                display
+            ),
+            GameDisplayStatusCode.InvalidCustomConfiguration => _localizationService[
+                "GameDisplayStatusInvalidCustom"
+            ],
+            _ => _localizationService["GameDisplayStatusNone"],
+        };
+    }
+
+    private static string FormatSize(Size? size) =>
+        size is { Width: > 0, Height: > 0 } value ? $"{value.Width} × {value.Height}" : "—";
+
+    private static string FormatCaptureBounds(Rectangle bounds) =>
+        bounds.Width > 0 && bounds.Height > 0
+            ? $"{bounds.Width} × {bounds.Height} @ ({bounds.X}, {bounds.Y})"
+            : "—";
+
+    private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration)
+    {
+        ApplyDisplayConfiguration(configuration, resetDraft: false);
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    }
+
+    public void Dispose()
+    {
+        RatConfig.GameDisplayConfigurationChanged -= OnGameDisplayConfigurationChanged;
     }
 
     private void RestoreRuntimeAfterFailedSave()
@@ -288,9 +569,7 @@ internal class SettingsVM : INotifyPropertyChanged
         private readonly bool _enableOverlay = RatConfig.Overlay.Search.Enable;
         private readonly bool _blurBehindSearch = RatConfig.Overlay.Search.BlurBehind;
         private readonly Hotkey _overlayHotkey = new(RatConfig.Overlay.Search.Hotkey);
-        private readonly int _screenWidth = RatConfig.ScreenWidth;
-        private readonly int _screenHeight = RatConfig.ScreenHeight;
-        private readonly float _screenScale = RatConfig.ScreenScale;
+        private readonly GameDisplayPreferences _gameDisplayPreferences = RatConfig.GetGameDisplayPreferences();
         private readonly TarkovDev.GraphQL.GameMode _gameMode = RatConfig.GameMode;
         private readonly bool _minimizeToTray = RatConfig.MinimizeToTray;
         private readonly bool _alwaysOnTop = RatConfig.AlwaysOnTop;
@@ -325,9 +604,8 @@ internal class SettingsVM : INotifyPropertyChanged
             RatConfig.Overlay.Search.Enable = _enableOverlay;
             RatConfig.Overlay.Search.BlurBehind = _blurBehindSearch;
             RatConfig.Overlay.Search.Hotkey = new Hotkey(_overlayHotkey);
-            RatConfig.ScreenWidth = _screenWidth;
-            RatConfig.ScreenHeight = _screenHeight;
-            RatConfig.ScreenScale = _screenScale;
+            RatConfig.SetGameDisplayPreferences(_gameDisplayPreferences);
+            RatConfig.RefreshGameDisplayConfiguration(force: true);
             RatConfig.GameMode = _gameMode;
             RatConfig.MinimizeToTray = _minimizeToTray;
             RatConfig.AlwaysOnTop = _alwaysOnTop;

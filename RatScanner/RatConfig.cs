@@ -2,13 +2,10 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Windows.Forms;
 using System.Windows.Input;
-using Newtonsoft.Json.Linq;
+using RatScanner.Display;
 using RatScanner.TarkovDev.GraphQL;
 using RatStash;
 using Key = System.Windows.Input.Key;
@@ -17,16 +14,10 @@ namespace RatScanner;
 
 internal static class RatConfig
 {
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromPoint([In] Point pt, [In] uint dwFlags);
-
-    [DllImport("Shcore.dll")]
-    private static extern IntPtr GetDpiForMonitor(
-        [In] IntPtr hmonitor,
-        [In] DpiType dpiType,
-        [Out] out uint dpiX,
-        [Out] out uint dpiY
-    );
+    private static readonly object GameDisplayLock = new();
+    private static readonly WindowsGameDisplayService GameDisplayService = new();
+    private static readonly TimeSpan GameDisplayRefreshInterval = TimeSpan.FromSeconds(5);
+    private static DateTimeOffset _lastGameDisplayRefresh = DateTimeOffset.MinValue;
 
     // Version
     public static string Version => Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion ?? "Unknown";
@@ -177,7 +168,20 @@ internal static class RatConfig
     internal static int ScreenWidth = 1920;
     internal static int ScreenHeight = 1080;
     internal static float ScreenScale = 1f;
-    internal static bool SetScreen = false;
+    internal static string PreferredGameDisplayId = "";
+    internal static string PreferredGameDisplayDeviceName = "";
+    internal static int PreferredGameDisplayBoundsX;
+    internal static int PreferredGameDisplayBoundsY;
+    internal static int PreferredGameDisplayBoundsWidth;
+    internal static int PreferredGameDisplayBoundsHeight;
+    internal static bool UseCustomGameResolution;
+    internal static int CustomGameWidth = 1920;
+    internal static int CustomGameHeight = 1080;
+    internal static bool UseCustomDisplayScale;
+    internal static float CustomDisplayScale = 1f;
+    internal static GameDisplayConfiguration GameDisplayConfiguration { get; private set; } =
+        GameDisplayConfiguration.Empty;
+    internal static event Action<GameDisplayConfiguration>? GameDisplayConfigurationChanged;
     internal static int LastWindowPositionX = int.MinValue;
     internal static int LastWindowPositionY = int.MinValue;
     internal static WindowMode LastWindowMode = WindowMode.Normal;
@@ -197,7 +201,9 @@ internal static class RatConfig
     internal static void LoadConfig()
     {
         bool configFileExists = File.Exists(Paths.ConfigFile);
-        bool isSupportedConfigVersion = IsSupportedConfigVersion();
+        bool isSupportedConfigVersion = !configFileExists || IsSupportedConfigVersion();
+        bool existingSupportedConfig = configFileExists && isSupportedConfigVersion;
+        bool shouldSaveConfig = !configFileExists;
         if (configFileExists && !isSupportedConfigVersion)
         {
             string message = "Old config version detected!\n\n";
@@ -206,13 +212,8 @@ internal static class RatConfig
             Logger.ShowMessage(message);
 
             File.Delete(Paths.ConfigFile);
-            TrySetScreenConfig();
-            SaveConfig();
-        }
-        else if (!configFileExists)
-        {
-            TrySetScreenConfig();
-            SaveConfig();
+            configFileExists = false;
+            shouldSaveConfig = true;
         }
 
         SimpleConfig config = new(Paths.ConfigFile) { Section = nameof(NameScan) };
@@ -289,12 +290,9 @@ internal static class RatConfig
         );
 
         config.Section = "Other";
-        if (!SetScreen)
-        {
-            ScreenWidth = config.ReadInt(nameof(ScreenWidth), ScreenWidth);
-            ScreenHeight = config.ReadInt(nameof(ScreenHeight), ScreenHeight);
-            ScreenScale = config.ReadFloat(nameof(ScreenScale), ScreenScale);
-        }
+        ScreenWidth = config.ReadInt(nameof(ScreenWidth), ScreenWidth);
+        ScreenHeight = config.ReadInt(nameof(ScreenHeight), ScreenHeight);
+        ScreenScale = config.ReadFloat(nameof(ScreenScale), ScreenScale);
 
         GameMode = (GameMode)config.ReadInt(nameof(GameMode), (int)GameMode);
         MinimizeToTray = config.ReadBool(nameof(MinimizeToTray), MinimizeToTray);
@@ -304,6 +302,26 @@ internal static class RatConfig
         LastWindowPositionX = config.ReadInt(nameof(LastWindowPositionX), LastWindowPositionX);
         LastWindowPositionY = config.ReadInt(nameof(LastWindowPositionY), LastWindowPositionY);
         LastWindowMode = (WindowMode)config.ReadInt(nameof(LastWindowMode), (int)LastWindowMode);
+
+        if (GameDisplayPreferencesStore.TryRead(config, ScreenWidth, ScreenHeight, ScreenScale, out var preferences))
+        {
+            SetGameDisplayPreferences(preferences);
+        }
+        else
+        {
+            GameDisplayConfiguration automaticConfiguration = GameDisplayService.Detect(
+                GameDisplayPreferences.Automatic
+            );
+            GameDisplayPreferences migratedPreferences = existingSupportedConfig
+                ? GameDisplayMigration.FromLegacy(ScreenWidth, ScreenHeight, ScreenScale, automaticConfiguration)
+                : CreateFirstRunPreferences(automaticConfiguration);
+            SetGameDisplayPreferences(migratedPreferences);
+            shouldSaveConfig = true;
+        }
+
+        RefreshGameDisplayConfiguration(force: true);
+        if (shouldSaveConfig)
+            SaveConfig();
     }
 
     internal static void SaveConfig()
@@ -377,6 +395,8 @@ internal static class RatConfig
             config.WriteInt(nameof(LastWindowPositionX), LastWindowPositionX);
             config.WriteInt(nameof(LastWindowPositionY), LastWindowPositionY);
             config.WriteInt(nameof(LastWindowMode), (int)LastWindowMode);
+
+            GameDisplayPreferencesStore.Write(config, GetGameDisplayPreferences());
             File.Move(temporaryPath, Paths.ConfigFile, overwrite: true);
         }
         finally
@@ -445,25 +465,6 @@ internal static class RatConfig
         }
     }
 
-    /// <summary>
-    /// Get the current screen config from tarkov's config files or default to the primary screen
-    /// </summary>
-    internal static void TrySetScreenConfig()
-    {
-        (int width, int height, double scale) = GetTarkovScreenConfig();
-        ScreenWidth = width;
-        ScreenHeight = height;
-        ScreenScale = (float)scale;
-        SetScreen = true;
-    }
-
-    public enum DpiType
-    {
-        Effective = 0,
-        Angular = 1,
-        Raw = 2,
-    }
-
     public enum WindowMode
     {
         Normal = 0,
@@ -471,57 +472,101 @@ internal static class RatConfig
         Minimized = 2,
     }
 
-    public static double GetScalingForScreen(Screen screen)
+    internal static bool RefreshGameDisplayConfiguration(bool force = false)
     {
-        Point pointOnScreen = new(screen.Bounds.X + 1, screen.Bounds.Y + 1);
-        nint mon = MonitorFromPoint(
-            pointOnScreen,
-            2 /*MONITOR_DEFAULTTONEAREST*/
+        GameDisplayConfiguration? changedConfiguration = null;
+        bool viewportChanged;
+        lock (GameDisplayLock)
+        {
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            if (!force && now - _lastGameDisplayRefresh < GameDisplayRefreshInterval)
+                return false;
+
+            GameDisplayConfiguration previous = GameDisplayConfiguration;
+            GameDisplayConfiguration detected = GameDisplayService.Detect(GetGameDisplayPreferences());
+            viewportChanged =
+                previous.GameViewport != detected.GameViewport
+                || Math.Abs(previous.DisplayScale - detected.DisplayScale) > 0.001;
+
+            GameDisplayConfiguration = detected;
+            ScreenWidth = detected.GameViewport.Width;
+            ScreenHeight = detected.GameViewport.Height;
+            ScreenScale = (float)detected.DisplayScale;
+            _lastGameDisplayRefresh = now;
+
+            if (HasMaterialDisplayChange(previous, detected))
+                changedConfiguration = detected;
+        }
+
+        if (changedConfiguration is not null)
+            GameDisplayConfigurationChanged?.Invoke(changedConfiguration);
+        return viewportChanged;
+    }
+
+    internal static GameDisplayConfiguration DetectGameDisplayConfiguration(GameDisplayPreferences preferences) =>
+        GameDisplayService.Detect(preferences);
+
+    internal static GameDisplayPreferences GetGameDisplayPreferences()
+    {
+        Rectangle? bounds = PreferredGameDisplayBoundsWidth > 0 && PreferredGameDisplayBoundsHeight > 0
+            ? new Rectangle(
+                PreferredGameDisplayBoundsX,
+                PreferredGameDisplayBoundsY,
+                PreferredGameDisplayBoundsWidth,
+                PreferredGameDisplayBoundsHeight
+            )
+            : null;
+        return new GameDisplayPreferences(
+            PreferredGameDisplayId,
+            PreferredGameDisplayDeviceName,
+            bounds,
+            UseCustomGameResolution,
+            CustomGameWidth,
+            CustomGameHeight,
+            UseCustomDisplayScale,
+            CustomDisplayScale
         );
-        GetDpiForMonitor(mon, DpiType.Effective, out uint dpiX, out _);
-        return dpiX / 96.0;
     }
 
-    private static (int widht, int height, double scale) GetTarkovScreenConfig()
+    internal static void SetGameDisplayPreferences(GameDisplayPreferences preferences)
     {
-        try
-        {
-            string configPath = Environment.ExpandEnvironmentVariables(
-                @"%AppData%\Battlestate Games\Escape From Tarkov\Settings\Graphics.ini"
-            );
-            using FileStream file = new(configPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using StreamReader reader = new(file, Encoding.UTF8);
-
-            JObject json = JObject.Parse(reader.ReadToEnd());
-
-            int activeDisplay =
-                json["DisplaySettings"]?["Display"]?.ToObject<int>()
-                ?? throw new InvalidOperationException("Missing DisplaySettings.Display");
-            JToken windowRes =
-                json["Stored"]?[activeDisplay.ToString()]?["WindowResolution"]
-                ?? throw new InvalidOperationException("Missing WindowResolution");
-            int width = windowRes["Width"]?.ToObject<int>() ?? throw new InvalidOperationException("Missing Width");
-            int height = windowRes["Height"]?.ToObject<int>() ?? throw new InvalidOperationException("Missing Height");
-
-            Screen usedScreen = Screen.AllScreens[activeDisplay];
-            double scale = GetScalingForScreen(usedScreen);
-
-            return (width, height, scale);
-        }
-        catch (Exception e)
-        {
-            Logger.LogWarning("Unable to query Escape From Tarkov graphic settings.", e);
-
-            Screen primary = Screen.PrimaryScreen ?? throw new InvalidOperationException("No primary screen available");
-            int width = primary.Bounds.Width;
-            int height = primary.Bounds.Height;
-            double scale = GetScalingForScreen(primary);
-
-            string message = $"Detected {width}x{height} Resolution at {scale} Scale.\n\n";
-            message += "You can adjust this inside the settings.";
-            Logger.ShowMessage(message);
-
-            return (width, height, scale);
-        }
+        PreferredGameDisplayId = preferences.PreferredStableId;
+        PreferredGameDisplayDeviceName = preferences.PreferredDeviceName;
+        PreferredGameDisplayBoundsX = preferences.LastPhysicalBounds?.X ?? 0;
+        PreferredGameDisplayBoundsY = preferences.LastPhysicalBounds?.Y ?? 0;
+        PreferredGameDisplayBoundsWidth = preferences.LastPhysicalBounds?.Width ?? 0;
+        PreferredGameDisplayBoundsHeight = preferences.LastPhysicalBounds?.Height ?? 0;
+        UseCustomGameResolution = preferences.UseCustomGameResolution;
+        CustomGameWidth = preferences.CustomGameWidth;
+        CustomGameHeight = preferences.CustomGameHeight;
+        UseCustomDisplayScale = preferences.UseCustomDisplayScale;
+        CustomDisplayScale = (float)preferences.CustomDisplayScale;
     }
+
+    private static GameDisplayPreferences CreateFirstRunPreferences(GameDisplayConfiguration automaticConfiguration)
+    {
+        GameDisplayInfo? display = automaticConfiguration.ActiveDisplay;
+        return new GameDisplayPreferences(
+            display?.StableId ?? "",
+            display?.DeviceName ?? "",
+            display?.PhysicalBounds,
+            false,
+            automaticConfiguration.GameViewport.Width,
+            automaticConfiguration.GameViewport.Height,
+            false,
+            automaticConfiguration.DisplayScale
+        );
+    }
+
+    private static bool HasMaterialDisplayChange(
+        GameDisplayConfiguration previous,
+        GameDisplayConfiguration current
+    ) =>
+        previous.ActiveDisplay?.StableId != current.ActiveDisplay?.StableId
+        || previous.GameClientBounds != current.GameClientBounds
+        || previous.GameViewport != current.GameViewport
+        || previous.CaptureBounds != current.CaptureBounds
+        || Math.Abs(previous.DisplayScale - current.DisplayScale) > 0.001
+        || previous.StatusCode != current.StatusCode
+        || previous.Displays.Count != current.Displays.Count;
 }
