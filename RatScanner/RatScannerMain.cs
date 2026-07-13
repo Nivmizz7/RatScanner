@@ -467,7 +467,13 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             if (bounds.Width <= 0 || bounds.Height <= 0)
             {
                 Vector2 mousePosition = UserActivityHelper.GetMousePosition();
-                bounds = Screen.AllScreens.First(screen => screen.Bounds.Contains(mousePosition)).Bounds;
+                Screen? screen =
+                    Screen.AllScreens.FirstOrDefault(candidate => candidate.Bounds.Contains(mousePosition))
+                    ?? Screen.PrimaryScreen
+                    ?? Screen.AllScreens.FirstOrDefault();
+                if (screen is null)
+                    return;
+                bounds = screen.Bounds;
             }
 
             Vector2 position = new(bounds.X, bounds.Y);

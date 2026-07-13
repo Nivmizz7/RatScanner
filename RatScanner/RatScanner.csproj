@@ -34,18 +34,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<Resource Include="Resources\iconMods.png" />
-		<Resource Include="Resources\settings.png" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="DeepCloner" Version="0.10.4" />
 		<PackageReference Include="GraphQlClientGenerator" Version="0.9.31" IncludeAssets="analyzers" PrivateAssets="all" />
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.71" />
 		<PackageReference Include="MudBlazor" Version="6.10.0" />
-		<PackageReference Include="Microsoft.DotNet.UpgradeAssistant.Extensions.Default.Analyzers" Version="0.4.421302">
-			<PrivateAssets>all</PrivateAssets>
-		</PackageReference>
 		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.9" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="RatStash" Version="6.0.0" />
@@ -76,8 +67,6 @@
 
 	<ItemGroup>
 		<Content Remove="Data\maps.json" />
-		<Content Remove="wwwroot\fonts\bender.bold.otf" />
-		<Content Remove="wwwroot\fonts\bender.regular.otf" />
 		<Content Remove="wwwroot\interactableOverlay.html" />
 	</ItemGroup>
 

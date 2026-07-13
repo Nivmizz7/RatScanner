@@ -24,7 +24,7 @@ public class ItemIconScan : ItemScan
         Confidence = icon.DetectionConfidence;
         Rotated = icon.Rotated;
         ItemSize = icon.ItemSize;
-        IconPath = icon.IconPath;
+        IconPath = icon.IconPath ?? string.Empty;
 
         _toolTipPosition = toolTipPosition;
         DissapearAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + duration;

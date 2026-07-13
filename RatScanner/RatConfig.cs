@@ -44,7 +44,6 @@ internal static class RatConfig
         internal static string UnknownIcon = Path.Combine(Data, "unknown.png");
         internal static string ConfigFile = Path.Combine(Base, "config.cfg");
         internal static string Debug = Path.Combine(Base, "Debug");
-        internal static string Updater = Path.Combine(Base, "RatUpdater.exe");
         internal static string LogFile = Path.Combine(Base, "Log.txt");
 
         internal static string I18nDir => Path.Combine(Base, "i18n");
@@ -137,13 +136,6 @@ internal static class RatConfig
             internal static bool BlurBehind = true;
             internal static Hotkey Hotkey = new([Key.N, Key.M]);
         }
-    }
-
-    // OAuth2 refresh tokens
-    internal static class OAuthRefreshToken
-    {
-        internal static string Discord = "";
-        internal static string Patreon = "";
     }
 
     // Other
@@ -279,16 +271,6 @@ internal static class RatConfig
         Overlay.Search.BlurBehind = config.ReadBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
         Overlay.Search.Hotkey = config.ReadHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
 
-        config.Section = nameof(OAuthRefreshToken);
-        OAuthRefreshToken.Discord = config.ReadSecureString(
-            nameof(OAuthRefreshToken.Discord),
-            OAuthRefreshToken.Discord
-        );
-        OAuthRefreshToken.Patreon = config.ReadSecureString(
-            nameof(OAuthRefreshToken.Patreon),
-            OAuthRefreshToken.Patreon
-        );
-
         config.Section = "Other";
         ScreenWidth = config.ReadInt(nameof(ScreenWidth), ScreenWidth);
         ScreenHeight = config.ReadInt(nameof(ScreenHeight), ScreenHeight);
@@ -378,10 +360,6 @@ internal static class RatConfig
             config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
             config.WriteBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
             config.WriteHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
-
-            config.Section = nameof(OAuthRefreshToken);
-            config.WriteSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);
-            config.WriteSecureString(nameof(OAuthRefreshToken.Patreon), OAuthRefreshToken.Patreon);
 
             config.Section = "Other";
             config.WriteInt(nameof(ScreenWidth), ScreenWidth);

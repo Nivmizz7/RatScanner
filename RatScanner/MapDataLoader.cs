@@ -24,8 +24,10 @@ public static class MapDataLoader
             string mapsJsonPath = Path.Combine(RatConfig.Paths.Data, "maps.json");
             if (!File.Exists(mapsJsonPath))
             {
-                Logger.LogError($"maps.json not found at {mapsJsonPath}");
-                return new();
+                // LogWarning: map overlay data is optional. LogError would call Environment.Exit.
+                Logger.LogWarning($"maps.json not found at {mapsJsonPath}; interactive maps will be unavailable.");
+                _mapsByIdCache = new();
+                return _mapsByIdCache;
             }
 
             string json = File.ReadAllText(mapsJsonPath);
@@ -40,8 +42,10 @@ public static class MapDataLoader
         }
         catch (Exception e)
         {
-            Logger.LogError("Failed to load maps.json", e);
-            return new();
+            // LogWarning: corrupt or unreadable map data must not terminate the process.
+            Logger.LogWarning("Failed to load maps.json; interactive maps will be unavailable.", e);
+            _mapsByIdCache = new();
+            return _mapsByIdCache;
         }
     }
 

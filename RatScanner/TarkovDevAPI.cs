@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RatScanner.TarkovDev.GraphQL;
@@ -296,7 +297,10 @@ public static class TarkovDevAPI
             return Task.CompletedTask;
         }
 
-        Lazy<Task> newLazy = new(() => QueueRequestInternal<T>(baseQueryKey, queryBuilder, ttl));
+        Lazy<Task> newLazy = new(
+            () => QueueRequestInternal<T>(baseQueryKey, queryBuilder, ttl),
+            LazyThreadSafetyMode.ExecutionAndPublication
+        );
         Lazy<Task> lazy = InFlightRequests.GetOrAdd(baseQueryKey, newLazy);
         Task task = lazy.Value;
         if (lazy == newLazy)

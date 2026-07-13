@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Runtime.InteropServices.ComTypes;
-using OpenCvSharp.ML;
-using OpenCvSharp.Text;
 using RatStash;
 
 namespace RatEye

@@ -110,16 +110,37 @@ internal static class GitHubUpdateService
     internal static bool IsNewerVersion(string currentVersion, string availableVersion)
     {
         if (
-            TryParseVersion(currentVersion, out Version current)
-            && TryParseVersion(availableVersion, out Version available)
+            !TryParseVersionInfo(currentVersion, out VersionInfo current)
+            || !TryParseVersionInfo(availableVersion, out VersionInfo available)
         )
-            return available > current;
-        return false;
+            return false;
+
+        // Never auto-offer a pre-release onto a stable install.
+        if (available.IsPrerelease && !current.IsPrerelease)
+            return false;
+
+        int comparison = available.Version.CompareTo(current.Version);
+        if (comparison > 0)
+            return true;
+        if (comparison < 0)
+            return false;
+
+        // Same numeric version: allow upgrading from pre-release to the matching stable.
+        return current.IsPrerelease && !available.IsPrerelease;
     }
 
     internal static bool TryParseVersion(string versionText, out Version version)
     {
-        version = new Version(0, 0);
+        bool parsed = TryParseVersionInfo(versionText, out VersionInfo info);
+        version = info.Version;
+        return parsed;
+    }
+
+    private readonly record struct VersionInfo(Version Version, bool IsPrerelease);
+
+    private static bool TryParseVersionInfo(string versionText, out VersionInfo info)
+    {
+        info = new VersionInfo(new Version(0, 0), false);
         if (string.IsNullOrWhiteSpace(versionText))
             return false;
 
@@ -127,13 +148,16 @@ internal static class GitHubUpdateService
         if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
             cleaned = cleaned.Substring(1);
 
-        int cut = cleaned.IndexOfAny(new[] { '-', '+' });
+        int cut = cleaned.IndexOfAny(['-', '+']);
+        bool isPrerelease = cut >= 0 && cleaned[cut] == '-';
         if (cut >= 0)
             cleaned = cleaned.Substring(0, cut);
 
-        bool parsed = Version.TryParse(cleaned, out Version? result);
-        version = result ?? new Version(0, 0);
-        return parsed;
+        if (!Version.TryParse(cleaned, out Version? result) || result is null)
+            return false;
+
+        info = new VersionInfo(result, isPrerelease);
+        return true;
     }
 
     /// <summary>

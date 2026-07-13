@@ -24,7 +24,19 @@ internal class MenuVM : INotifyPropertyChanged
 
     public ItemQueue ItemScans => DataSource.ItemScans;
 
-    public ItemScan LastItemScan => ItemScans.LastOrDefault() ?? throw new Exception("ItemQueue is empty!");
+    public ItemScan LastItemScan =>
+        ItemScans.LastOrDefault()
+        ?? new DefaultItemScan(
+            new Item
+            {
+                Id = "loading",
+                Name = "Loading...",
+                ShortName = "Loading...",
+                Width = 1,
+                Height = 1,
+            },
+            isSeed: true
+        );
 
     public Item LastItem => LastItemScan.Item;
 
@@ -133,10 +145,9 @@ internal class MenuVM : INotifyPropertyChanged
         OnPropertyChanged();
     }
 
-    // Still used in minimal menu
-    public static string IntToLongPrice(int? value)
+    internal static string FormatLongPrice(int? value)
     {
-        if (value == null)
+        if (value is null or 0)
             return "0 ₽";
         string text = $"{value:n0}";
         string numberGroupSeparator = NumberFormatInfo.CurrentInfo.NumberGroupSeparator;

@@ -361,6 +361,9 @@ public class GitHubUpdateServiceTests
     [InlineData("3.9.3", "v3.9.4", true)]
     [InlineData("3.9.3+build.1", "3.9.3", false)]
     [InlineData("3.10.0-beta.1", "3.9.9", false)]
+    [InlineData("3.9.3", "3.9.4-beta.1", false)]
+    [InlineData("3.9.4-beta.1", "3.9.4", true)]
+    [InlineData("3.9.4-beta.1", "3.9.5-beta.1", true)]
     [InlineData("unknown", "3.9.4", false)]
     public void IsNewerVersion_handles_release_tag_formats(string current, string available, bool expected) =>
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));

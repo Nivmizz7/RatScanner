@@ -132,7 +132,22 @@ namespace RatEye
                 if (_loadedStaticIconSizes.Contains(slotSize))
                     return;
 
-                var newIcons = LoadNewIcons(_config.PathConfig.StaticIcons, IconType.Static, slotSize);
+                Dictionary<Vector2, Dictionary<string, Mat>> newIcons;
+                try
+                {
+                    newIcons = LoadNewIcons(_config.PathConfig.StaticIcons, IconType.Static, slotSize);
+                }
+                catch (Exception e) when (e is DirectoryNotFoundException or FileNotFoundException)
+                {
+                    // Missing Data/icons is a recoverable packaging issue; keep scanning alive.
+                    Logger.LogDebug(
+                        "Static icon folder is missing; icon matching for this slot size will stay empty until data is installed.",
+                        e
+                    );
+                    _loadedStaticIconSizes.Add(slotSize);
+                    return;
+                }
+
                 StaticIconsLock.EnterWriteLock();
                 try
                 {
