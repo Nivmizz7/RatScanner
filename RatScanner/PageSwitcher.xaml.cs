@@ -19,8 +19,8 @@ public partial class PageSwitcher : Window
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
-    public const int MinimumWidth = 900;
-    public const int MinimumHeight = 640;
+    public const int MinimumWidth = 560;
+    public const int MinimumHeight = 420;
 
     private NotifyIcon _notifyIcon = null!;
     private ContextMenuStrip _contextMenuStrip = new();
@@ -62,6 +62,7 @@ public partial class PageSwitcher : Window
 
     internal void ResetWindowSize()
     {
+        WindowRoot.Margin = new Thickness(7);
         SizeToContent = SizeToContent.Manual;
         ResizeMode = ResizeMode.CanResize;
         MinWidth = MinimumWidth;
@@ -237,6 +238,7 @@ public partial class PageSwitcher : Window
     internal void ShowMinimalUI()
     {
         RatConfig.LastWindowMode = RatConfig.WindowMode.Minimal;
+        WindowRoot.Margin = new Thickness(0);
         CollapseTitleBar();
         ResizeMode = ResizeMode.NoResize;
         MinWidth = 0;

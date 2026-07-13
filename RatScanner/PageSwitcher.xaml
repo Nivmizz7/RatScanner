@@ -9,34 +9,22 @@
         ResizeMode="CanResize"
         WindowStyle="None"
         mc:Ignorable="d">
-	<Grid>
+	<WindowChrome.WindowChrome>
+		<WindowChrome CaptionHeight="0"
+		              CornerRadius="0"
+		              GlassFrameThickness="0"
+		              ResizeBorderThickness="7"
+		              UseAeroCaptionButtons="False" />
+	</WindowChrome.WindowChrome>
+	<Grid x:Name="WindowRoot"
+	      Margin="7">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
 		<Border x:Name="TitleBar"
-		        Grid.Row="0"
-		        BorderThickness="1,1,1,0">
-			<Border.Style>
-				<Style TargetType="{x:Type Border}">
-					<Style.Triggers>
-						<DataTrigger
-							Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-							Value="True">
-							<Setter Property="BorderBrush"
-							        Value="#444444" />
-						</DataTrigger>
-						<DataTrigger
-							Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-							Value="False">
-							<Setter Property="BorderBrush"
-							        Value="#999999" />
-						</DataTrigger>
-					</Style.Triggers>
-				</Style>
-			</Border.Style>
-
+		        Grid.Row="0">
 			<Grid Height="30"
 			      Background="{DynamicResource NativeTitleBarBackgroundBrush}"
 			      MouseDown="OnTitleBarMouseDown">

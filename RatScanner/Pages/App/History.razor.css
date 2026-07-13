@@ -60,3 +60,25 @@
 	color: var(--rs-text-2);
 }
 
+@media (max-width: 759px) {
+	.history-page {
+		padding: 16px;
+	}
+}
+
+@media (max-width: 599px) {
+	.history-row {
+		grid-template-columns: 44px 1fr;
+		gap: 10px;
+	}
+
+	.history-row img {
+		width: 40px;
+		height: 40px;
+	}
+
+	.history-row > div:last-child {
+		grid-column: 2;
+		text-align: left;
+	}
+}
