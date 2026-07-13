@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using RatScanner.Scan;
+using RatScanner.TarkovDev;
 using RatScanner.ViewModel;
 
 namespace RatScanner.Presentation;
@@ -11,15 +12,31 @@ internal static class ScanResultAdapter
 
     internal static ScanResultViewModel Map(ItemScan scan, MenuVM menu, bool isHistoricalResult)
     {
-        int questRemaining = scan.Item.GetTaskRemaining().count;
-        int hideoutRemaining = scan.Item.GetHideoutRemaining();
-        return Map(scan, questRemaining, hideoutRemaining, isHistoricalResult);
+        RequirementBreakdown quests = scan.Item.GetTaskRequirementBreakdown();
+        RequirementBreakdown hideout = scan.Item.GetHideoutRequirementBreakdown();
+        AcquisitionInfo acquisition = scan.Item.GetAcquisitionInfo();
+        return Map(scan, quests, hideout, acquisition, isHistoricalResult);
     }
 
     internal static ScanResultViewModel Map(
         ItemScan scan,
         int questRemaining,
         int hideoutRemaining,
+        bool isHistoricalResult
+    ) =>
+        Map(
+            scan,
+            new RequirementBreakdown(questRemaining, questRemaining, 0),
+            new RequirementBreakdown(hideoutRemaining, 0, hideoutRemaining),
+            scan.Item.GetAcquisitionInfo(),
+            isHistoricalResult
+        );
+
+    internal static ScanResultViewModel Map(
+        ItemScan scan,
+        RequirementBreakdown quests,
+        RequirementBreakdown hideout,
+        AcquisitionInfo acquisition,
         bool isHistoricalResult
     )
     {
@@ -61,16 +78,34 @@ internal static class ScanResultAdapter
             traderPrice is null
                 ? null
                 : new TraderViewModel(trader?.Name, trader?.Trader?.ImageLink, traderPrice, traderPrice / slots),
-            RecommendationSelector.Select(fleaPrice, traderPrice, trader?.Name, questRemaining, hideoutRemaining),
-            MapRequirement(questRemaining),
-            MapRequirement(hideoutRemaining),
+            RecommendationSelector.Select(
+                fleaPrice,
+                traderPrice,
+                trader?.Name,
+                quests,
+                hideout,
+                acquisition
+            ),
+            MapRequirement(quests),
+            MapRequirement(hideout),
+            new AcquisitionViewModel(
+                acquisition.CanCraft,
+                acquisition.CraftRecipeCount,
+                acquisition.CanBarter,
+                acquisition.BarterOfferCount
+            ),
             null,
             isHistoricalResult
         );
     }
 
-    private static RequirementViewModel MapRequirement(int remaining) =>
-        remaining > 0
-            ? new RequirementViewModel(RequirementStatus.Required, remaining)
+    private static RequirementViewModel MapRequirement(RequirementBreakdown breakdown) =>
+        breakdown.Any
+            ? new RequirementViewModel(
+                RequirementStatus.Required,
+                breakdown.Total,
+                breakdown.FoundInRaid,
+                breakdown.NonFoundInRaid
+            )
             : new RequirementViewModel(RequirementStatus.NotRequired, 0);
 }

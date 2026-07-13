@@ -10,6 +10,7 @@ internal sealed record ScanResultViewModel(
     RecommendationViewModel Recommendation,
     RequirementViewModel Quests,
     RequirementViewModel Hideout,
+    AcquisitionViewModel Acquisition,
     DateTimeOffset? ScannedAt,
     bool IsHistoricalResult
 );
@@ -65,4 +66,29 @@ internal enum RequirementStatus
     Unavailable,
 }
 
-internal sealed record RequirementViewModel(RequirementStatus Status, int? RemainingRequired);
+/// <param name="RequiresFoundInRaid">How many of the remaining needs mandate FIR.</param>
+/// <param name="NonFoundInRaid">Remaining needs that accept non-FIR items.</param>
+internal sealed record RequirementViewModel(
+    RequirementStatus Status,
+    int? RemainingRequired,
+    int RequiresFoundInRaid = 0,
+    int NonFoundInRaid = 0
+)
+{
+    public bool HasFirNeed => RequiresFoundInRaid > 0;
+    public bool HasNonFirNeed => NonFoundInRaid > 0;
+}
+
+/// <summary>
+/// Alternate ways to get the item. Craft outputs are always FIR in-game;
+/// barters are not. Visual FIR check on the scan is not implemented.
+/// </summary>
+internal sealed record AcquisitionViewModel(
+    bool CanCraft,
+    int CraftRecipeCount,
+    bool CanBarter,
+    int BarterOfferCount
+)
+{
+    public bool Any => CanCraft || CanBarter;
+}

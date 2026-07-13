@@ -1,42 +1,76 @@
 using System;
 using System.Globalization;
+using System.Text;
+using RatScanner.TarkovDev;
 
 namespace RatScanner.Presentation;
 
 internal static class RecommendationSelector
 {
+    /// <summary>Legacy overloads used by unit tests.</summary>
     internal static RecommendationViewModel Select(
         int? flea,
         int? trader,
         string? traderName,
         int questRemaining,
         int hideoutRemaining
+    ) =>
+        Select(
+            flea,
+            trader,
+            traderName,
+            new RequirementBreakdown(questRemaining, questRemaining, 0),
+            new RequirementBreakdown(hideoutRemaining, 0, hideoutRemaining),
+            default
+        );
+
+    internal static RecommendationViewModel Select(
+        int? flea,
+        int? trader,
+        string? traderName,
+        RequirementBreakdown quests,
+        RequirementBreakdown hideout,
+        AcquisitionInfo acquisition
     )
     {
-        if (questRemaining > 0)
+        if (quests.Any)
+        {
+            string firNote = FirNote(quests);
+            string craftHint = CraftHint(acquisition, quests.HasFirNeed);
             return new(
                 RecommendationType.KeepForQuest,
                 "Keep for quest",
-                $"{questRemaining} still required for active quests.",
+                $"{quests.Total} still required for active quests.{firNote}{craftHint}",
                 null,
                 null
             );
-        if (hideoutRemaining > 0)
+        }
+
+        if (hideout.Any)
+        {
+            string firNote = FirNote(hideout);
+            string craftHint = CraftHint(acquisition, hideout.HasFirNeed);
             return new(
                 RecommendationType.KeepForHideout,
                 "Keep for hideout",
-                $"{hideoutRemaining} still required for hideout upgrades.",
+                $"{hideout.Total} still required for hideout upgrades.{firNote}{craftHint}",
                 null,
                 null
             );
+        }
+
         if (flea is null && trader is null)
+        {
+            string acquire = AcquireFallback(acquisition);
             return new(
                 RecommendationType.PriceUnavailable,
                 "Price unavailable",
-                "No current market or trader value is available.",
+                "No current market or trader value is available." + acquire,
                 null,
                 null
             );
+        }
+
         if (flea is int fleaValue && (trader is null || fleaValue > trader))
         {
             int? difference = trader is int traderValue ? fleaValue - traderValue : null;
@@ -44,15 +78,54 @@ internal static class RecommendationSelector
             string explanation = difference is null
                 ? "No comparable trader offer is available."
                 : $"{PriceFormatter.Format(difference)} more than {traderName ?? "the best trader"}.";
+            explanation += AcquireFallback(acquisition);
             return new(RecommendationType.SellOnFlea, "Sell on Flea Market", explanation, difference, percent);
         }
+
+        string sellTrader =
+            "The trader offer meets or exceeds the current market value." + AcquireFallback(acquisition);
         return new(
             RecommendationType.SellToTrader,
             $"Sell to {traderName ?? "best trader"}",
-            "The trader offer meets or exceeds the current market value.",
+            sellTrader,
             trader - flea,
             flea is > 0 ? (int)Math.Round((double)(trader!.Value - flea.Value) / flea.Value * 100) : null
         );
+    }
+
+    private static string FirNote(RequirementBreakdown breakdown)
+    {
+        if (breakdown.HasFirNeed && breakdown.HasNonFirNeed)
+            return $" {breakdown.FoundInRaid} must be found in raid; {breakdown.NonFoundInRaid} can be non-FIR.";
+        if (breakdown.HasFirNeed)
+            return $" Requires found in raid (confirm FIR on the item — visual FIR detection is not available yet).";
+        return " Non-FIR is OK for these needs.";
+    }
+
+    private static string CraftHint(AcquisitionInfo acquisition, bool needsFir)
+    {
+        if (!acquisition.CanCraft)
+            return string.Empty;
+        // Crafted items are always FIR in EFT — especially useful when quest/hideout needs FIR.
+        return needsFir
+            ? " Craftable in hideout (crafted items are always found in raid)."
+            : " Also craftable in hideout.";
+    }
+
+    private static string AcquireFallback(AcquisitionInfo acquisition)
+    {
+        if (!acquisition.Any)
+            return string.Empty;
+        StringBuilder sb = new(" ");
+        if (acquisition.CanCraft && acquisition.CanBarter)
+            sb.Append(
+                $"Can be crafted ({acquisition.CraftRecipeCount}) or bartered for ({acquisition.BarterOfferCount})."
+            );
+        else if (acquisition.CanCraft)
+            sb.Append($"Can be crafted in hideout ({acquisition.CraftRecipeCount} recipe(s); output is always FIR).");
+        else
+            sb.Append($"Can be bartered for ({acquisition.BarterOfferCount} offer(s)).");
+        return sb.ToString();
     }
 }
 

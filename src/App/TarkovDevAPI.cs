@@ -263,6 +263,20 @@ public static class TarkovDevAPI
             return JsonConvert.DeserializeObject<HideoutStation[]>(cachedResponse, JsonSettings);
         if (baseQueryKey.StartsWith("maps_", StringComparison.Ordinal))
             return JsonConvert.DeserializeObject<Map[]>(cachedResponse, JsonSettings);
+        if (baseQueryKey.StartsWith("crafts_", StringComparison.Ordinal))
+        {
+            Craft[]? crafts = JsonConvert.DeserializeObject<Craft[]>(cachedResponse, JsonSettings);
+            if (crafts != null)
+                RebuildCraftIndex(crafts);
+            return crafts;
+        }
+        if (baseQueryKey.StartsWith("barters_", StringComparison.Ordinal))
+        {
+            Barter[]? barters = JsonConvert.DeserializeObject<Barter[]>(cachedResponse, JsonSettings);
+            if (barters != null)
+                RebuildBarterIndex(barters);
+            return barters;
+        }
         return null;
     }
 
@@ -396,13 +410,37 @@ public static class TarkovDevAPI
             RatConfig.LongTTL,
             json => JsonConvert.DeserializeObject<Map[]>(json, JsonSettings)
         );
+        bool craftsLoaded = TryLoadFromOfflineCache(
+            CraftsQueryKey(),
+            RatConfig.LongTTL,
+            json =>
+            {
+                Craft[]? crafts = JsonConvert.DeserializeObject<Craft[]>(json, JsonSettings);
+                if (crafts != null)
+                    RebuildCraftIndex(crafts);
+                return crafts;
+            }
+        );
+        bool bartersLoaded = TryLoadFromOfflineCache(
+            BartersQueryKey(),
+            RatConfig.LongTTL,
+            json =>
+            {
+                Barter[]? barters = JsonConvert.DeserializeObject<Barter[]>(json, JsonSettings);
+                if (barters != null)
+                    RebuildBarterIndex(barters);
+                return barters;
+            }
+        );
 
         bool allLoaded = itemsLoaded && tasksLoaded && hideoutLoaded && mapsLoaded;
         if (allLoaded)
-            Logger.LogInfo("All API caches loaded from offline storage");
+            Logger.LogInfo(
+                $"Core API caches loaded from offline storage (crafts: {craftsLoaded}, barters: {bartersLoaded})"
+            );
         else
             Logger.LogWarning(
-                $"Offline cache status - Items: {itemsLoaded}, Tasks: {tasksLoaded}, Hideout: {hideoutLoaded}, Maps: {mapsLoaded}"
+                $"Offline cache status - Items: {itemsLoaded}, Tasks: {tasksLoaded}, Hideout: {hideoutLoaded}, Maps: {mapsLoaded}, Crafts: {craftsLoaded}, Barters: {bartersLoaded}"
             );
 
         return allLoaded;
@@ -414,7 +452,9 @@ public static class TarkovDevAPI
         return IsCacheExpired(ItemsQueryKey(), time)
             || IsCacheExpired(TasksQueryKey(), time)
             || IsCacheExpired(HideoutStationsQueryKey(), time)
-            || IsCacheExpired(MapsQueryKey(), time);
+            || IsCacheExpired(MapsQueryKey(), time)
+            || IsCacheExpired(CraftsQueryKey(), time)
+            || IsCacheExpired(BartersQueryKey(), time);
     }
 
     private static bool IsCacheExpired(string baseQueryKey, long time)
@@ -437,6 +477,10 @@ public static class TarkovDevAPI
             refreshes.Add(QueueRequest(HideoutStationsQueryKey(), FetchHideoutAsync, RatConfig.LongTTL));
         if (IsCacheExpired(MapsQueryKey(), now))
             refreshes.Add(QueueRequest(MapsQueryKey(), FetchMapsAsync, RatConfig.LongTTL));
+        if (IsCacheExpired(CraftsQueryKey(), now))
+            refreshes.Add(QueueRequest(CraftsQueryKey(), FetchAndIndexCraftsAsync, RatConfig.LongTTL));
+        if (IsCacheExpired(BartersQueryKey(), now))
+            refreshes.Add(QueueRequest(BartersQueryKey(), FetchAndIndexBartersAsync, RatConfig.LongTTL));
 
         if (refreshes.Count > 0)
             await Task.WhenAll(refreshes).ConfigureAwait(false);
@@ -479,6 +523,86 @@ public static class TarkovDevAPI
 
     public static Map[] GetMaps() => GetCached<Map>(MapsQueryKey(), FetchMapsAsync, RatConfig.LongTTL);
 
+    public static Craft[] GetCrafts() =>
+        GetCached<Craft>(CraftsQueryKey(), FetchAndIndexCraftsAsync, RatConfig.LongTTL);
+
+    public static Barter[] GetBarters() =>
+        GetCached<Barter>(BartersQueryKey(), FetchAndIndexBartersAsync, RatConfig.LongTTL);
+
+    /// <summary>True if this item is a product of any hideout craft (output is always FIR in-game).</summary>
+    public static bool IsCraftProduct(string? itemId) =>
+        !string.IsNullOrEmpty(itemId) && CraftProductIds.Contains(itemId);
+
+    /// <summary>True if any trader barter offers this item.</summary>
+    public static bool IsBarterProduct(string? itemId) =>
+        !string.IsNullOrEmpty(itemId) && BarterProductIds.Contains(itemId);
+
+    public static int CraftRecipeCount(string? itemId) =>
+        string.IsNullOrEmpty(itemId) ? 0 : CraftProductIds.Contains(itemId) ? CraftCounts.GetValueOrDefault(itemId) : 0;
+
+    public static int BarterOfferCount(string? itemId) =>
+        string.IsNullOrEmpty(itemId) ? 0 : BarterCounts.GetValueOrDefault(itemId);
+
+    #endregion
+
+    #region Craft / barter indexes
+
+    private static readonly object IndexLock = new();
+    private static HashSet<string> CraftProductIds = new(StringComparer.Ordinal);
+    private static HashSet<string> BarterProductIds = new(StringComparer.Ordinal);
+    private static Dictionary<string, int> CraftCounts = new(StringComparer.Ordinal);
+    private static Dictionary<string, int> BarterCounts = new(StringComparer.Ordinal);
+
+    private static void RebuildCraftIndex(Craft[] crafts)
+    {
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        Dictionary<string, int> counts = new(StringComparer.Ordinal);
+        foreach (Craft craft in crafts)
+        {
+            if (string.IsNullOrEmpty(craft.ProductItemId))
+                continue;
+            ids.Add(craft.ProductItemId);
+            counts[craft.ProductItemId] = counts.GetValueOrDefault(craft.ProductItemId) + 1;
+        }
+        lock (IndexLock)
+        {
+            CraftProductIds = ids;
+            CraftCounts = counts;
+        }
+    }
+
+    private static void RebuildBarterIndex(Barter[] barters)
+    {
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        Dictionary<string, int> counts = new(StringComparer.Ordinal);
+        foreach (Barter barter in barters)
+        {
+            if (string.IsNullOrEmpty(barter.OfferedItemId))
+                continue;
+            ids.Add(barter.OfferedItemId);
+            counts[barter.OfferedItemId] = counts.GetValueOrDefault(barter.OfferedItemId) + 1;
+        }
+        lock (IndexLock)
+        {
+            BarterProductIds = ids;
+            BarterCounts = counts;
+        }
+    }
+
+    private static async Task<object> FetchAndIndexCraftsAsync()
+    {
+        Craft[] crafts = await FetchCraftsAsync(RatConfig.GameMode).ConfigureAwait(false);
+        RebuildCraftIndex(crafts);
+        return crafts;
+    }
+
+    private static async Task<object> FetchAndIndexBartersAsync()
+    {
+        Barter[] barters = await FetchBartersAsync(RatConfig.GameMode).ConfigureAwait(false);
+        RebuildBarterIndex(barters);
+        return barters;
+    }
+
     #endregion
 
     #region Keys
@@ -498,6 +622,10 @@ public static class TarkovDevAPI
     private static string MapsQueryKey() => MapsQueryKey(LocaleCode(), RatConfig.GameMode);
 
     private static string MapsQueryKey(string locale, GameMode gameMode) => $"maps_{locale}_{gameMode}";
+
+    private static string CraftsQueryKey() => $"crafts_{RatConfig.GameMode}";
+
+    private static string BartersQueryKey() => $"barters_{RatConfig.GameMode}";
 
     #endregion
 

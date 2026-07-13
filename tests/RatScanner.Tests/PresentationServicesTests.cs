@@ -46,6 +46,39 @@ public class PresentationServicesTests
         Assert.Equal($"{PriceFormatter.Format(5000)} more than Mechanic.", result.Explanation);
     }
 
+    [Fact]
+    public void QuestFirNeedMentionsFoundInRaidAndCraft()
+    {
+        RecommendationViewModel result = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new RequirementBreakdown(Total: 2, FoundInRaid: 2, NonFoundInRaid: 0),
+            default,
+            new AcquisitionInfo(CanCraft: true, CraftRecipeCount: 1, CanBarter: false, BarterOfferCount: 0)
+        );
+
+        Assert.Equal(RecommendationType.KeepForQuest, result.Type);
+        Assert.Contains("found in raid", result.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Craftable", result.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SellRecommendationMentionsBarterWhenAvailable()
+    {
+        RecommendationViewModel result = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            default,
+            default,
+            new AcquisitionInfo(CanCraft: false, CraftRecipeCount: 0, CanBarter: true, BarterOfferCount: 3)
+        );
+
+        Assert.Equal(RecommendationType.SellOnFlea, result.Type);
+        Assert.Contains("bartered", result.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("ammoBox", "Ammunition container")]
     [InlineData("gun", "Weapon")]

@@ -158,13 +158,21 @@
             <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="Requirements">
                 @if (HasAnyRequirement)
                 {
-                    <div class="requirement-chip @(IsRequired(_result.Quests) ? "required" : "muted")">
+                    <div class="requirement-chip @(IsRequired(_result.Quests) ? "required" : "muted") @(_result.Quests.HasFirNeed ? "fir" : null)">
                         <label>Quest requirements</label>
                         <strong>@RequirementSummary(_result.Quests)</strong>
+                        @if (IsRequired(_result.Quests))
+                        {
+                            <span class="req-meta">@FirLabel(_result.Quests)</span>
+                        }
                     </div>
-                    <div class="requirement-chip @(IsRequired(_result.Hideout) ? "required" : "muted")">
+                    <div class="requirement-chip @(IsRequired(_result.Hideout) ? "required" : "muted") @(_result.Hideout.HasFirNeed ? "fir" : null)">
                         <label>Hideout requirements</label>
                         <strong>@RequirementSummary(_result.Hideout)</strong>
+                        @if (IsRequired(_result.Hideout))
+                        {
+                            <span class="req-meta">@FirLabel(_result.Hideout)</span>
+                        }
                     </div>
                 }
                 else
@@ -176,6 +184,33 @@
                     </p>
                 }
             </section>
+
+            @if (_result.Acquisition.Any || HasFirNeedAnywhere)
+            {
+                <section class="acquisition" aria-label="Acquisition and found-in-raid">
+                    @if (HasFirNeedAnywhere)
+                    {
+                        <div class="acq-chip fir" title="At least one remaining need requires found in raid. Confirm FIR on the item yourself — automatic FIR icon detection is not implemented yet.">
+                            <strong>FIR required</strong>
+                            <span>Confirm the checkmark on the item (not detected automatically)</span>
+                        </div>
+                    }
+                    @if (_result.Acquisition.CanCraft)
+                    {
+                        <div class="acq-chip craft" title="Hideout craft products are always found in raid.">
+                            <strong>Craftable</strong>
+                            <span>@_result.Acquisition.CraftRecipeCount recipe(s) · always FIR</span>
+                        </div>
+                    }
+                    @if (_result.Acquisition.CanBarter)
+                    {
+                        <div class="acq-chip barter" title="Trader barter offers this item (not FIR unless noted elsewhere).">
+                            <strong>Barterable</strong>
+                            <span>@_result.Acquisition.BarterOfferCount offer(s)</span>
+                        </div>
+                    }
+                </section>
+            }
 
             <div class="actions">
                 <div class="action-links">
@@ -287,6 +322,9 @@
         !IsManual && _result?.Recognition.Confidence is float confidence && confidence < MediumConfidence;
     private bool HasAnyRequirement =>
         IsRequired(_result?.Quests) || IsRequired(_result?.Hideout);
+
+    private bool HasFirNeedAnywhere =>
+        (_result?.Quests.HasFirNeed == true) || (_result?.Hideout.HasFirNeed == true);
 
     private int? Difference =>
         _result?.Pricing.FleaPrice is int flea && _result.Trader?.TotalPrice is int trader
@@ -487,6 +525,17 @@
             RequirementStatus.NotRequired => "Not required",
             _ => "Unavailable",
         };
+
+    private static string FirLabel(RequirementViewModel value)
+    {
+        if (value.HasFirNeed && value.HasNonFirNeed)
+            return $"{value.RequiresFoundInRaid} FIR · {value.NonFoundInRaid} non-FIR OK";
+        if (value.HasFirNeed)
+            return "Must be found in raid";
+        if (value.HasNonFirNeed)
+            return "Non-FIR is OK";
+        return string.Empty;
+    }
 
     private static string ShortLabel(string? shortName, string? name)
     {
