@@ -90,6 +90,11 @@ namespace RatEye
                     return new Bitmap(marker);
                 }
 
+                internal void EnsureMarker()
+                {
+                    Marker ??= LoadMarker();
+                }
+
                 internal string GetHash()
                 {
                     var components = new string[]

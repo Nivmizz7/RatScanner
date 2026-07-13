@@ -31,6 +31,7 @@ namespace RatEye
 
             System.IO.Directory.CreateDirectory(config.PathConfig.CacheDir);
 
+            config.ProcessingConfig.InspectionConfig.EnsureMarker();
             Config.IconManager = new IconManager(config);
         }
 
@@ -68,8 +69,11 @@ namespace RatEye
 
             Config.IconManager?.Dispose();
             Config.ProcessingConfig.InspectionConfig.TesseractEngine?.Dispose();
+            Config.ProcessingConfig.InspectionConfig.TesseractEngine = null;
             Config.ProcessingConfig.IconConfig.TesseractEngine?.Dispose();
+            Config.ProcessingConfig.IconConfig.TesseractEngine = null;
             Config.ProcessingConfig.InspectionConfig.Marker?.Dispose();
+            Config.ProcessingConfig.InspectionConfig.Marker = null;
             _disposed = true;
             System.GC.SuppressFinalize(this);
         }

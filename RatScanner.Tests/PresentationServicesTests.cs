@@ -70,6 +70,16 @@ public class ItemQueueTests
         Assert.Single(queue);
     }
 
+    [Fact]
+    public void GetNextExpiration_returns_null_when_no_live_scan_remains()
+    {
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        ItemQueue queue = new();
+        queue.Enqueue(new TestItemScan(now - 1));
+
+        Assert.Null(queue.GetNextExpiration(now));
+    }
+
     private sealed class TestItemScan : ItemScan
     {
         public TestItemScan(long expiresAt)
@@ -263,6 +273,7 @@ public class TarkovDevApiTests
         string query = TarkovDevAPI.ItemsQuery(LanguageCode.En, GameMode.Regular);
 
         Assert.Contains("avg24hPrice", query);
+        Assert.Contains("backgroundColor", query);
         Assert.Contains("sellFor", query);
         Assert.Contains("properties", query);
         Assert.DoesNotContain("buyFor", query);

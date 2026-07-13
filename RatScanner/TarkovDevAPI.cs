@@ -514,6 +514,7 @@ public static class TarkovDevAPI
                     .WithIconLink()
                     .WithBaseImageLink()
                     .WithAvg24HPrice()
+                    .WithBackgroundColor()
                     .WithTypes()
                     .WithProperties(
                         new ItemPropertiesQueryBuilder().WithItemPropertiesAmmoFragment(

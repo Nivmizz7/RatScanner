@@ -8,7 +8,6 @@ using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using RatStash;
 using Tesseract;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace RatEye.Processing
 {
