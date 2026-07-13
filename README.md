@@ -5,7 +5,7 @@
 **TarkovTracker Edition** — community-maintained fork by [TarkovTracker.org][tarkovtracker].
 
 [![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
-[![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/tarkovtracker)
+[![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/M8nBgA2sT6)
 [![Download](https://img.shields.io/static/v1?&label=&message=Download&color=4FBD54&style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHZpZXdCb3g9IjAsMCwxMDI0LDEwMjQiPgoJPGRlc2M+ZmlsZV9kb3dubG9hZCBpY29uIC0gTGljZW5zZWQgdW5kZXIgQXBhY2hlIExpY2Vuc2UgdjIuMCAoaHR0cDovL3d3dy5hcGFjaGUub3JnL2xpY2Vuc2VzL0xJQ0VOU0UtMi4wKSAtIENyZWF0ZWQgd2l0aCBJY29uZnUuY29tIC0gRGVyaXZhdGl2ZSB3b3JrIG9mIE1hdGVyaWFsIGljb25zIChDb3B5cmlnaHQgR29vZ2xlIEluYy4pPC9kZXNjPgoJPGcgZmlsbD0iI2ZmZmZmZiIgZmlsbC1ydWxlPSJub256ZXJvIiBzdHlsZT0ibWl4LWJsZW5kLW1vZGU6IG5vcm1hbCI+CgkJPHBhdGggZD0iTTUxMiw2ODIuNjdsLTI5OC42NywtMjk4LjY3aDE3MC42N3YtMjU2aDI1NnYyNTZoMTcwLjY3ek04MTAuNjcsNzY4djg1LjMzaC01OTcuMzR2LTg1LjMzeiIvPgoJPC9nPgo8L3N2Zz4=)](https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip)
 
 Rat Scanner is an external tool for [Escape from Tarkov][escape-from-tarkov] that scans items from screenshots and shows pricing, quest, and hideout-related info using the [tarkov.dev][tarkov-dev] API.
@@ -171,7 +171,7 @@ Market data: [tarkov.dev][tarkov-dev].
 
 [common-issues]: FAQ.md#program-issues
 [demo-video]: https://www.youtube.com/watch?v=tXoIkgXFmdA
-[discord]: https://discord.gg/tarkovtracker
+[discord]: https://discord.gg/M8nBgA2sT6
 [escape-from-tarkov]: https://www.escapefromtarkov.com/
 [faq-page]: FAQ.md
 [fork-repo]: https://github.com/tarkovtracker-org/RatScanner
