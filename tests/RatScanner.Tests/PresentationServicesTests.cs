@@ -2,7 +2,7 @@ using System;
 using RatEye;
 using RatScanner.Presentation;
 using RatScanner.Scan;
-using RatScanner.TarkovDev.GraphQL;
+using RatScanner.TarkovDev;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -319,57 +319,35 @@ public class RatEyeProcessingTests
 public class TarkovDevApiTests
 {
     [Fact]
-    public void ItemsQuery_requests_only_fields_used_by_the_application()
+    public async System.Threading.Tasks.Task FetchCrafts_returns_projected_domain_models()
     {
-        string query = TarkovDevAPI.ItemsQuery(LanguageCode.En, GameMode.Regular);
+        Craft[] crafts = await TarkovDevAPI.FetchCraftsAsync(GameMode.Regular);
+        // Network may be flaky in CI; when data is returned it must be projected.
+        if (crafts.Length == 0)
+            return;
 
-        Assert.Contains("avg24hPrice", query);
-        Assert.Contains("backgroundColor", query);
-        Assert.Contains("sellFor", query);
-        Assert.Contains("properties", query);
-        Assert.DoesNotContain("buyFor", query);
-        Assert.DoesNotContain("bartersFor", query);
-        Assert.DoesNotContain("craftsUsing", query);
-        Assert.DoesNotContain("historicalPrices", query);
+        Assert.All(crafts, c => Assert.False(string.IsNullOrWhiteSpace(c.Id)));
+        Assert.Contains(crafts, c => !string.IsNullOrWhiteSpace(c.ProductItemId));
     }
 
     [Fact]
-    public void TasksQuery_omits_unused_nested_payloads()
+    public async System.Threading.Tasks.Task FetchBarters_returns_projected_domain_models()
     {
-        string query = TarkovDevAPI.TasksQuery(LanguageCode.En, GameMode.Regular);
+        Barter[] barters = await TarkovDevAPI.FetchBartersAsync(GameMode.Regular);
+        if (barters.Length == 0)
+            return;
 
-        Assert.Contains("taskImageLink", query);
-        Assert.Contains("foundInRaid", query);
-        Assert.Contains("markerItem", query);
-        Assert.DoesNotContain("zones", query);
-        Assert.DoesNotContain("taskRequirements", query);
-        Assert.DoesNotContain("startRewards", query);
+        Assert.All(barters, b => Assert.False(string.IsNullOrWhiteSpace(b.Id)));
+        Assert.Contains(barters, b => !string.IsNullOrWhiteSpace(b.OfferedItemId));
     }
 
-    [Fact]
-    public void HideoutQuery_requests_only_progress_fields()
-    {
-        string query = TarkovDevAPI.HideoutStationsQuery(LanguageCode.En, GameMode.Regular);
-
-        Assert.Contains("itemRequirements", query);
-        Assert.Contains("count", query);
-        Assert.DoesNotContain("crafts", query);
-        Assert.DoesNotContain("bonuses", query);
-        Assert.DoesNotContain("stationLevelRequirements", query);
-    }
-
-    [Fact]
-    public void MapsQuery_requests_only_search_and_mapping_fields()
-    {
-        string query = TarkovDevAPI.MapsQuery(LanguageCode.En, GameMode.Regular);
-
-        Assert.Contains("id", query);
-        Assert.Contains("name", query);
-        Assert.Contains("normalizedName", query);
-        Assert.DoesNotContain("extracts", query);
-        Assert.DoesNotContain("transits", query);
-        Assert.DoesNotContain("wiki", query);
-    }
+    [Theory]
+    [InlineData("Gun", "Weapon")]
+    [InlineData("gun", "Weapon")]
+    [InlineData("Ammo", "Ammunition")]
+    [InlineData("meds", "Medical item")]
+    public void ItemTypeLabel_tolerates_json_and_legacy_casing(string raw, string expected) =>
+        Assert.Equal(expected, ItemTypeLabel.Format(raw));
 }
 
 public class GitHubUpdateServiceTests

@@ -79,7 +79,7 @@ internal static class FreshnessFormatter
     }
 }
 
-/// <summary>Maps GraphQL ItemType enum names to user-facing labels.</summary>
+/// <summary>Maps json.tarkov.dev item type tags to user-facing labels.</summary>
 internal static class ItemTypeLabel
 {
     internal static string Format(string? raw)
@@ -87,7 +87,11 @@ internal static class ItemTypeLabel
         if (string.IsNullOrWhiteSpace(raw))
             return "Item";
 
-        return raw switch
+        // JSON types are lowercase/camelCase; tolerate accidental PascalCase.
+        string key = raw.Trim();
+        string folded = key.Length == 0 ? key : char.ToLowerInvariant(key[0]) + key.Substring(1);
+
+        return folded switch
         {
             "ammo" => "Ammunition",
             "ammoBox" => "Ammunition container",
@@ -113,7 +117,9 @@ internal static class ItemTypeLabel
             "rig" => "Tactical rig",
             "suppressor" => "Suppressor",
             "wearable" => "Wearable",
-            _ => SplitCamelCase(raw),
+            "poster" => "Poster",
+            "specialSlot" => "Special slot",
+            _ => SplitCamelCase(key),
         };
     }
 

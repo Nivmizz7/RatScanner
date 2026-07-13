@@ -30,9 +30,6 @@
 		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
 		<!-- Exclude Data (thousands of icons) from item defaults / dotnet-watch so the file watcher is not flooded. -->
 		<DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\generated\**;$(MSBuildProjectDirectory)\Data\**</DefaultItemExcludes>
-		<GraphQlClientGenerator_Namespace>$(RootNamespace).TarkovDev.GraphQL</GraphQlClientGenerator_Namespace>
-		<GraphQlClientGenerator_IdTypeMapping>String</GraphQlClientGenerator_IdTypeMapping>
-		<GraphQlClientGenerator_DataClassMemberNullability>DefinedBySchema</GraphQlClientGenerator_DataClassMemberNullability>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -47,7 +44,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="GraphQlClientGenerator" Version="0.9.31" IncludeAssets="analyzers" PrivateAssets="all" />
+		<!-- Bulk catalog/tasks/hideout/maps come from json.tarkov.dev (no GraphQL generator). -->
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.71" />
 		<PackageReference Include="MudBlazor" Version="6.10.0" />
 		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.9" />
@@ -55,18 +52,6 @@
 		<PackageReference Include="RatStash" Version="6.0.0" />
 		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
 		<PackageReference Include="Tesseract" Version="5.2.0" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<CompilerVisibleProperty Include="GraphQlClientGenerator_Namespace" />
-		<CompilerVisibleProperty Include="GraphQlClientGenerator_IdTypeMapping" />
-		<CompilerVisibleProperty Include="GraphQlClientGenerator_DataClassMemberNullability" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<!-- Keep clean/offline builds independent of tarkov.dev availability. -->
-		<AdditionalFiles Include="TarkovDev.gql.schema.json" CacheObjects="true" />
-		<Content Update="TarkovDev.gql.schema.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
 	</ItemGroup>
 
 	<ItemGroup>

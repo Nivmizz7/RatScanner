@@ -161,7 +161,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     public string DisplayDetectionMode => _displayPreview.UsesCustomGameResolution || _displayPreview.UsesCustomDisplayScale
         ? _localizationService["CustomMode"]
         : _localizationService["AutomaticMode"];
-    public TarkovDev.GraphQL.GameMode GameMode { get; set; }
+    public TarkovDev.GameMode GameMode { get; set; }
     public bool MinimizeToTray { get; set; }
     public bool AlwaysOnTop { get; set; }
     public bool LogDebug { get; set; }
@@ -570,7 +570,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         private readonly bool _blurBehindSearch = RatConfig.Overlay.Search.BlurBehind;
         private readonly Hotkey _overlayHotkey = new(RatConfig.Overlay.Search.Hotkey);
         private readonly GameDisplayPreferences _gameDisplayPreferences = RatConfig.GetGameDisplayPreferences();
-        private readonly TarkovDev.GraphQL.GameMode _gameMode = RatConfig.GameMode;
+        private readonly TarkovDev.GameMode _gameMode = RatConfig.GameMode;
         private readonly bool _minimizeToTray = RatConfig.MinimizeToTray;
         private readonly bool _alwaysOnTop = RatConfig.AlwaysOnTop;
         private readonly bool _logDebug = RatConfig.LogDebug;

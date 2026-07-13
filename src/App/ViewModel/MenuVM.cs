@@ -4,7 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using RatScanner.Scan;
-using RatScanner.TarkovDev.GraphQL;
+using RatScanner.TarkovDev;
 
 namespace RatScanner.ViewModel;
 
@@ -77,7 +77,7 @@ internal class MenuVM : INotifyPropertyChanged
 
     public int PricePerSlot => LastItem.GetAvg24hMarketPricePerSlot();
 
-    public ItemPrice? BestTraderOffer => LastItem.GetBestTraderOffer();
+    public ItemSellPrice? BestTraderOffer => LastItem.GetBestTraderOffer();
     public TraderOffer? BestTraderOfferVendor => LastItem.GetBestTraderOfferVendor();
 
     public (int count, int kappaCount) TaskRemainingResult => LastItem.GetTaskRemaining();

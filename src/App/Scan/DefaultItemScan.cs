@@ -6,7 +6,7 @@ public class DefaultItemScan : ItemScan
 {
     public DefaultItemScan() { }
 
-    public DefaultItemScan(TarkovDev.GraphQL.Item item, bool isSeed = false)
+    public DefaultItemScan(TarkovDev.Item item, bool isSeed = false)
     {
         Item = item;
         IsSeed = isSeed;

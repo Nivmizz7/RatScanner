@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using RatScanner.TarkovDev.GraphQL;
+using RatScanner.TarkovDev;
 using Tasks = System.Threading.Tasks;
-using TTask = RatScanner.TarkovDev.GraphQL.Task;
+using TTask = RatScanner.TarkovDev.Task;
 
 namespace RatScanner.Pages.InteractableOverlay.Services;
 
@@ -111,7 +111,7 @@ public class SearchService
                         continue;
 
                     match.Score += (item.Name?.Length ?? 0) * 0.002;
-                    if (item.Types?.Contains(ItemType.Mods) == true)
+                    if (item.Types?.Any(t => string.Equals(t, "mods", StringComparison.OrdinalIgnoreCase)) == true)
                         match.Score += 5;
                     matches.Add(match);
                 }

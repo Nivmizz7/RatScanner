@@ -1,5 +1,5 @@
-@using RatScanner.TarkovDev.GraphQL
-@using TTask = RatScanner.TarkovDev.GraphQL.Task;
+@using RatScanner.TarkovDev
+@using TTask = RatScanner.TarkovDev.Task;
 
 <div class="map-viewer-overlay" @onclick="OnClose">
     <div class="map-viewer-header" @onclick:stopPropagation="true">
@@ -32,21 +32,7 @@
                  class="map-image"
                  draggable="false" />
             
-            @* Render objective markers *@
-            @if (ObjectiveZones != null && Objective != null) {
-                @foreach (var zone in ObjectiveZones.Where(z => z?.Position != null)) {
-                    var pos = zone!.Position!;
-                    <div class="objective-marker" 
-                         style="left: @(pos.X)%; top: @(pos.Y)%;">
-                        <div class="marker-icon">
-                            <MudIcon Icon="@Constants.Icon.TaskObjective.FromType(Objective.Type)" 
-                                    Size="Size.Large" 
-                                    Color="Color.Warning" />
-                        </div>
-                        <div class="marker-label">@Objective.Type</div>
-                    </div>
-                }
-            }
+            @* Zone markers require coordinate projection; not sourced from json.tarkov.dev yet. *@
         </div>
     </div>
 </div>
@@ -168,10 +154,11 @@
     public TTask? Task { get; set; }
 
     [Parameter]
-    public ITaskObjective? Objective { get; set; }
+    public TaskObjective? Objective { get; set; }
 
+    /// <summary>Reserved for map-zone overlays; JSON tasks do not project zones yet.</summary>
     [Parameter]
-    public List<TaskZone?>? ObjectiveZones { get; set; }
+    public List<object?>? ObjectiveZones { get; set; }
 
     [Parameter]
     public EventCallback OnClose { get; set; }

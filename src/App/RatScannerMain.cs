@@ -15,7 +15,7 @@ using RatStash;
 using MessageBox = System.Windows.MessageBox;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
 using Size = System.Drawing.Size;
-using TarkovItem = RatScanner.TarkovDev.GraphQL.Item;
+using TarkovItem = RatScanner.TarkovDev.Item;
 using Timer = System.Threading.Timer;
 
 namespace RatScanner;
@@ -330,8 +330,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private static Database RatStashDatabaseFromTarkovDev(out bool hasItems)
     {
-        List<Item> rsItems = [];
-        if (!TarkovDevAPI.TryGetCachedItems(out TarkovDev.GraphQL.Item[] items) || items.Length == 0)
+        List<RatStash.Item> rsItems = [];
+        if (!TarkovDevAPI.TryGetCachedItems(out TarkovItem[] items) || items.Length == 0)
         {
             hasItems = false;
             Logger.LogWarning("Items cache not ready; initializing RatEye with empty item database.");
@@ -339,12 +339,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         }
 
         hasItems = true;
-        foreach (TarkovDev.GraphQL.Item i in items)
+        foreach (TarkovItem i in items)
             rsItems.Add(ToRatStashItem(i));
         return RatStash.Database.FromItems(rsItems);
     }
 
-    internal static RatStash.Item ToRatStashItem(TarkovDev.GraphQL.Item item)
+    internal static RatStash.Item ToRatStashItem(TarkovItem item)
     {
         _ = Enum.TryParse(item.BackgroundColor, ignoreCase: true, out TaxonomyColor backgroundColor);
         return new RatStash.Item

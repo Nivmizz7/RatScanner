@@ -1,5 +1,5 @@
-@using RatScanner.TarkovDev.GraphQL
-@using TTask = RatScanner.TarkovDev.GraphQL.Task;
+@using RatScanner.TarkovDev
+@using TTask = RatScanner.TarkovDev.Task;
 @using System.Diagnostics;
 
 <MudPaper Class="pa-2" Elevation="3" Style="">
@@ -25,7 +25,7 @@
             <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.End" Spacing="0">
                 <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Center" Spacing="0">
                     <MudAvatar Size="Size.Large" Style="float: left;" Square="true" Variant="Variant.Outlined">
-                        <MudImage Src="@Task.Trader?.ImageLink" Alt="" />
+                        <MudImage Src="@Task.TraderImageLink" Alt="" />
                     </MudAvatar>
                 </MudStack>
             </MudStack>
@@ -37,7 +37,7 @@
 
         <MudStack Row="false" Style="max-height:200px; overflow:hidden; position:relative">
             <div class="fadeOut" style="top: 200px;"></div>
-            @foreach (ITaskObjective? objective in Task.Objectives ?? Enumerable.Empty<ITaskObjective?>()) {
+            @foreach (TaskObjective? objective in Task.Objectives ?? Enumerable.Empty<TaskObjective?>()) {
                 if (objective == null) continue;
                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
                     <MudStack Row="true" Justify="Justify.FlexStart" Class="flex-1" AlignItems="AlignItems.Center">

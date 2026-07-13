@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows.Input;
 using RatScanner.Display;
-using RatScanner.TarkovDev.GraphQL;
+using RatScanner.TarkovDev;
 using RatStash;
 using Key = System.Windows.Input.Key;
 

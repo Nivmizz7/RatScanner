@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
-using TarkovDevMap = RatScanner.TarkovDev.GraphQL.Map;
+using TarkovDevMap = RatScanner.TarkovDev.Map;
 
 namespace RatScanner;
 

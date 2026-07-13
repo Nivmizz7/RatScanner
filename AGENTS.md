@@ -43,7 +43,7 @@ scripts/
 Key app files live under `src/App/`:
 
 - `RatScannerMain.cs` — entry point, startup flow, update check
-- `TarkovDevAPI.cs` — GraphQL API client with rate limiting, caching, dedup
+- `TarkovDevAPI.cs` — json.tarkov.dev bulk client (items/tasks/hideout/maps) with rate limiting, caching, dedup; locale overlays (`items_en`, …)
 - `RatConfig.cs` — configuration, cache path logic
 - `MapDataLoader.cs` — map data loading
 - `RatScanner.csproj` — project file, target framework, package + project references
@@ -87,20 +87,7 @@ dev.bat                              # local watch loop (preferred while coding)
 publish.bat                          # release single-file package only
 ```
 
-Verify changes by building (and running tests when behavior is covered). GraphQL models come from the `GraphQlClientGenerator` source generator at build time — do not check in generated client sources under `obj/`.
-
-### GraphQL ambiguity / "already contains a definition" flood
-
-If the IDE or build reports thousands of errors like `Ambiguity between 'Item.Id' and 'Item.Id'` or `namespace 'RatScanner.TarkovDev.GraphQL' already contains a definition`, stale emitted sources under `src/App/obj/generated/` are almost always the cause (duplicate of the live generator output). Fix:
-
-```sh
-dotnet clean RatScanner.sln
-# if obj\generated still exists:
-# Remove-Item -Recurse -Force src\App\obj\generated
-dotnet build RatScanner.sln
-```
-
-Do not try to "fix" hand-written call sites for these ambiguity errors.
+Verify changes by building (and running tests when behavior is covered). Tarkov.dev catalog data is loaded from **json.tarkov.dev** (not GraphQL). Domain models live under `src/App/TarkovDev/`.
 
 ## Fork And Branch Workflow
 
@@ -133,6 +120,7 @@ New worktrees are created under `C:/Users/Dysekt/orca/workspaces/RatScanner/` an
 - **Versioning (TarkovTracker Edition):** independent semver line starting at **4.0.0** (upstream used 3.x). Bump `<Version>` only in `src/App/RatScanner.csproj`. Git tags: `vMAJOR.MINOR.PATCH` (e.g. `v4.0.0`). Do **not** mirror upstream tag numbers — reports/logs/UIs must make fork vs original obvious at a glance (`v4.x.x · TT`).
 - Nullable reference types are enabled — handle nulls explicitly.
 - Cache freshness is based on file modification time (see `RatConfig.cs`).
-- API calls go through `TarkovDevAPI.cs` which handles rate limiting, dedup, and exponential backoff — do not bypass it with raw HTTP calls.
+- API calls go through `TarkovDevAPI.cs` (json.tarkov.dev GETs + offline cache) which handles rate limiting, dedup, and exponential backoff — do not bypass it with raw HTTP calls or reintroduce GraphQL for bulk catalog data.
+- Future craft/barter/FIR recommendations should load `/barters` and `/crafts` via the helpers already on `TarkovDevAPI` and combine with TarkovTracker progress — keep them off the startup path until productized.
 - Do **not** re-add a NuGet `PackageReference` for `RatEye`. Edit `src/ScanEngine/` in-tree and reference via `ProjectReference`.
 - C# namespaces for the scan engine remain `RatEye` for now; only the **folder** was renamed to `src/ScanEngine/`.

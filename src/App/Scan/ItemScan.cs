@@ -5,7 +5,7 @@ namespace RatScanner.Scan;
 public abstract class ItemScan
 // Base Scan Data
 {
-    public TarkovDev.GraphQL.Item Item { get; set; } = new TarkovDev.GraphQL.Item();
+    public TarkovDev.Item Item { get; set; } = new TarkovDev.Item();
 
     public float Confidence { get; set; } = 0;
 

@@ -41,7 +41,7 @@ internal static class ScanResultAdapter
         var traderOffer = item.GetBestTraderOffer();
         var trader = item.GetBestTraderOfferVendor();
         int? traderPrice = traderOffer?.PriceRub is > 0 ? traderOffer.PriceRub : null;
-        string? itemType = item.Types?.FirstOrDefault()?.ToString();
+        string? itemType = item.Types?.FirstOrDefault();
 
         return new ScanResultViewModel(
             new ScanItemViewModel(
