@@ -1,37 +1,60 @@
-﻿using System.Net;
+using System;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using RatScanner.FetchModels.TarkovTracker;
 
 namespace RatScanner;
 
 internal static class APIClient
 {
-    private static readonly HttpClient httpClient = new(
-        new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate }
-    );
+    private static readonly HttpClient HttpClient = CreateHttpClient();
 
-    private static HttpRequestMessage formRequest(HttpMethod method, string url, string? bearerToken = null)
+    private static HttpClient CreateHttpClient()
+    {
+        return new HttpClient(
+            new HttpClientHandler { AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate }
+        )
+        {
+            Timeout = TimeSpan.FromSeconds(30),
+        };
+    }
+
+    private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? bearerToken = null)
     {
         HttpRequestMessage request = new(method, url);
-        request.Headers.Add("User-Agent", "RatScanner-Client/3");
-        if (bearerToken != null)
-            request.Headers.Add("Authorization", "Bearer " + bearerToken);
+        request.Headers.UserAgent.ParseAdd("RatScanner-Client/3");
+        if (!string.IsNullOrEmpty(bearerToken))
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 
         return request;
     }
 
-    public static string Get(string url, string? bearerToken = null)
-    {
-        HttpRequestMessage request = formRequest(HttpMethod.Get, url, bearerToken);
-        System.Threading.Tasks.Task<HttpResponseMessage> responseTask = httpClient.SendAsync(request);
-        responseTask.Wait();
-        if (responseTask.Result.StatusCode == HttpStatusCode.Unauthorized)
-            throw new UnauthorizedTokenException("Token was rejected by the API");
-        else if (responseTask.Result.StatusCode == HttpStatusCode.TooManyRequests)
-            throw new RateLimitExceededException("Rate Limiting reached for token");
-        System.Threading.Tasks.Task<string> contentTask = responseTask.Result.Content.ReadAsStringAsync();
-        contentTask.Wait();
+    internal static string Get(string url, string? bearerToken = null) => Get(HttpClient, url, bearerToken);
 
-        return contentTask.Result;
+    internal static string Get(HttpClient client, string url, string? bearerToken = null)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        using HttpRequestMessage request = CreateRequest(HttpMethod.Get, url, bearerToken);
+        using HttpResponseMessage response = client
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
+            .GetAwaiter()
+            .GetResult();
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+            throw new UnauthorizedTokenException("Token was rejected by the API");
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            throw new RateLimitExceededException("Rate Limiting reached for token");
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"TarkovTracker API request failed ({(int)response.StatusCode} {response.ReasonPhrase}).",
+                null,
+                response.StatusCode
+            );
+        }
+
+        return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
     }
 }

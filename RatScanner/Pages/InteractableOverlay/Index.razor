@@ -9,6 +9,7 @@
 @using RatScanner.Pages.InteractableOverlay.Services;
 @using RatScanner.Pages.InteractableOverlay.Components;
 @using SearchResult = RatScanner.Pages.InteractableOverlay.Services.SearchResult;
+@using System.Threading
 @inject MenuVM MenuVM
 @inject RatScanner.VirtualScreenOffset VirtualScreenOffset
 @inject SettingsVM SettingsVM;
@@ -66,17 +67,31 @@
     private string _searchText { get; set; } = "";
     private IEnumerable<SearchResult> _searchResults { get; set; } = new List<SearchResult>();
     private readonly SearchService _searchService = new();
+    private CancellationTokenSource? _searchCancellation;
 
-    private async void ExecuteSearch(string value) {
+    private async Task ExecuteSearch(string value) {
+        var cancellation = new CancellationTokenSource();
+        var previousCancellation = Interlocked.Exchange(ref _searchCancellation, cancellation);
+        previousCancellation?.Cancel();
+        previousCancellation?.Dispose();
+
         var sanitizedValue = _searchService.SanitizeSearch(value);
-        var results = Enumerable.Empty<SearchResult>();
-        results = results.Concat(await _searchService.SearchItemsAsync(sanitizedValue));
-        results = results.Concat(await _searchService.SearchTasksAsync(sanitizedValue));
-        // TODO: Re-enable map search when MapViewer is fixed
-        // results = results.Concat(await _searchService.SearchMapsAsync(sanitizedValue));
-        results = results.Where(result => result != null && result.Data != null);
-        results = results.OrderBy(result => result.Score).Take(4);
-        _searchResults = results;
+        try {
+            var itemSearch = _searchService.SearchItemsAsync(sanitizedValue, cancellation.Token);
+            var taskSearch = _searchService.SearchTasksAsync(sanitizedValue, cancellation.Token);
+            await Task.WhenAll(itemSearch, taskSearch);
+
+            if (cancellation.IsCancellationRequested || !ReferenceEquals(_searchCancellation, cancellation))
+                return;
+
+            _searchResults = itemSearch.Result
+                .Concat(taskSearch.Result)
+                .Where(result => result.Data != null)
+                .OrderBy(result => result.Score)
+                .Take(4)
+                .ToArray();
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
     }
 
     [JSInvokable]
@@ -85,20 +100,23 @@
     }
 
     [JSInvokable]
-    public static void JSShowOverlay() {
-        _searchTextField.FocusAsync();
-        _searchTextField.SelectAsync();
+    public static async Task JSShowOverlay() {
+        await _searchTextField.FocusAsync();
+        await _searchTextField.SelectAsync();
     }
 
     protected override void OnInitialized() {
         MenuVM.PropertyChanged += PropertyChangeHandler;
     }
 
-    private async void PropertyChangeHandler(object? sender, EventArgs e) {
-        await InvokeAsync(() => StateHasChanged());
+    private void PropertyChangeHandler(object? sender, EventArgs e) {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose() {
+        var cancellation = Interlocked.Exchange(ref _searchCancellation, null);
+        cancellation?.Cancel();
+        cancellation?.Dispose();
         MenuVM.PropertyChanged -= PropertyChangeHandler;
     }
 }

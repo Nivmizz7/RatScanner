@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
-using Microsoft.Win32;
+using Microsoft.Web.WebView2.Core;
+using RatScanner.View;
 using SingleInstanceCore;
 
 namespace RatScanner;
@@ -14,12 +15,8 @@ namespace RatScanner;
 /// </summary>
 public partial class App : Application, ISingleInstance
 {
-    private readonly string[] _webview2RegKeys = new[]
-    {
-        @"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        @"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-        @"HKEY_CURRENT_USER\Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
-    };
+    private static readonly TimeSpan WebViewDownloadTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan WebViewInstallTimeout = TimeSpan.FromMinutes(10);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -42,10 +39,18 @@ public partial class App : Application, ISingleInstance
         SetupExceptionHandling();
 #endif
 
-        // Install webview2 runtime if it is not already
-        bool existing = _webview2RegKeys.Any(key => Registry.GetValue(key, "pv", null) != null);
-        if (!existing)
-            InstallWebview2Runtime();
+        if (!IsWebView2RuntimeAvailable() && !InstallWebView2Runtime())
+        {
+            MessageBox.Show(
+                "RatScanner requires the Microsoft Edge WebView2 Runtime. Automatic installation failed. "
+                    + "Check your internet connection, install WebView2, and start RatScanner again.",
+                "RatScanner startup error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            Shutdown(3);
+            return;
+        }
     }
 
     public void OnInstanceInvoked(string[] args)
@@ -80,39 +85,76 @@ public partial class App : Application, ISingleInstance
         action.Invoke();
     }
 
-    private void InstallWebview2Runtime()
+    private static bool IsWebView2RuntimeAvailable()
     {
-        using System.Net.Http.HttpClient client = new();
-        byte[] installerBytes = client
-            .GetByteArrayAsync("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
-            .GetAwaiter()
-            .GetResult();
-        File.WriteAllBytes("MicrosoftEdgeWebview2Setup.exe", installerBytes);
+        try
+        {
+            return !string.IsNullOrWhiteSpace(CoreWebView2Environment.GetAvailableBrowserVersionString());
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            return false;
+        }
+    }
 
-        ProcessStartInfo startInfo = new();
-        startInfo.CreateNoWindow = false;
-        startInfo.UseShellExecute = false;
-        startInfo.FileName = "MicrosoftEdgeWebview2Setup.exe";
-        startInfo.WindowStyle = ProcessWindowStyle.Hidden;
-        startInfo.Arguments = "/install";
+    private static bool InstallWebView2Runtime()
+    {
+        string installerPath = Path.Combine(Path.GetTempPath(), $"RatScanner-WebView2-{Guid.NewGuid():N}.exe");
 
         try
         {
-            // Start the process with the info we specified.
-            // Call WaitForExit and then the using statement will close.
-            Process? exeProcess = Process.Start(startInfo);
-            exeProcess?.WaitForExit();
+            using HttpClient client = new() { Timeout = WebViewDownloadTimeout };
+            byte[] installerBytes = client
+                .GetByteArrayAsync("https://go.microsoft.com/fwlink/p/?LinkId=2124703")
+                .GetAwaiter()
+                .GetResult();
+            File.WriteAllBytes(installerPath, installerBytes);
+
+            ProcessStartInfo startInfo = new()
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                FileName = installerPath,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                Arguments = "/silent /install",
+            };
+            using Process? installer = Process.Start(startInfo);
+            if (installer is null)
+                throw new InvalidOperationException("The WebView2 installer could not be started.");
+            if (!installer.WaitForExit((int)WebViewInstallTimeout.TotalMilliseconds))
+            {
+                try
+                {
+                    installer.Kill(entireProcessTree: true);
+                    installer.WaitForExit((int)TimeSpan.FromSeconds(5).TotalMilliseconds);
+                }
+                catch (Exception terminationException)
+                {
+                    Logger.LogWarning("Unable to stop the timed-out WebView2 installer.", terminationException);
+                }
+                throw new TimeoutException($"The WebView2 installer did not finish within {WebViewInstallTimeout}.");
+            }
+            if (installer.ExitCode != 0)
+                throw new InvalidOperationException($"The WebView2 installer exited with code {installer.ExitCode}.");
+
+            return IsWebView2RuntimeAvailable();
         }
         catch (Exception ex)
         {
-            Logger.LogError("Could not install Webview2", ex);
+            Logger.LogWarning("Could not install the WebView2 Runtime.", ex);
+            return false;
         }
-
-        try
+        finally
         {
-            File.Delete("MicrosoftEdgeWebview2Setup.exe");
+            try
+            {
+                File.Delete(installerPath);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Unable to delete the temporary WebView2 installer.", ex);
+            }
         }
-        catch { }
     }
 
     private void SetupExceptionHandling()
@@ -141,5 +183,20 @@ public partial class App : Application, ISingleInstance
     {
         exception.Data.Add("Source", source);
         Logger.LogError(exception);
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        try
+        {
+            RatScannerMain.DisposeInstance();
+            BlazorUI.DisposeInstance();
+        }
+        finally
+        {
+            SingleInstance.Cleanup();
+            Logger.Flush();
+            base.OnExit(e);
+        }
     }
 }

@@ -95,8 +95,8 @@ namespace RatEye.Processing
 
             var scale = _config.ProcessingConfig.Scale;
 
-            using var hStructure = Mat.Ones(MatType.CV_8U, new[] { 1, (int)(2 * scale) }).ToMat();
-            using var vStructure = Mat.Ones(MatType.CV_8U, new[] { (int)(2 * scale), 1 }).ToMat();
+            using var hStructure = new Mat(1, (int)(2 * scale), MatType.CV_8U, Scalar.All(1));
+            using var vStructure = new Mat((int)(2 * scale), 1, MatType.CV_8U, Scalar.All(1));
 
             Cv2.Dilate(colorFilter, colorFilter, hStructure, null, 1);
             Cv2.Dilate(colorFilter, colorFilter, vStructure, null, 1);
@@ -119,18 +119,20 @@ namespace RatEye.Processing
             // Extract vertical and horizontal lines
             var scaledSlotSize = (int)ProcessingConfig.ScaledSlotSize;
             var size = scaledSlotSize - (scaledSlotSize % 2) + 1;
-            using var lineStructure = Mat.Ones(MatType.CV_8U, new[] { size, 1 });
+            using var lineStructure = new Mat(size, 1, MatType.CV_8U, Scalar.All(1));
+            using var horizontalLineStructure = new Mat(1, size, MatType.CV_8U, Scalar.All(1));
             var verticalLines = colorFilter.Erode(lineStructure);
             Cv2.Dilate(verticalLines, verticalLines, lineStructure);
-            using var horizontalLines = colorFilter.Erode(lineStructure.T());
-            Cv2.Dilate(horizontalLines, horizontalLines, lineStructure.T());
+            using var horizontalLines = colorFilter.Erode(horizontalLineStructure);
+            Cv2.Dilate(horizontalLines, horizontalLines, horizontalLineStructure);
 
             SmoothJaggedLines(verticalLines, false);
             SmoothJaggedLines(horizontalLines, true);
 
             var grid = CombineWithoutPeeks(verticalLines, horizontalLines);
-            Cv2.Dilate(grid, grid, Mat.Ones(2, 2));
-            Cv2.Erode(grid, grid, Mat.Ones(2, 2));
+            using var closeStructure = new Mat(2, 2, MatType.CV_8U, Scalar.All(1));
+            Cv2.Dilate(grid, grid, closeStructure);
+            Cv2.Erode(grid, grid, closeStructure);
 
             _grid = grid;
             _vertGrid = verticalLines;
@@ -246,10 +248,20 @@ namespace RatEye.Processing
             var size = (int)(ProcessingConfig.ScaledSlotSize * 2);
             size = size - (size % 2) + 1;
             var extendStructureSize = horizontal ? new[] { 1, size } : new[] { size, 1 };
-            using var extendStructure = Mat.Ones(MatType.CV_8U, extendStructureSize).ToMat();
+            using var extendStructure = new Mat(
+                extendStructureSize[0],
+                extendStructureSize[1],
+                MatType.CV_8U,
+                Scalar.All(1)
+            );
 
             var thickenStructureSize = horizontal ? new[] { 3, 1 } : new[] { 1, 3 };
-            using var thickenStructure = Mat.Ones(MatType.CV_8U, thickenStructureSize).ToMat();
+            using var thickenStructure = new Mat(
+                thickenStructureSize[0],
+                thickenStructureSize[1],
+                MatType.CV_8U,
+                Scalar.All(1)
+            );
 
             Cv2.Dilate(mat, extendedLines, extendStructure, null, 10);
             Cv2.Dilate(mat, thickenedLines, thickenStructure);
@@ -270,11 +282,11 @@ namespace RatEye.Processing
             var scaledSlotSize = (int)(ProcessingConfig.ScaledSlotSize / 2);
             var size = scaledSlotSize - (scaledSlotSize % 2) + 1;
 
-            using var vStructure = Mat.Ones(MatType.CV_8U, new[] { size, 1 }).ToMat();
+            using var vStructure = new Mat(size, 1, MatType.CV_8U, Scalar.All(1));
             Cv2.Erode(vLinesWithHoles, vLinesWithHoles, vStructure);
             Cv2.Dilate(vLinesWithHoles, vLinesWithHoles, vStructure);
 
-            using var hStructure = Mat.Ones(MatType.CV_8U, new[] { 1, size }).ToMat();
+            using var hStructure = new Mat(1, size, MatType.CV_8U, Scalar.All(1));
             Cv2.Erode(hLinesWithHoles, hLinesWithHoles, hStructure);
             Cv2.Dilate(hLinesWithHoles, hLinesWithHoles, hStructure);
 

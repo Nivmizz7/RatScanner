@@ -57,16 +57,7 @@ internal class MenuVM : INotifyPropertyChanged
 
     public bool RecommendFlea => HasFleaOffer && (!HasTraderOffer || FleaPrice > TraderPrice);
 
-    public string WikiLink
-    {
-        get
-        {
-            string? link = LastItem.WikiLink;
-            if (link?.Length > 3)
-                return link;
-            return $"https://escapefromtarkov.gamepedia.com/{Uri.EscapeDataString((LastItem.Name ?? string.Empty).Replace(" ", "_"))}";
-        }
-    }
+    public string WikiLink => LastItem.GetWikiLink();
 
     public int PricePerSlot => LastItem.GetAvg24hMarketPricePerSlot();
 

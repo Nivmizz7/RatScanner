@@ -15,6 +15,11 @@ namespace RatEye
 {
     internal class IconManager : IDisposable
     {
+        private const long MaxCacheBytes = 256L * 1024 * 1024;
+        private const int MaxCacheFiles = 10_000;
+        private static readonly TimeSpan MaxCacheAge = TimeSpan.FromDays(30);
+        private static readonly TimeSpan MaxTemporaryCacheFileAge = TimeSpan.FromDays(1);
+
         private enum IconType
         {
             Static,
@@ -22,6 +27,7 @@ namespace RatEye
         }
 
         private readonly Config _config;
+        private readonly string _cacheDirectory;
 
         /// <summary>
         /// Static icons are those which are rendered ahead of time.
@@ -99,8 +105,18 @@ namespace RatEye
         /// <param name="config">The config to use for this instance></param>
         /// <remarks>Depends on <see cref="Config.Processing.Icon"/> and <see cref="Config.Path"/></remarks>
         internal IconManager(Config config)
+            : this(config, config.PathConfig.CacheDir) { }
+
+        internal IconManager(Config config, string cacheDirectory)
         {
             _config = config;
+            _cacheDirectory = cacheDirectory;
+
+            if (_config.ProcessingConfig.UseCache)
+            {
+                Directory.CreateDirectory(_cacheDirectory);
+                PruneCacheBestEffort();
+            }
 
             var iconConfig = _config.ProcessingConfig.IconConfig;
             if (iconConfig.UseStaticIcons)
@@ -187,17 +203,11 @@ namespace RatEye
                                 return;
 
                             var useCache = _config.ProcessingConfig.UseCache;
-                            var cacheIconPath = $"{_config.PathConfig.CacheDir}\\{iconKey.CacheKey(configHash)}.bmp";
-                            var cacheHit = useCache && File.Exists(cacheIconPath);
+                            var cacheIconPath = Path.Combine(_cacheDirectory, $"{iconKey.CacheKey(configHash)}.bmp");
+                            var icon = useCache ? TryLoadCachedIcon(cacheIconPath) : null;
+                            var cacheHit = icon != null;
 
-                            iconPath = cacheHit ? cacheIconPath : iconPath;
-
-                            Mat icon;
-                            if (cacheHit)
-                            {
-                                icon = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
-                            }
-                            else
+                            if (!cacheHit)
                             {
                                 using var mat = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
                                 icon = GetIconWithBackground(mat, item);
@@ -212,7 +222,7 @@ namespace RatEye
 
                             // Add the icon to the cache if caching is enabled and doesn't already contain it
                             if (useCache && !cacheHit)
-                                icon.SaveImage(cacheIconPath);
+                                SaveCacheIconAtomic(icon, cacheIconPath);
 
                             var size = new Vector2(PixelsToSlots(icon.Width), PixelsToSlots(icon.Height));
                             lock (loadedIcons)
@@ -224,7 +234,7 @@ namespace RatEye
 
                                 // Add icon to icon and path dictionary
                                 loadedIcons[size][iconKey] = icon;
-                                _iconPaths[iconKey] = iconPath;
+                                _iconPaths[iconKey] = cacheHit ? cacheIconPath : iconPath;
                             }
                         }
                     );
@@ -253,7 +263,156 @@ namespace RatEye
                 }
             }
 
+            if (_config.ProcessingConfig.UseCache)
+                PruneCacheBestEffort();
+
             return loadedIcons;
+        }
+
+        private Mat TryLoadCachedIcon(string cacheIconPath)
+        {
+            if (!File.Exists(cacheIconPath))
+                return null;
+
+            Mat icon = null;
+            try
+            {
+                icon = Cv2.ImRead(cacheIconPath, ImreadModes.Unchanged);
+                var valid =
+                    !icon.Empty()
+                    && icon.Type() == MatType.CV_8UC3
+                    && IsValidPixelSize(icon.Width)
+                    && IsValidPixelSize(icon.Height);
+                if (valid)
+                    return icon;
+
+                icon.Dispose();
+                icon = null;
+                DeleteCacheFileBestEffort(cacheIconPath);
+                Logger.LogDebug("Regenerating invalid cached icon: " + cacheIconPath);
+                return null;
+            }
+            catch (Exception e)
+            {
+                icon?.Dispose();
+                DeleteCacheFileBestEffort(cacheIconPath);
+                Logger.LogDebug("Regenerating unreadable cached icon: " + cacheIconPath, e);
+                return null;
+            }
+        }
+
+        private static void SaveCacheIconAtomic(Mat icon, string cacheIconPath)
+        {
+            var cacheDirectory = Path.GetDirectoryName(cacheIconPath);
+            var temporaryPath = Path.Combine(
+                cacheDirectory,
+                $"{Path.GetFileNameWithoutExtension(cacheIconPath)}.{Guid.NewGuid():N}.tmp.bmp"
+            );
+
+            try
+            {
+                Directory.CreateDirectory(cacheDirectory);
+                icon.SaveImage(temporaryPath);
+                if (new FileInfo(temporaryPath).Length == 0)
+                    throw new InvalidDataException("The encoded cache image was empty.");
+
+                if (File.Exists(cacheIconPath))
+                {
+                    File.Replace(temporaryPath, cacheIconPath, null, true);
+                }
+                else
+                {
+                    try
+                    {
+                        File.Move(temporaryPath, cacheIconPath);
+                    }
+                    catch (IOException) when (File.Exists(cacheIconPath))
+                    {
+                        // Another process published the same complete cache entry first.
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                // Cache persistence must never prevent the in-memory icon from being used.
+                Logger.LogDebug("Could not persist cached icon: " + cacheIconPath, e);
+            }
+            finally
+            {
+                DeleteCacheFileBestEffort(temporaryPath);
+            }
+        }
+
+        private void PruneCacheBestEffort()
+        {
+            PruneCache(_cacheDirectory, DateTime.UtcNow, MaxCacheAge, MaxCacheBytes, MaxCacheFiles);
+        }
+
+        internal static void PruneCache(
+            string cacheDirectory,
+            DateTime utcNow,
+            TimeSpan maxAge,
+            long maxBytes,
+            int maxFiles
+        )
+        {
+            try
+            {
+                if (!Directory.Exists(cacheDirectory))
+                    return;
+
+                var cacheFiles = new List<(FileInfo file, long length)>();
+                var staleCutoff = utcNow - maxAge;
+                var temporaryCutoff = utcNow - MaxTemporaryCacheFileAge;
+
+                foreach (var path in Directory.EnumerateFiles(cacheDirectory, "*.bmp", SearchOption.TopDirectoryOnly))
+                {
+                    var file = new FileInfo(path);
+                    var isTemporary = file.Name.EndsWith(".tmp.bmp", StringComparison.OrdinalIgnoreCase);
+                    if (
+                        (isTemporary && file.LastWriteTimeUtc <= temporaryCutoff)
+                        || file.LastWriteTimeUtc <= staleCutoff
+                    )
+                    {
+                        DeleteCacheFileBestEffort(path);
+                        continue;
+                    }
+
+                    if (!isTemporary)
+                        cacheFiles.Add((file, file.Length));
+                }
+
+                var totalBytes = cacheFiles.Sum(entry => entry.length);
+                var fileCount = cacheFiles.Count;
+                foreach (var entry in cacheFiles.OrderBy(entry => entry.file.LastWriteTimeUtc))
+                {
+                    if (totalBytes <= maxBytes && fileCount <= maxFiles)
+                        break;
+                    if (!DeleteCacheFileBestEffort(entry.file.FullName))
+                        continue;
+
+                    totalBytes -= entry.length;
+                    fileCount--;
+                }
+            }
+            catch (Exception e)
+            {
+                // Cleanup is opportunistic; cache failures must not block scanning.
+                Logger.LogDebug("Could not prune the icon cache.", e);
+            }
+        }
+
+        private static bool DeleteCacheFileBestEffort(string path)
+        {
+            try
+            {
+                File.Delete(path);
+                return !File.Exists(path);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -289,7 +448,8 @@ namespace RatEye
             border.Rectangle(borderRect, _config.ProcessingConfig.InventoryConfig.GridColor);
 
             // Blend layers
-            using var tmp1 = gridCell.AlphaBlend(background).RemoveTransparency();
+            using var blendedGrid = gridCell.AlphaBlend(background);
+            using var tmp1 = blendedGrid.RemoveTransparency();
             using var tmp2 = gridColor.AlphaBlend(tmp1);
             using var tmp3 = border.AlphaBlend(tmp2);
             using var result = transparentIcon.AlphaBlend(tmp3);

@@ -11,6 +11,18 @@ internal static class ScanResultAdapter
 
     internal static ScanResultViewModel Map(ItemScan scan, MenuVM menu, bool isHistoricalResult)
     {
+        int questRemaining = scan.Item.GetTaskRemaining().count;
+        int hideoutRemaining = scan.Item.GetHideoutRemaining();
+        return Map(scan, questRemaining, hideoutRemaining, isHistoricalResult);
+    }
+
+    internal static ScanResultViewModel Map(
+        ItemScan scan,
+        int questRemaining,
+        int hideoutRemaining,
+        bool isHistoricalResult
+    )
+    {
         var item = scan.Item;
         int slots = Math.Max(1, item.Width * item.Height);
         bool manual = scan is DefaultItemScan;
@@ -30,8 +42,6 @@ internal static class ScanResultAdapter
         var trader = item.GetBestTraderOfferVendor();
         int? traderPrice = traderOffer?.PriceRub is > 0 ? traderOffer.PriceRub : null;
         string? itemType = item.Types?.FirstOrDefault()?.ToString();
-        int questRemaining = menu.TaskRemaining;
-        int hideoutRemaining = menu.HideoutRemaining;
 
         return new ScanResultViewModel(
             new ScanItemViewModel(
@@ -40,7 +50,7 @@ internal static class ScanResultAdapter
                 item.ShortName,
                 item.IconLink,
                 item.Link,
-                menu.WikiLink,
+                item.GetWikiLink(),
                 itemType,
                 1,
                 item.Width,

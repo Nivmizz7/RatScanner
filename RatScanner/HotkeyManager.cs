@@ -9,25 +9,27 @@ using OverlayC = RatScanner.RatConfig.Overlay;
 
 namespace RatScanner;
 
-internal class HotkeyManager
+internal sealed class HotkeyManager : IDisposable
 {
+    private readonly RatScannerMain _owner;
     private long _last_mouse_click = 0;
+    private bool _disposed;
 
     internal ActiveHotkey NameScanHotkey;
     internal ActiveHotkey IconScanHotkey;
     internal ActiveHotkey OpenInteractableOverlayHotkey;
     internal ActiveHotkey CloseInteractableOverlayHotkey;
 
-    internal HotkeyManager()
+    internal HotkeyManager(RatScannerMain owner)
     {
+        _owner = owner;
         UserActivityHelper.Start(true, true);
         RegisterHotkeys();
     }
 
     ~HotkeyManager()
     {
-        UnregisterHotkeys();
-        UserActivityHelper.Stop(true, true, false);
+        Dispose(false);
     }
 
     /// <summary>
@@ -44,12 +46,19 @@ internal class HotkeyManager
     )]
     internal void RegisterHotkeys()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         // Unregister hotkeys to prevent multiple listeners for the same hotkey
         UnregisterHotkeys();
 
-        Hotkey nameScanHotkey = new(null, new[] { MouseButton.Left });
-        NameScanHotkey = new ActiveHotkey(nameScanHotkey, OnNameScanHotkey, ref NameScan.Enable);
         IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, ref IconScan.Enable);
+        Hotkey nameScanHotkey = new(null, new[] { MouseButton.Left });
+        NameScanHotkey = new ActiveHotkey(
+            nameScanHotkey,
+            OnNameScanHotkey,
+            ref NameScan.Enable,
+            canHandle: e => !IconScanHotkey.Enabled || !IconScanHotkey.IsPressed(e)
+        );
         OpenInteractableOverlayHotkey = new ActiveHotkey(
             OverlayC.Search.Hotkey,
             OnOpenInteractableOverlayHotkey,
@@ -69,6 +78,23 @@ internal class HotkeyManager
         NameScanHotkey?.Dispose();
         IconScanHotkey?.Dispose();
         OpenInteractableOverlayHotkey?.Dispose();
+        CloseInteractableOverlayHotkey?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        UnregisterHotkeys();
+        UserActivityHelper.Stop(true, true, false);
+        _disposed = true;
     }
 
     private static void Wrap<T>(Func<T> func)
@@ -79,7 +105,7 @@ internal class HotkeyManager
         }
         catch (Exception e)
         {
-            Logger.LogError(e.Message, e);
+            Logger.LogWarning("A RatScanner hotkey action failed.", e);
         }
     }
 
@@ -91,7 +117,7 @@ internal class HotkeyManager
         }
         catch (Exception e)
         {
-            Logger.LogError(e.Message, e);
+            Logger.LogWarning("A RatScanner hotkey action failed.", e);
         }
     }
 
@@ -99,11 +125,11 @@ internal class HotkeyManager
     {
         Wrap(() =>
         {
-            RatScannerMain.Instance.NameScan(UserActivityHelper.GetMousePosition());
+            _owner.NameScan(UserActivityHelper.GetMousePosition());
             if (_last_mouse_click + 500 < DateTimeOffset.Now.ToUnixTimeMilliseconds() && NameScan.EnableAuto)
             {
                 Thread.Sleep(200); // wait for double click and ui
-                RatScannerMain.Instance.NameScanScreen();
+                _owner.NameScanScreen();
                 _last_mouse_click = DateTimeOffset.Now.ToUnixTimeMilliseconds();
             }
         });
@@ -111,7 +137,7 @@ internal class HotkeyManager
 
     private void OnIconScanHotkey(object? sender, KeyUpEventArgs e)
     {
-        Wrap(() => RatScannerMain.Instance.IconScan(UserActivityHelper.GetMousePosition()));
+        Wrap(() => _owner.IconScan(UserActivityHelper.GetMousePosition()));
     }
 
     private void OnOpenInteractableOverlayHotkey(object? sender, KeyUpEventArgs e)

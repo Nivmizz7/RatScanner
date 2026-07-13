@@ -188,6 +188,15 @@ public static class ItemExtensions
     public static TraderOffer? GetBestTraderOfferVendor(this Item item) =>
         GetBestTraderOffer(item)?.Vendor as TraderOffer;
 
+    public static string GetWikiLink(this Item item)
+    {
+        if (item.WikiLink?.Length > 3)
+            return item.WikiLink;
+
+        string pageName = (item.Name ?? string.Empty).Replace(" ", "_", StringComparison.Ordinal);
+        return $"https://escapefromtarkov.gamepedia.com/{Uri.EscapeDataString(pageName)}";
+    }
+
     public static IEnumerable<Item> GetAmmoOfSameCaliber(this Item item)
     {
         if (item.Properties is not ItemPropertiesAmmo ammo)

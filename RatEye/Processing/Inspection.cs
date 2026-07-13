@@ -25,6 +25,8 @@ namespace RatEye.Processing
         private Vector2 _markerPosition;
         private float _markerConfidence;
         private string _title = "";
+        private Item _item;
+        private float _itemConfidence;
 
         /// <summary>
         /// Position of the marker in the given image
@@ -80,14 +82,26 @@ namespace RatEye.Processing
             get
             {
                 SatisfyState(State.ScannedTitle);
-                return GetItem();
+                return _item;
+            }
+        }
+
+        /// <summary>
+        /// Similarity between the OCR title and the detected item's name.
+        /// </summary>
+        public float ItemConfidence
+        {
+            get
+            {
+                SatisfyState(State.ScannedTitle);
+                return _itemConfidence;
             }
         }
 
         /// <summary>
         /// The path to the icon of the detected item
         /// </summary>
-        public string IconPath => _config.IconManager.GetIconPath(Item, new ItemExtraInfo());
+        public string IconPath => Item == null ? null : _config.IconManager.GetIconPath(Item, new ItemExtraInfo());
 
         /// <summary>
         /// Constructor for inspection view processing object
@@ -199,7 +213,7 @@ namespace RatEye.Processing
             }
 
             // Compute title search box dimensions
-            var position = MarkerPosition;
+            var position = new Vector2(MarkerPosition.X, MarkerPosition.Y);
             position.X += GetHorizontalTitleSearchOffset();
 
             // Find end of the title bar
@@ -236,6 +250,7 @@ namespace RatEye.Processing
             try
             {
                 Title = OCR(rescaledSearchBox);
+                MatchItem();
             }
             finally
             {
@@ -357,17 +372,22 @@ namespace RatEye.Processing
         /// Get the item, best matching the scanned title
         /// </summary>
         /// <returns>Item instance</returns>
-        private Item GetItem()
+        private void MatchItem()
         {
-            var items = _config.RatStashDB.GetItems();
-            return items.Aggregate(
-                (i1, i2) =>
-                {
-                    var i1Dist = i1.Name.CyrillicToLatin().NormedLevenshteinDistance(Title);
-                    var i2Dist = i2.Name.CyrillicToLatin().NormedLevenshteinDistance(Title);
-                    return i1Dist > i2Dist ? i1 : i2;
-                }
-            );
+            _item = null;
+            _itemConfidence = 0;
+            if (string.IsNullOrWhiteSpace(_title))
+                return;
+
+            foreach (Item item in _config.RatStashDB.GetItems())
+            {
+                float confidence = item.Name.CyrillicToLatin().NormedLevenshteinDistance(_title);
+                if (confidence <= _itemConfidence)
+                    continue;
+
+                _item = item;
+                _itemConfidence = confidence;
+            }
         }
     }
 }

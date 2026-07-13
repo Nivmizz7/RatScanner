@@ -14,6 +14,7 @@ namespace RatEye
     internal static class Logger
     {
         private static List<string> _backlog = new();
+        private static readonly object Sync = new();
 
         internal static void LogDebug(string message, Exception e)
         {
@@ -39,13 +40,14 @@ namespace RatEye
             if (!Config.LogDebug)
                 return;
 
-            var tmp = mat;
             if (mat.Type() == MatType.CV_32FC1)
             {
-                tmp = new Mat(mat.Size(), MatType.CV_8UC1);
-                mat.ConvertTo(tmp, MatType.CV_8UC1, 255);
+                using var converted = new Mat(mat.Size(), MatType.CV_8UC1);
+                mat.ConvertTo(converted, MatType.CV_8UC1, 255);
+                converted.SaveImage(GetUniquePath(Config.Path.Debug, fileName, ".png"));
+                return;
             }
-            tmp.SaveImage(GetUniquePath(Config.Path.Debug, fileName, ".png"));
+            mat.SaveImage(GetUniquePath(Config.Path.Debug, fileName, ".png"));
         }
 
         private static string GetUniquePath(string basePath, string fileName, string extension)
@@ -67,20 +69,23 @@ namespace RatEye
 
         private static void AppendToLog(string content)
         {
-            ProcessBacklog();
-
-            var prefix = "[" + DateTime.UtcNow.ToUniversalTime().TimeOfDay + "] > ";
-
-            try
+            lock (Sync)
             {
-                AppendToLogRaw(prefix + content + "\n");
-            }
-            catch (Exception e)
-            {
-                _backlog.Add(prefix + "Could not write to log file\n" + e + "\n");
-                _backlog.Add(prefix + content + "\n");
-                Thread.Sleep(250);
                 ProcessBacklog();
+
+                var prefix = "[" + DateTime.UtcNow.ToUniversalTime().TimeOfDay + "] > ";
+
+                try
+                {
+                    AppendToLogRaw(prefix + content + "\n");
+                }
+                catch (Exception e)
+                {
+                    _backlog.Add(prefix + "Could not write to log file\n" + e + "\n");
+                    _backlog.Add(prefix + content + "\n");
+                    Thread.Sleep(250);
+                    ProcessBacklog();
+                }
             }
         }
 

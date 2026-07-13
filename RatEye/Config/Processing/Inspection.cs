@@ -17,7 +17,7 @@ namespace RatEye
                 /// <summary>
                 /// Marker bitmap to identify regions of interest. This should be a cropped image of the magnifier icon
                 /// </summary>
-                public Bitmap Marker = new Bitmap(new MemoryStream(Resources.icon_search));
+                public Bitmap Marker = LoadMarker();
 
                 /// <summary>
                 /// Detection threshold of the marker bitmap
@@ -82,6 +82,13 @@ namespace RatEye
                 /// Create a new inspection config instance
                 /// </summary>
                 public Inspection() { }
+
+                private static Bitmap LoadMarker()
+                {
+                    using var stream = new MemoryStream(Resources.icon_search);
+                    using var marker = new Bitmap(stream);
+                    return new Bitmap(marker);
+                }
 
                 internal string GetHash()
                 {

@@ -226,7 +226,7 @@ internal static class GitHubUpdateService
     /// PowerShell script: wait for the app PID to exit, copy staged files over the install dir
     /// (preserving config), then relaunch. Deletes staging when done.
     /// </summary>
-    private static void WriteApplyScript(string scriptPath, string installDir, string payloadDir, int appPid)
+    internal static void WriteApplyScript(string scriptPath, string installDir, string payloadDir, int appPid)
     {
         // Keep user config and local caches; only replace app binaries/assets from the zip.
         string[] preserveNames = { "config.cfg", "Log.txt", "RatScannerLog.txt", "RatEyeLog.txt" };
@@ -263,19 +263,39 @@ internal static class GitHubUpdateService
             # Extra wait: single-file publish can hold locks briefly.
             Start-Sleep -Seconds 1
 
+            function Copy-PayloadEntry {
+                param(
+                    [Parameter(Mandatory = $true)]
+                    [System.IO.FileSystemInfo]$Entry,
+                    [Parameter(Mandatory = $true)]
+                    [string]$Destination
+                )
+
+                if (-not $Entry.PSIsContainer) {
+                    Copy-Item -LiteralPath $Entry.FullName -Destination $Destination -Force
+                    return
+                }
+
+                # Copy the directory contents instead of the directory itself. Copy-Item
+                # nests a source directory when the same-named destination already exists.
+                [System.IO.Directory]::CreateDirectory($Destination) | Out-Null
+                Get-ChildItem -LiteralPath $Entry.FullName -Force | ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force
+                }
+            }
+
             # Copy payload over install, excluding user config files if present in zip.
             Get-ChildItem -LiteralPath $payloadDir -Force | ForEach-Object {
                 $name = $_.Name
+                $dest = Join-Path $installDir $name
                 if ($preserve -contains $name) {
                     # Only copy config from package if the user does not already have one.
-                    $dest = Join-Path $installDir $name
                     if (-not (Test-Path -LiteralPath $dest)) {
-                        Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force
+                        Copy-PayloadEntry -Entry $_ -Destination $dest
                     }
                     return
                 }
-                $dest = Join-Path $installDir $name
-                Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force
+                Copy-PayloadEntry -Entry $_ -Destination $dest
             }
 
             $exe = Join-Path $installDir 'RatScanner.exe'

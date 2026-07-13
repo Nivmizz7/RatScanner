@@ -88,8 +88,9 @@ namespace RatEye.Processing
 
             using Bitmap marker = GetScaledMarker();
             var markers = GetMarkerPositions(marker);
-            var threshold = InspectionConfig.MarkerThreshold;
-            _inspections = markers.Select(marker => new Inspection(_image, _config, marker, threshold)).ToList();
+            _inspections = markers
+                .Select(match => new Inspection(_image, _config, match.position, match.confidence))
+                .ToList();
         }
 
         /// <summary>
@@ -98,7 +99,7 @@ namespace RatEye.Processing
         /// <param name="marker">The marker template to identify</param>
         /// <remarks>Provided marker has to be in RGB</remarks>
         /// <returns>List of markers which confidence is above <see cref="Config.Processing.Inspection.MarkerThreshold"/></returns>
-        private List<Vector2> GetMarkerPositions(Bitmap marker)
+        private List<(Vector2 position, float confidence)> GetMarkerPositions(Bitmap marker)
         {
             using var refMat = _image.ToMat();
             using var tplMat = marker.ToMat(); // tpl = template
@@ -109,13 +110,34 @@ namespace RatEye.Processing
             using var gtpl = tplMat.CvtColor(ColorConversionCodes.RGB2GRAY);
 
             Cv2.MatchTemplate(gref, gtpl, res, TemplateMatchModes.CCoeffNormed);
-            Cv2.Threshold(res, res, InspectionConfig.MarkerThreshold, 1, ThresholdTypes.Binary);
-            var nonZeroes = res.FindNonZero();
-            if (nonZeroes.Empty())
-                return new List<Vector2>();
 
-            nonZeroes.GetArray(out Point[] points);
-            return points.Select(point => new Vector2(point)).ToList();
+            return ExtractMarkerPeaks(res, marker.Size, InspectionConfig.MarkerThreshold);
+        }
+
+        internal static List<(Vector2 position, float confidence)> ExtractMarkerPeaks(
+            Mat response,
+            System.Drawing.Size markerSize,
+            float threshold
+        )
+        {
+            var matches = new List<(Vector2 position, float confidence)>();
+            while (true)
+            {
+                Cv2.MinMaxLoc(response, out _, out double maxValue, out _, out Point maxLocation);
+                if (maxValue < threshold)
+                    break;
+
+                matches.Add((new Vector2(maxLocation), (float)maxValue));
+
+                int left = Math.Max(0, maxLocation.X - markerSize.Width / 2);
+                int top = Math.Max(0, maxLocation.Y - markerSize.Height / 2);
+                int right = Math.Min(response.Width, maxLocation.X + markerSize.Width / 2 + 1);
+                int bottom = Math.Min(response.Height, maxLocation.Y + markerSize.Height / 2 + 1);
+                using Mat suppressionRegion = response[new Rect(left, top, right - left, bottom - top)];
+                suppressionRegion.SetTo(Scalar.All(-1));
+            }
+
+            return matches;
         }
 
         /// <summary>

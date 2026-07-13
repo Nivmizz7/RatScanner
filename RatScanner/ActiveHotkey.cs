@@ -8,6 +8,7 @@ namespace RatScanner;
 internal class ActiveHotkey : Hotkey, IDisposable
 {
     private event UserActivityHelper.KeyUpEventHandler HotkeyPressedEventHandler;
+    private readonly Func<KeyUpEventArgs, bool>? _canHandle;
 
     /// <summary>
     /// <see langword="true"/> if the hotkey should not be forwarded down
@@ -45,13 +46,15 @@ internal class ActiveHotkey : Hotkey, IDisposable
         Hotkey hotkey,
         UserActivityHelper.KeyUpEventHandler hotkeyPressedEventHandler,
         ref bool enabled,
-        bool suppressHotkey = false
+        bool suppressHotkey = false,
+        Func<KeyUpEventArgs, bool>? canHandle = null
     )
         : base(hotkey.KeyboardKeys, hotkey.MouseButtons)
     {
         HotkeyPressedEventHandler += hotkeyPressedEventHandler;
         Enabled = enabled;
         SuppressHotkey = suppressHotkey;
+        _canHandle = canHandle;
         RegisterEventListeners();
     }
 
@@ -117,6 +120,8 @@ internal class ActiveHotkey : Hotkey, IDisposable
     private void OnKeyUp(object? sender, KeyUpEventArgs e)
     {
         if (!Enabled)
+            return;
+        if (_canHandle != null && !_canHandle(e))
             return;
         if (IsPressed(e) && HotkeyPressedEventHandler != null)
         {

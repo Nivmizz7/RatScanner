@@ -108,45 +108,36 @@ internal static class UserActivityHelper
     /// <summary>
     /// Stores the handle to the mouse hook procedure.
     /// </summary>
-    private static int hMouseHook = 0;
+    private static nint hMouseHook;
 
     /// <summary>
     /// Stores the handle to the keyboard hook procedure.
     /// </summary>
-    private static int hKeyboardHook = 0;
+    private static nint hKeyboardHook;
 
     private static HookProc? MouseHookProcedure;
     private static HookProc? KeyboardHookProcedure;
 
-    private delegate int HookProc(int nCode, int wParam, IntPtr lParam);
+    private delegate nint HookProc(int nCode, nint wParam, nint lParam);
 
     [StructLayout(LayoutKind.Sequential)]
-    private class MouseHookStruct
+    private struct MouseLLHookStruct
     {
         internal Win32Point pt;
-        internal int hwnd;
-        internal int wHitTestCode;
-        internal int dwExtraInfo;
+        internal uint mouseData;
+        internal uint flags;
+        internal uint time;
+        internal nuint dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private class MouseLLHookStruct
-    {
-        internal Win32Point pt;
-        internal int mouseData;
-        internal int flags;
-        internal int time;
-        internal int dwExtraInfo;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public class KBDLLHOOKSTRUCT
+    private struct KBDLLHOOKSTRUCT
     {
         public uint vkCode;
         public uint scanCode;
         public KBDLLHOOKSTRUCTFlags flags;
         public uint time;
-        public UIntPtr dwExtraInfo;
+        public nuint dwExtraInfo;
     }
 
     [Flags]
@@ -164,7 +155,7 @@ internal static class UserActivityHelper
         CallingConvention = CallingConvention.StdCall,
         SetLastError = true
     )]
-    private static extern int SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, int dwThreadId);
+    private static extern nint SetWindowsHookEx(int idHook, HookProc lpfn, nint hMod, uint dwThreadId);
 
     [DllImport(
         "user32.dll",
@@ -172,10 +163,11 @@ internal static class UserActivityHelper
         CallingConvention = CallingConvention.StdCall,
         SetLastError = true
     )]
-    private static extern int UnhookWindowsHookEx(int idHook);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(nint idHook);
 
     [DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.StdCall)]
-    private static extern int CallNextHookEx(int idHook, int nCode, int wParam, IntPtr lParam);
+    private static extern nint CallNextHookEx(nint idHook, int nCode, nint wParam, nint lParam);
 
     internal static void Start(bool installMouseHook, bool installKeyboardHook)
     {
@@ -241,11 +233,11 @@ internal static class UserActivityHelper
         if (hMouseHook != 0 && uninstallMouseHook)
         {
             // Uninstall hook
-            int retMouse = UnhookWindowsHookEx(hMouseHook);
+            bool retMouse = UnhookWindowsHookEx(hMouseHook);
             // Reset invalid handle
             hMouseHook = 0;
             // If failed and exception must be thrown
-            if (retMouse == 0 && throwExceptions)
+            if (!retMouse && throwExceptions)
             {
                 // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
                 int errorCode = Marshal.GetLastWin32Error();
@@ -258,11 +250,11 @@ internal static class UserActivityHelper
         if (hKeyboardHook != 0 && uninstallKeyboardHook)
         {
             // Uninstall hook
-            int retKeyboard = UnhookWindowsHookEx(hKeyboardHook);
+            bool retKeyboard = UnhookWindowsHookEx(hKeyboardHook);
             // Reset invalid handle
             hKeyboardHook = 0;
             // If failed and exception must be thrown
-            if (retKeyboard == 0 && throwExceptions)
+            if (!retKeyboard && throwExceptions)
             {
                 // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
                 int errorCode = Marshal.GetLastWin32Error();
@@ -272,7 +264,7 @@ internal static class UserActivityHelper
         }
     }
 
-    private static int KeyboardHookProc(int nCode, int wParam, IntPtr lParam)
+    private static nint KeyboardHookProc(int nCode, nint wParam, nint lParam)
     {
         if (nCode < 0 || (OnKeyboardKeyUp == null && OnKeyboardKeyDown == null))
         {
@@ -303,11 +295,11 @@ internal static class UserActivityHelper
         return handled ? 1 : CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
     }
 
-    private static int MouseHookProc(int nCode, int wParam, IntPtr lParam)
+    private static nint MouseHookProc(int nCode, nint wParam, nint lParam)
     {
         if (nCode < 0 || (OnMouseButtonUp == null && OnMouseButtonDown == null))
         {
-            return CallNextHookEx(hKeyboardHook, nCode, wParam, lParam);
+            return CallNextHookEx(hMouseHook, nCode, wParam, lParam);
         }
 
         // Indicates if any of underlying events set the Handled flag

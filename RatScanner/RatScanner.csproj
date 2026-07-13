@@ -6,7 +6,8 @@
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>True</UseWindowsForms>
 		<ApplicationIcon>Resources\RatLogoSmall.ico</ApplicationIcon>
-		<StartupObject>RatScanner.App</StartupObject>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<StartupObject>RatScanner.Program</StartupObject>
 		<Version>3.9.3</Version>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>

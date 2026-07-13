@@ -19,7 +19,7 @@ internal static class Logger
     private static readonly ConcurrentQueue<string> Backlog = new();
     private static int _processingBacklog;
 
-    private static bool Crashed = false;
+    private static int _crashed;
 
     internal static void LogInfo(string message)
     {
@@ -41,9 +41,8 @@ internal static class Logger
 
     internal static void LogError(string message, Exception? e = null)
     {
-        if (Crashed)
+        if (Interlocked.Exchange(ref _crashed, 1) != 0)
             return;
-        Crashed = true;
 
         // Log the error
         string logMessage = "[Error] " + message;
@@ -53,34 +52,37 @@ internal static class Logger
         else
             logMessage += $"\n {divider} \n {Environment.StackTrace}";
         AppendToLog(logMessage);
+        Flush();
 
-        // Setup info box
-        string title = "RatScanner " + RatConfig.Version;
+        try
+        {
+            string title = "RatScanner " + RatConfig.Version;
+            string faqBoxMessage = message + "\n\nThe FAQ will probably help with that.\nDo you want to open it now?";
+            if (
+                MessageBox.Show(faqBoxMessage, title, MessageBoxButton.YesNo, MessageBoxImage.Error)
+                == MessageBoxResult.Yes
+            )
+                TryRunSupportAction(() => OpenURL(Constants.Links.FAQ), "Unable to open the FAQ.");
 
-        // Ask to open FAQ
-        string faqBoxMessage = message + "\n\nThe FAQ will probably help with that.\nDo you want to open it now?";
-        MessageBoxResult faqBoxResult = MessageBox.Show(
-            faqBoxMessage,
-            title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Error
-        );
-        if (faqBoxResult == MessageBoxResult.Yes)
-            OpenFAQ(message);
-
-        // Ask for git issue creation
-        string gitBoxMessage = "Would you like to create a issue on GitHub?";
-        MessageBoxResult gitBoxResult = MessageBox.Show(
-            gitBoxMessage,
-            title,
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question
-        );
-        if (gitBoxResult == MessageBoxResult.Yes)
-            CreateGitHubIssue(message, e);
-
-        // Exit after error is handled
-        Environment.Exit(0);
+            if (
+                MessageBox.Show(
+                    "Would you like to create an issue on GitHub?",
+                    title,
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question
+                ) == MessageBoxResult.Yes
+            )
+                TryRunSupportAction(() => CreateGitHubIssue(message, e), "Unable to open the GitHub issue form.");
+        }
+        catch (Exception supportException)
+        {
+            AppendToLog("[Warning] Unable to display crash assistance.\n" + supportException);
+        }
+        finally
+        {
+            Flush();
+            Environment.Exit(1);
+        }
     }
 
     internal static void LogDebugBitmap(Bitmap bitmap, string fileName = "bitmap")
@@ -151,7 +153,16 @@ internal static class Logger
     private static void AppendToLogRaw(string text)
     {
         Debug.WriteLine(text);
-        File.AppendAllText(RatConfig.Paths.LogFile, text, Encoding.UTF8);
+        try
+        {
+            File.AppendAllText(RatConfig.Paths.LogFile, text, Encoding.UTF8);
+        }
+        catch (Exception exception)
+        {
+            // Logging must never recursively crash the application. Debug output is
+            // still available when the configured log path cannot be written.
+            Debug.WriteLine(exception);
+        }
     }
 
     private static void ProcessBacklog()
@@ -160,13 +171,28 @@ internal static class Logger
         {
             lock (SyncObject)
             {
+                StringBuilder batch = new();
                 while (Backlog.TryDequeue(out string? entry))
-                    AppendToLogRaw(entry);
+                    batch.Append(entry);
+                if (batch.Length > 0)
+                    AppendToLogRaw(batch.ToString());
             }
 
             Interlocked.Exchange(ref _processingBacklog, 0);
             if (Backlog.IsEmpty || Interlocked.CompareExchange(ref _processingBacklog, 1, 0) != 0)
                 return;
+        }
+    }
+
+    internal static void Flush()
+    {
+        lock (SyncObject)
+        {
+            StringBuilder batch = new();
+            while (Backlog.TryDequeue(out string? entry))
+                batch.Append(entry);
+            if (batch.Length > 0)
+                AppendToLogRaw(batch.ToString());
         }
     }
 
@@ -202,9 +228,16 @@ internal static class Logger
             }
     }
 
-    private static void OpenFAQ(string message)
+    private static void TryRunSupportAction(Action action, string failureMessage)
     {
-        OpenURL(Constants.Links.FAQ);
+        try
+        {
+            action();
+        }
+        catch (Exception exception)
+        {
+            AppendToLog("[Warning] " + failureMessage + "\n" + exception);
+        }
     }
 
     private static void CreateGitHubIssue(string message, Exception? e)
@@ -243,6 +276,13 @@ internal static class Logger
 
     private static string ReadAll()
     {
-        return File.ReadAllText(RatConfig.Paths.LogFile, Encoding.UTF8);
+        try
+        {
+            return File.ReadAllText(RatConfig.Paths.LogFile, Encoding.UTF8);
+        }
+        catch (Exception exception)
+        {
+            return "The log file could not be read: " + exception.Message;
+        }
     }
 }

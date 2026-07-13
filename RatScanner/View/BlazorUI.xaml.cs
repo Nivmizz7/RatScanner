@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,13 +17,42 @@ namespace RatScanner.View;
 /// <summary>
 /// Interaction logic for BlazorUI.xaml
 /// </summary>
-public partial class BlazorUI : UserControl, ISwitchable
+public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 {
+    private static readonly object InstanceLock = new();
     private static BlazorUI _instance = null!;
-    public static BlazorUI Instance => _instance ??= new BlazorUI();
+    private static bool _shutdownStarted;
+
+    public static BlazorUI Instance
+    {
+        get
+        {
+            lock (InstanceLock)
+            {
+                ObjectDisposedException.ThrowIf(_shutdownStarted, typeof(BlazorUI));
+                return _instance ??= new BlazorUI();
+            }
+        }
+    }
+
+    internal static void DisposeInstance()
+    {
+        BlazorUI? instance;
+        lock (InstanceLock)
+        {
+            _shutdownStarted = true;
+            instance = _instance;
+            _instance = null!;
+        }
+        instance?.Dispose();
+    }
 
     public static BlazorOverlay BlazorOverlay { get; set; } = null!;
     public static BlazorInteractableOverlay BlazorInteractableOverlay { get; set; } = null!;
+
+    private readonly ServiceProvider _serviceProvider;
+    private bool _webViewEventsAttached;
+    private bool _disposed;
 
     private BlazorUI()
     {
@@ -54,20 +84,24 @@ public partial class BlazorUI : UserControl, ISwitchable
 
         serviceCollection.AddSingleton<TarkovTrackerDB>(s => RatScannerMain.Instance.TarkovTrackerDB);
 
-        ServiceProvider serviceProvider = serviceCollection.BuildServiceProvider();
+        _serviceProvider = serviceCollection.BuildServiceProvider();
 
-        Resources.Add("services", serviceProvider);
+        Resources.Add("services", _serviceProvider);
 
-        BlazorOverlay ??= new BlazorOverlay(serviceProvider);
+        BlazorOverlay ??= new BlazorOverlay(_serviceProvider);
         BlazorOverlay.Show();
 
-        BlazorInteractableOverlay ??= new BlazorInteractableOverlay(serviceProvider);
+        BlazorInteractableOverlay ??= new BlazorInteractableOverlay(_serviceProvider);
 
         InitializeComponent();
     }
 
     private void BlazorUI_Loaded(object? sender, RoutedEventArgs e)
     {
+        if (_webViewEventsAttached)
+            return;
+        _webViewEventsAttached = true;
+
         blazorWebView.WebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         blazorWebView.WebView.NavigationCompleted += WebView_Loaded;
         blazorWebView.WebView.CoreWebView2InitializationCompleted += CoreWebView_Loaded;
@@ -122,4 +156,25 @@ public partial class BlazorUI : UserControl, ISwitchable
     }
 
     public void OnClose() { }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        if (_webViewEventsAttached)
+        {
+            blazorWebView.WebView.NavigationCompleted -= WebView_Loaded;
+            blazorWebView.WebView.CoreWebView2InitializationCompleted -= CoreWebView_Loaded;
+        }
+
+        BlazorInteractableOverlay?.Close();
+        BlazorOverlay?.Close();
+        blazorWebView.WebView.Dispose();
+        Resources.Remove("services");
+        _serviceProvider.Dispose();
+        BlazorInteractableOverlay = null!;
+        BlazorOverlay = null!;
+    }
 }

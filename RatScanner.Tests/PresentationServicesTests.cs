@@ -1,4 +1,5 @@
 using System;
+using RatEye;
 using RatScanner.Presentation;
 using RatScanner.Scan;
 using RatScanner.TarkovDev.GraphQL;
@@ -80,6 +81,28 @@ public class ItemQueueTests
     }
 }
 
+public class SimpleConfigTests
+{
+    [Fact]
+    public void Config_round_trips_values_larger_than_the_initial_native_buffer()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"RatScanner-{Guid.NewGuid():N}.cfg");
+        try
+        {
+            SimpleConfig config = new(path, "Test");
+            string expected = new('x', 4_096);
+
+            config.WriteString("LongValue", expected);
+
+            Assert.Equal(expected, config.ReadString("LongValue", string.Empty));
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+}
+
 public class RatEyeIconManagerTests
 {
     [Fact]
@@ -150,6 +173,88 @@ public class RatEyeIconManagerTests
     }
 }
 
+public class RatEyeProcessingTests
+{
+    [Theory]
+    [InlineData("", "", 0)]
+    [InlineData("item", "", 0)]
+    [InlineData("", "item", 0)]
+    [InlineData("item", "item", 1)]
+    public void Normalized_similarity_handles_empty_input(string source, string target, float expected) =>
+        Assert.Equal(expected, source.NormedLevenshteinDistance(target));
+
+    [Fact]
+    public void Crop_clamps_to_the_image_and_rejects_disjoint_regions()
+    {
+        using System.Drawing.Bitmap source = new(20, 20);
+        using System.Drawing.Bitmap cropped = source.Crop(-5, -5, 10, 10);
+
+        Assert.Equal(5, cropped.Width);
+        Assert.Equal(5, cropped.Height);
+        Assert.Throws<ArgumentOutOfRangeException>(() => source.Crop(30, 30, 5, 5));
+    }
+
+    [Fact]
+    public void Multi_inspection_suppresses_duplicate_peaks_and_preserves_confidence()
+    {
+        using System.Drawing.Bitmap marker = CreateMarker();
+        using System.Drawing.Bitmap source = new(100, 60);
+        using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(source))
+        {
+            graphics.Clear(System.Drawing.Color.FromArgb(25, 27, 27));
+            graphics.DrawImageUnscaled(marker, 10, 10);
+            graphics.DrawImageUnscaled(marker, 65, 35);
+        }
+
+        RatEye.Config.Processing.Inspection inspectionConfig = new() { MarkerItemScale = 1, MarkerThreshold = 0.8f };
+        inspectionConfig.Marker.Dispose();
+        inspectionConfig.Marker = new System.Drawing.Bitmap(marker);
+        RatEye.Config config = new()
+        {
+            ProcessingConfig = new RatEye.Config.Processing { Scale = 1, InspectionConfig = inspectionConfig },
+        };
+
+        using RatEye.RatEyeEngine engine = new(config, RatStash.Database.FromItems(Array.Empty<RatStash.Item>()));
+        RatEye.Processing.MultiInspection result = engine.NewMultiInspection(source);
+
+        Assert.Equal(2, result.Inspections.Count);
+        Assert.All(result.Inspections, inspection => Assert.True(inspection.MarkerConfidence > 0.99f));
+    }
+
+    [Fact]
+    public void Marker_peak_extraction_suppresses_adjacent_peaks_but_keeps_separated_matches()
+    {
+        using OpenCvSharp.Mat response = new(5, 15, OpenCvSharp.MatType.CV_32FC1, OpenCvSharp.Scalar.All(0));
+        response.Set(2, 2, 0.99f);
+        response.Set(2, 3, 0.98f);
+        response.Set(2, 12, 0.97f);
+
+        var matches = RatEye.Processing.MultiInspection.ExtractMarkerPeaks(
+            response,
+            new System.Drawing.Size(5, 5),
+            0.8f
+        );
+
+        Assert.Equal(2, matches.Count);
+        Assert.Equal(new RatEye.Vector2(2, 2), matches[0].position);
+        Assert.Equal(0.99f, matches[0].confidence);
+        Assert.Equal(new RatEye.Vector2(12, 2), matches[1].position);
+        Assert.Equal(0.97f, matches[1].confidence);
+    }
+
+    private static System.Drawing.Bitmap CreateMarker()
+    {
+        System.Drawing.Bitmap marker = new(9, 9);
+        using System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(marker);
+        graphics.Clear(System.Drawing.Color.FromArgb(25, 27, 27));
+        using System.Drawing.Pen pen = new(System.Drawing.Color.White, 2);
+        graphics.DrawLine(pen, 1, 1, 7, 7);
+        graphics.DrawLine(pen, 7, 1, 1, 7);
+        marker.SetPixel(4, 1, System.Drawing.Color.Red);
+        return marker;
+    }
+}
+
 public class TarkovDevApiTests
 {
     [Fact]
@@ -198,6 +303,7 @@ public class TarkovDevApiTests
 
         Assert.Contains("id", query);
         Assert.Contains("name", query);
+        Assert.Contains("normalizedName", query);
         Assert.DoesNotContain("extracts", query);
         Assert.DoesNotContain("transits", query);
         Assert.DoesNotContain("wiki", query);
@@ -248,5 +354,28 @@ public class ItemExtensionTests
         Assert.Equal(2, mapped.Width);
         Assert.Equal(3, mapped.Height);
         Assert.Equal(RatStash.TaxonomyColor.Violet, mapped.BackgroundColor);
+    }
+
+    [Fact]
+    public void Scan_result_mapping_uses_the_scanned_items_metadata()
+    {
+        Item item = new()
+        {
+            Id = "historical-item",
+            Name = "Historical Item",
+            ShortName = "History",
+            Avg24HPrice = 12_000,
+            Width = 2,
+            Height = 1,
+            WikiLink = "https://example.test/historical-item",
+        };
+        DefaultItemScan scan = new(item);
+
+        ScanResultViewModel result = ScanResultAdapter.Map(scan, questRemaining: 2, hideoutRemaining: 0, true);
+
+        Assert.Equal(item.Id, result.Item.Id);
+        Assert.Equal(item.WikiLink, result.Item.WikiUrl);
+        Assert.Equal(2, result.Quests.RemainingRequired);
+        Assert.Equal(RecommendationType.KeepForQuest, result.Recommendation.Type);
     }
 }

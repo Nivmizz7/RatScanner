@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -14,16 +16,17 @@ internal class SimpleConfig
     internal string Section;
     internal string EnumerableSeparator = ";";
 
-    [DllImport("kernel32")]
-    private static extern long WritePrivateProfileString(string section, string key, string val, string filePath);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool WritePrivateProfileString(string section, string key, string val, string filePath);
 
-    [DllImport("kernel32")]
-    private static extern int GetPrivateProfileString(
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetPrivateProfileString(
         string section,
         string key,
         string def,
         StringBuilder retVal,
-        int size,
+        uint size,
         string filePath
     );
 
@@ -35,7 +38,8 @@ internal class SimpleConfig
 
     internal void WriteString(string key, string value)
     {
-        WritePrivateProfileString(Section, key.ToLower(), value, Path);
+        if (!WritePrivateProfileString(Section, key.ToLowerInvariant(), value, Path))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), $"Unable to write configuration file '{Path}'.");
     }
 
     internal void WriteSecureString(string key, string value)
@@ -48,7 +52,7 @@ internal class SimpleConfig
         byte[] bytes = Encoding.ASCII.GetBytes(value);
         byte[] encryptedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
         string hexString = Convert.ToHexString(encryptedBytes);
-        WritePrivateProfileString(Section, key.ToLower(), hexString, Path);
+        WriteString(key, hexString);
     }
 
     internal void WriteInt(string key, int value)
@@ -85,11 +89,26 @@ internal class SimpleConfig
 
     private string ReadStringInternal(string key)
     {
-        StringBuilder temp = new(1024);
         const string def = "RatScanner.Config.Default.Exception";
-        GetPrivateProfileString(Section, key.ToLower(), def, temp, short.MaxValue, Path);
-        string result = temp.ToString();
-        return result == def ? throw new Exception(def) : result;
+        for (int capacity = 1024; capacity <= short.MaxValue; capacity *= 2)
+        {
+            StringBuilder temp = new(capacity);
+            uint length = GetPrivateProfileString(
+                Section,
+                key.ToLowerInvariant(),
+                def,
+                temp,
+                (uint)temp.Capacity,
+                Path
+            );
+            string result = temp.ToString();
+            if (result == def)
+                throw new KeyNotFoundException(def);
+            if (length < temp.Capacity - 1)
+                return result;
+        }
+
+        throw new InvalidDataException($"Configuration value '{Section}.{key}' is too long.");
     }
 
     internal string ReadString(string key, string defaultValue)

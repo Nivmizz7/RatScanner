@@ -91,7 +91,8 @@ namespace RatEye.Processing
         /// <summary>
         /// The path to the icon of the detected item
         /// </summary>
-        public string IconPath => _config.IconManager.GetIconPath(Item, ItemExtraInfo ?? new ItemExtraInfo());
+        public string IconPath =>
+            Item == null ? null : _config.IconManager.GetIconPath(Item, ItemExtraInfo ?? new ItemExtraInfo());
 
         /// <summary>
         /// Confidence with which the <see cref="Item"/> was detected/>
@@ -312,7 +313,7 @@ namespace RatEye.Processing
                 new Scalar(113 * (255f / 180f), 24, 217)
             );
 
-            using var morphologyStructure = Mat.Ones(MatType.CV_8U, new[] { 2, 2 }).ToMat();
+            using var morphologyStructure = new Mat(2, 2, MatType.CV_8U, Scalar.All(1));
             Cv2.MorphologyEx(colorFilter, colorFilter, MorphTypes.Close, morphologyStructure);
             Cv2.BitwiseNot(colorFilter, colorFilter);
             Logger.LogDebugMat(colorFilter);
@@ -362,15 +363,25 @@ namespace RatEye.Processing
                 var v = new Vector2(i.GetSlotSize());
                 return v == slotSize || v == slotSize.Flipped;
             });
-            _item = items.Aggregate(
-                (i1, i2) =>
-                {
-                    var i1Dist = i1.ShortName.Replace("I", "T").CyrillicToLatin().NormedLevenshteinDistance(_ocrTitle);
-                    var i2Dist = i2.ShortName.Replace("I", "T").CyrillicToLatin().NormedLevenshteinDistance(_ocrTitle);
-                    return i1Dist > i2Dist ? i1 : i2;
-                }
-            );
-            _detectionConfidence = _item.ShortName.CyrillicToLatin().NormedLevenshteinDistance(_ocrTitle);
+            _item = null;
+            _detectionConfidence = 0;
+            if (string.IsNullOrWhiteSpace(_ocrTitle))
+                return;
+
+            foreach (Item item in items)
+            {
+                float confidence = item
+                    .ShortName.Replace("I", "T")
+                    .CyrillicToLatin()
+                    .NormedLevenshteinDistance(_ocrTitle);
+                if (confidence <= _detectionConfidence)
+                    continue;
+
+                _item = item;
+                _detectionConfidence = confidence;
+            }
+            if (_item == null)
+                return;
             _rotated = new Vector2(_item.GetSlotSize()) != slotSize;
         }
 

@@ -1,7 +1,6 @@
 ﻿@page "/app/settings/tracking"
 @using static RatScanner.RatConfig
 @inject SettingsVM SettingsVM
-@inject RatScanner.TarkovTrackerDB TarkovTrackerDB
 @inject LocalizationService Localizer
 @implements IDisposable
 <div>
@@ -36,7 +35,7 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12">
-                        <MudTextField @bind-Value="SettingsVM.TarkovTrackerToken" Validation="@(new Func<string, IEnumerable<string>>(CheckToken))" Label="@Localizer["ApiToken"]" InputType="@PasswordInput" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon" OnAdornmentClick="TokenShowClick"></MudTextField>
+                        <MudTextField @bind-Value="SettingsVM.TarkovTrackerToken" Label="@Localizer["ApiToken"]" InputType="@PasswordInput" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon" OnAdornmentClick="TokenShowClick"></MudTextField>
                     </MudItem>
                     <MudItem xs="12">
                         <MudCheckBox @bind-Checked="SettingsVM.ShowTarkovTrackerTeam" Label="@Localizer["ShowTeammates"]" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
@@ -54,9 +53,9 @@
         SettingsVM.PropertyChanged += PropertyChangeHandler;
     }
 
-    private async void PropertyChangeHandler(object? sender, EventArgs e)
+    private void PropertyChangeHandler(object? sender, EventArgs e)
     {
-        await InvokeAsync(() => StateHasChanged());
+        _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose()
@@ -67,12 +66,6 @@
     bool isShow;
     InputType PasswordInput = InputType.Password;
     string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-
-    private IEnumerable<string> CheckToken(string token)
-    {
-        if (!string.IsNullOrEmpty(token) && !TarkovTrackerDB.TestToken(token))
-            yield return Localizer["InvalidToken"];
-    }
 
     void TokenShowClick()
     {

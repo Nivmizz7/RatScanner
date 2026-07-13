@@ -7,10 +7,10 @@
 
 <MudGrid Class="px-2 my-2 settings-actions" Spacing="0">
     <MudItem xs="6" Class="d-flex justify-start pr-1">
-        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Class="light-green darken-3" FullWidth="true" OnClick="SaveSettings">@Localizer["SaveButton"]</MudButton>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Class="light-green darken-3" FullWidth="true" Disabled="_showSpinner" OnClick="SaveSettings">@Localizer["SaveButton"]</MudButton>
     </MudItem>
     <MudItem xs="6" Class="d-flex justify-end pl-1">
-        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" FullWidth="true" OnClick="DiscardSettings">@Localizer["CancelButton"]</MudButton>
+        <MudButton Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Delete" Color="Color.Error" FullWidth="true" Disabled="_showSpinner" OnClick="DiscardSettings">@Localizer["CancelButton"]</MudButton>
     </MudItem>
 </MudGrid>
 
@@ -21,11 +21,23 @@
 @code {
     private bool _showSpinner;
 
-    private async void SaveSettings() {
+    private async Task SaveSettings() {
+        if (_showSpinner)
+            return;
+
         _showSpinner = true;
-        await SettingsVM.SaveSettings();
-        StateHasChanged();
-        NavigationManager.NavigateTo("/app");
+        try {
+            await SettingsVM.SaveSettings();
+            NavigationManager.NavigateTo("/app");
+        }
+        catch (Exception exception) {
+            Logger.LogWarning("Unable to save settings.", exception);
+            Logger.ShowWarning("RatScanner could not apply these settings. Your previous saved configuration is still available.");
+        }
+        finally {
+            _showSpinner = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void DiscardSettings() {
@@ -38,8 +50,8 @@
         SettingsVM.PropertyChanged += PropertyChangeHandler;
     }
 
-    private async void PropertyChangeHandler(object? sender, EventArgs e) {
-        await InvokeAsync(() => StateHasChanged());
+    private void PropertyChangeHandler(object? sender, EventArgs e) {
+        _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose() {

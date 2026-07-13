@@ -109,6 +109,7 @@ public partial class PageSwitcher : Window
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
         }
+        _contextMenuStrip.Dispose();
 
         base.OnClosed(e);
         ExitApplication();

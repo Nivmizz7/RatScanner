@@ -11,12 +11,12 @@ public class ItemNameScan : ItemScan
 
     public ItemNameScan(Inspection inspection, Vector2 toolTipPosition, int duration)
     {
-        RatStash.Item inspectionItem = inspection.Item;
+        RatStash.Item inspectionItem = inspection.Item ?? throw new InvalidOperationException("No item was detected.");
         Item =
             TarkovDevAPI.GetItems().FirstOrDefault(item => item.Id == inspectionItem.Id)
             ?? throw new Exception($"Unknown item: {inspection.Item.Id}");
-        Confidence = inspection.MarkerConfidence;
-        IconPath = inspection.IconPath;
+        Confidence = inspection.ItemConfidence;
+        IconPath = inspection.IconPath ?? string.Empty;
         _toolTipPosition = toolTipPosition;
         DissapearAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + duration;
     }

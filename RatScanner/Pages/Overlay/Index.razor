@@ -15,6 +15,8 @@
        && itemScan.GetToolTipPosition() != null
        && itemScan.DissapearAt > DateTimeOffset.Now.ToUnixTimeMilliseconds())
         {
+            var taskRemaining = item.GetTaskRemaining().count;
+            var hideoutRemaining = item.GetHideoutRemaining();
             @if (itemScan is ItemIconScan iconScan)
             {
                 var leftPos = iconScan.GetToolTipPosition().X - VirtualScreenOffset.XOffset;
@@ -54,16 +56,16 @@
                                 </div>
                             }
 
-                            @if (MenuVM.TaskRemaining > 0)
+                            @if (taskRemaining > 0)
                             {
                                 <div class="d-flex align-center stroke">
-                                    @MenuVM.TaskRemaining <MudIcon Icon="@Icons.Material.Filled.Checklist" Size="Size.Small" Class="ml-1" />
+                                    @taskRemaining <MudIcon Icon="@Icons.Material.Filled.Checklist" Size="Size.Small" Class="ml-1" />
                                 </div>
                             }
-                            @if (MenuVM.HideoutRemaining > 0)
+                            @if (hideoutRemaining > 0)
                             {
                                 <div class="d-flex align-center stroke">
-                                    @MenuVM.HideoutRemaining <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
+                                    @hideoutRemaining <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
                                 </div>
                             }
                         </div>
@@ -92,11 +94,11 @@
                         </div>
                     }
 
-                    @if (MenuVM.TaskRemaining > 0)
+                    @if (taskRemaining > 0)
                     {
                         <MudIcon Icon="@Icons.Material.Filled.Checklist" Size="Size.Small" Class="ml-1" />
                     }
-                    @if (MenuVM.HideoutRemaining > 0)
+                    @if (hideoutRemaining > 0)
                     {
                         <MudIcon Icon="@Icons.Material.Filled.House" Size="Size.Small" Class="ml-1" />
                     }
@@ -113,9 +115,12 @@
 
         if (string.IsNullOrEmpty(path)) return itemScan.Item.BaseImageLink ?? "";
 
-        path = path.Replace("\\", "/");
-        var pathEnd = path[path.IndexOf("Data/icons/")..path.Length];
-        pathEnd = pathEnd[5..pathEnd.Length];
+        path = path.Replace("\\", "/", StringComparison.Ordinal);
+        const string iconDirectory = "Data/icons/";
+        var iconDirectoryIndex = path.IndexOf(iconDirectory, StringComparison.OrdinalIgnoreCase);
+        if (iconDirectoryIndex < 0) return itemScan.Item.BaseImageLink ?? "";
+
+        var pathEnd = path[(iconDirectoryIndex + "Data/".Length)..];
         var url = "https://local.data/" + pathEnd;
         return url;
     }

@@ -45,6 +45,8 @@ public static class TarkovDevAPI
     private static readonly ConcurrentDictionary<string, Lazy<Task>> InFlightRequests = new();
     private static readonly ConcurrentDictionary<string, long> BackoffUntil = new();
 
+    internal static event EventHandler? ItemsCacheUpdated;
+
     private static readonly HttpClient HttpClient = CreateHttpClient();
 
     private static HttpClient CreateHttpClient()
@@ -195,7 +197,16 @@ public static class TarkovDevAPI
             BackoffUntil.TryRemove(baseQueryKey, out _);
 
             // Cache raw response for offline use
-            RatConfig.WriteToCache(baseQueryKey, rawResponse);
+            try
+            {
+                RatConfig.WriteToCache(baseQueryKey, rawResponse);
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning($"Unable to persist API cache for: \"{baseQueryKey}\".", e);
+            }
+
+            NotifyItemsCacheUpdated<T>();
 
             Logger.LogInfo(
                 $"Completed fetch in {sw.ElapsedMilliseconds}ms: {results.Length} total items for \"{baseQueryKey}\""
@@ -205,10 +216,11 @@ public static class TarkovDevAPI
         {
             Logger.LogWarning($"Failed request for: \"{baseQueryKey}\".", e);
 
-            if (e is RateLimitedException rateLimited)
-            {
-                ApplyBackoff(baseQueryKey, rateLimited.RetryAfter);
-            }
+            ApplyBackoff(
+                baseQueryKey,
+                e is RateLimitedException rateLimited ? rateLimited.RetryAfter : null,
+                e is RateLimitedException
+            );
 
             // If we have existing cached data, extend its TTL to prevent rapid retries
             if (Cache.TryGetValue(baseQueryKey, out var existingCache))
@@ -228,28 +240,47 @@ public static class TarkovDevAPI
             if (RatConfig.ReadFromCache(baseQueryKey, out string cachedResponse))
             {
                 Logger.LogInfo($"Read from offline cache for: \"{baseQueryKey}\"");
-
-                ResponseData<T[]>? neededResponse = JsonConvert.DeserializeObject<ResponseData<T[]>?>(
-                    cachedResponse,
-                    JsonSettings
-                );
-                if (neededResponse?.Data?.Data != null)
+                try
                 {
-                    long time = DateTimeOffset.Now.ToUnixTimeSeconds();
-                    long expire = time + RatConfig.SuperShortTTL;
-                    if (BackoffUntil.TryGetValue(baseQueryKey, out long until))
+                    ResponseData<T[]>? neededResponse = JsonConvert.DeserializeObject<ResponseData<T[]>?>(
+                        cachedResponse,
+                        JsonSettings
+                    );
+                    if (neededResponse?.Data?.Data != null)
                     {
-                        expire = Math.Max(expire, until);
+                        long time = DateTimeOffset.Now.ToUnixTimeSeconds();
+                        long expire = time + RatConfig.SuperShortTTL;
+                        if (BackoffUntil.TryGetValue(baseQueryKey, out long until))
+                            expire = Math.Max(expire, until);
+                        Cache[baseQueryKey] = (expire, neededResponse.Data.Data);
+                        NotifyItemsCacheUpdated<T>();
+                        return;
                     }
-                    Cache[baseQueryKey] = (expire, neededResponse.Data.Data);
-                    return;
+                }
+                catch (Exception cacheException)
+                {
+                    Logger.LogWarning($"Offline API cache is invalid for: \"{baseQueryKey}\".", cacheException);
                 }
             }
 
             if (!Cache.ContainsKey(baseQueryKey))
-            {
-                throw new Exception("Failed to fetch query response and no cache available.");
-            }
+                Logger.LogWarning($"No API data is available for: \"{baseQueryKey}\".");
+        }
+    }
+
+    private static void NotifyItemsCacheUpdated<T>()
+        where T : class
+    {
+        if (typeof(T) != typeof(Item))
+            return;
+
+        try
+        {
+            ItemsCacheUpdated?.Invoke(null, EventArgs.Empty);
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("An item-cache update listener failed.", e);
         }
     }
 
@@ -336,7 +367,7 @@ public static class TarkovDevAPI
         return false;
     }
 
-    private static void ApplyBackoff(string baseQueryKey, TimeSpan? retryAfter)
+    private static void ApplyBackoff(string baseQueryKey, TimeSpan? retryAfter, bool rateLimited)
     {
         double delaySeconds = retryAfter?.TotalSeconds ?? RatConfig.SuperShortTTL;
         long backoffSeconds = (long)Math.Ceiling(Math.Max(delaySeconds, RatConfig.SuperShortTTL));
@@ -348,7 +379,8 @@ public static class TarkovDevAPI
         {
             Cache[baseQueryKey] = (Math.Max(existingCache.expire, until), existingCache.response);
         }
-        Logger.LogInfo($"Rate limited for: \"{baseQueryKey}\". Backing off for {backoffSeconds}s.");
+        string reason = rateLimited ? "Rate limited" : "Request failed";
+        Logger.LogInfo($"{reason} for: \"{baseQueryKey}\". Backing off for {backoffSeconds}s.");
     }
 
     /// <summary>
@@ -636,7 +668,12 @@ public static class TarkovDevAPI
     internal static string MapsQuery(LanguageCode language, GameMode gameMode)
     {
         return new QueryQueryBuilder()
-            .WithMaps(new MapQueryBuilder().WithId().WithName(), alias: "data", lang: language, gameMode: gameMode)
+            .WithMaps(
+                new MapQueryBuilder().WithId().WithName().WithNormalizedName(),
+                alias: "data",
+                lang: language,
+                gameMode: gameMode
+            )
             .Build();
     }
 

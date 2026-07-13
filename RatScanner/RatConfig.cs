@@ -308,68 +308,88 @@ internal static class RatConfig
 
     internal static void SaveConfig()
     {
-        SimpleConfig config = new(Paths.ConfigFile) { Section = nameof(NameScan) };
+        string temporaryPath = Paths.ConfigFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Paths.ConfigFile) ?? Paths.Base);
+            if (File.Exists(Paths.ConfigFile))
+                File.Copy(Paths.ConfigFile, temporaryPath);
 
-        config.WriteBool(nameof(NameScan.Enable), NameScan.Enable);
-        config.WriteBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
-        config.WriteInt(nameof(NameScan.Language), (int)NameScan.Language);
+            SimpleConfig config = new(temporaryPath) { Section = nameof(NameScan) };
 
-        config.Section = nameof(IconScan);
-        config.WriteBool(nameof(IconScan.Enable), IconScan.Enable);
-        config.WriteBool(nameof(IconScan.ScanRotatedIcons), IconScan.ScanRotatedIcons);
-        config.WriteHotkey(nameof(IconScan.Hotkey), IconScan.Hotkey);
-        config.WriteBool(nameof(IconScan.UseCachedIcons), IconScan.UseCachedIcons);
+            config.WriteBool(nameof(NameScan.Enable), NameScan.Enable);
+            config.WriteBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
+            config.WriteInt(nameof(NameScan.Language), (int)NameScan.Language);
 
-        config.Section = nameof(ToolTip);
-        config.WriteInt(nameof(ToolTip.Duration), ToolTip.Duration);
-        config.WriteString(nameof(ToolTip.DigitGroupingSymbol), ToolTip.DigitGroupingSymbol);
+            config.Section = nameof(IconScan);
+            config.WriteBool(nameof(IconScan.Enable), IconScan.Enable);
+            config.WriteBool(nameof(IconScan.ScanRotatedIcons), IconScan.ScanRotatedIcons);
+            config.WriteHotkey(nameof(IconScan.Hotkey), IconScan.Hotkey);
+            config.WriteBool(nameof(IconScan.UseCachedIcons), IconScan.UseCachedIcons);
 
-        config.Section = nameof(UserInterface);
-        config.WriteInt(nameof(UserInterface.Language), (int)UserInterface.Language);
+            config.Section = nameof(ToolTip);
+            config.WriteInt(nameof(ToolTip.Duration), ToolTip.Duration);
+            config.WriteString(nameof(ToolTip.DigitGroupingSymbol), ToolTip.DigitGroupingSymbol);
 
-        config.Section = nameof(MinimalUi);
-        config.WriteBool(nameof(MinimalUi.ShowName), MinimalUi.ShowName);
-        config.WriteBool(nameof(MinimalUi.ShowAvgDayPrice), MinimalUi.ShowAvgDayPrice);
-        config.WriteBool(nameof(MinimalUi.ShowPricePerSlot), MinimalUi.ShowPricePerSlot);
-        config.WriteBool(nameof(MinimalUi.ShowTraderPrice), MinimalUi.ShowTraderPrice);
-        config.WriteBool(nameof(MinimalUi.ShowUpdated), MinimalUi.ShowUpdated);
-        config.WriteBool(nameof(MinimalUi.ShowKappa), MinimalUi.ShowKappa);
-        config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTracker), MinimalUi.ShowQuestHideoutTracker);
-        config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTeamTracker), MinimalUi.ShowQuestHideoutTeamTracker);
-        config.WriteInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
+            config.Section = nameof(UserInterface);
+            config.WriteInt(nameof(UserInterface.Language), (int)UserInterface.Language);
 
-        config.Section = nameof(Tracking);
-        config.WriteBool(nameof(Tracking.ShowNonFIRNeeds), Tracking.ShowNonFIRNeeds);
-        config.WriteBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
+            config.Section = nameof(MinimalUi);
+            config.WriteBool(nameof(MinimalUi.ShowName), MinimalUi.ShowName);
+            config.WriteBool(nameof(MinimalUi.ShowAvgDayPrice), MinimalUi.ShowAvgDayPrice);
+            config.WriteBool(nameof(MinimalUi.ShowPricePerSlot), MinimalUi.ShowPricePerSlot);
+            config.WriteBool(nameof(MinimalUi.ShowTraderPrice), MinimalUi.ShowTraderPrice);
+            config.WriteBool(nameof(MinimalUi.ShowUpdated), MinimalUi.ShowUpdated);
+            config.WriteBool(nameof(MinimalUi.ShowKappa), MinimalUi.ShowKappa);
+            config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTracker), MinimalUi.ShowQuestHideoutTracker);
+            config.WriteBool(nameof(MinimalUi.ShowQuestHideoutTeamTracker), MinimalUi.ShowQuestHideoutTeamTracker);
+            config.WriteInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
 
-        config.Section = nameof(Tracking.TarkovTracker);
-        config.WriteInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
-        config.WriteSecureString(nameof(Tracking.TarkovTracker.Token), Tracking.TarkovTracker.Token);
-        config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
+            config.Section = nameof(Tracking);
+            config.WriteBool(nameof(Tracking.ShowNonFIRNeeds), Tracking.ShowNonFIRNeeds);
+            config.WriteBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
 
-        config.Section = nameof(Overlay);
+            config.Section = nameof(Tracking.TarkovTracker);
+            config.WriteInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
+            config.WriteSecureString(nameof(Tracking.TarkovTracker.Token), Tracking.TarkovTracker.Token);
+            config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
-        config.Section = nameof(Overlay.Search);
-        config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
-        config.WriteBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
-        config.WriteHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
+            config.Section = nameof(Overlay);
 
-        config.Section = nameof(OAuthRefreshToken);
-        config.WriteSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);
-        config.WriteSecureString(nameof(OAuthRefreshToken.Patreon), OAuthRefreshToken.Patreon);
+            config.Section = nameof(Overlay.Search);
+            config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
+            config.WriteBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
+            config.WriteHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
 
-        config.Section = "Other";
-        config.WriteInt(nameof(ScreenWidth), ScreenWidth);
-        config.WriteInt(nameof(ScreenHeight), ScreenHeight);
-        config.WriteFloat(nameof(ScreenScale), ScreenScale);
-        config.WriteInt(nameof(GameMode), (int)GameMode);
-        config.WriteBool(nameof(MinimizeToTray), MinimizeToTray);
-        config.WriteBool(nameof(AlwaysOnTop), AlwaysOnTop);
-        config.WriteBool(nameof(LogDebug), LogDebug);
-        config.WriteInt(nameof(ConfigVersion), ConfigVersion);
-        config.WriteInt(nameof(LastWindowPositionX), LastWindowPositionX);
-        config.WriteInt(nameof(LastWindowPositionY), LastWindowPositionY);
-        config.WriteInt(nameof(LastWindowMode), (int)LastWindowMode);
+            config.Section = nameof(OAuthRefreshToken);
+            config.WriteSecureString(nameof(OAuthRefreshToken.Discord), OAuthRefreshToken.Discord);
+            config.WriteSecureString(nameof(OAuthRefreshToken.Patreon), OAuthRefreshToken.Patreon);
+
+            config.Section = "Other";
+            config.WriteInt(nameof(ScreenWidth), ScreenWidth);
+            config.WriteInt(nameof(ScreenHeight), ScreenHeight);
+            config.WriteFloat(nameof(ScreenScale), ScreenScale);
+            config.WriteInt(nameof(GameMode), (int)GameMode);
+            config.WriteBool(nameof(MinimizeToTray), MinimizeToTray);
+            config.WriteBool(nameof(AlwaysOnTop), AlwaysOnTop);
+            config.WriteBool(nameof(LogDebug), LogDebug);
+            config.WriteInt(nameof(ConfigVersion), ConfigVersion);
+            config.WriteInt(nameof(LastWindowPositionX), LastWindowPositionX);
+            config.WriteInt(nameof(LastWindowPositionY), LastWindowPositionY);
+            config.WriteInt(nameof(LastWindowMode), (int)LastWindowMode);
+            File.Move(temporaryPath, Paths.ConfigFile, overwrite: true);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning("Unable to delete a temporary configuration file.", exception);
+            }
+        }
     }
 
     internal static bool ReadFromCache(string key, out string value)
@@ -380,9 +400,26 @@ internal static class RatConfig
     internal static bool ReadFromCache(string key, out string value, out DateTimeOffset lastWriteUtc)
     {
         string path = GetCachePath(key);
-        value = File.Exists(path) ? File.ReadAllText(path) : string.Empty;
-        lastWriteUtc = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTimeOffset.MinValue;
-        return value != string.Empty;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                value = string.Empty;
+                lastWriteUtc = DateTimeOffset.MinValue;
+                return false;
+            }
+
+            value = File.ReadAllText(path);
+            lastWriteUtc = File.GetLastWriteTimeUtc(path);
+            return value.Length > 0;
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning($"Unable to read cache file '{path}'.", e);
+            value = string.Empty;
+            lastWriteUtc = DateTimeOffset.MinValue;
+            return false;
+        }
     }
 
     internal static string GetCachePath(string key)
@@ -396,7 +433,16 @@ internal static class RatConfig
     {
         string path = GetCachePath(key);
         Directory.CreateDirectory(Paths.CacheDir);
-        File.WriteAllText(path, value);
+        string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            File.WriteAllText(temporaryPath, value);
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
     }
 
     /// <summary>

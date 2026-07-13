@@ -83,18 +83,17 @@ namespace RatEye
         /// <exception cref="ArgumentOutOfRangeException">The input image is not big enough for the desired crop</exception>
         public static Bitmap Crop(this Bitmap image, int x, int y, int width, int height, bool ignoreBounds = true)
         {
+            if (width <= 0)
+                throw new ArgumentOutOfRangeException(nameof(width), "Crop width must be positive.");
+            if (height <= 0)
+                throw new ArgumentOutOfRangeException(nameof(height), "Crop height must be positive.");
+
+            var rect = new Rectangle(x, y, width, height);
             if (ignoreBounds)
             {
-                if (x < 0)
-                    width -= -x;
-                if (y < 0)
-                    height -= -y;
-
-                x = Math.Max(0, x);
-                y = Math.Max(0, y);
-
-                width = Math.Min(x + width, image.Width) - x;
-                height = Math.Min(y + height, image.Height) - y;
+                rect = Rectangle.Intersect(rect, new Rectangle(Point.Empty, image.Size));
+                if (rect.Width == 0 || rect.Height == 0)
+                    throw new ArgumentOutOfRangeException(nameof(image), "The crop does not intersect the image.");
             }
             else
             {
@@ -111,8 +110,7 @@ namespace RatEye
                 }
             }
 
-            var rect = new Rectangle(x, y, width, height);
-            return new Bitmap(image).Clone(rect, image.PixelFormat);
+            return image.Clone(rect, image.PixelFormat);
         }
 
         /// <summary>
@@ -174,7 +172,9 @@ namespace RatEye
             using var bAlpha = b.ExtractChannel(3);
             bAlpha.ConvertTo(bAlpha, MatType.CV_32FC1, 1 / 255f);
 
-            using var invBottomAlpha = Mat.Ones(aAlpha.Size(), MatType.CV_32FC1).Subtract(aAlpha).ToMat();
+            using var ones = new Mat(aAlpha.Size(), MatType.CV_32FC1, Scalar.All(1));
+            using var invBottomAlpha = new Mat();
+            Cv2.Subtract(ones, aAlpha, invBottomAlpha);
 
             using var aColor = a.RemoveChannel4();
             aColor.ConvertTo(aColor, MatType.CV_32FC3, 1 / 255f);
@@ -182,11 +182,14 @@ namespace RatEye
             using var bColor = b.RemoveChannel4();
             bColor.ConvertTo(bColor, MatType.CV_32FC3, 1 / 255f);
 
-            using var tmp = invBottomAlpha.Mul(bAlpha).ToMat();
-            Cv2.CvtColor(tmp, tmp, ColorConversionCodes.GRAY2BGR);
+            using var weightedBottomAlpha = new Mat();
+            Cv2.Multiply(invBottomAlpha, bAlpha, weightedBottomAlpha);
+            using var alpha = new Mat();
+            Cv2.Add(aAlpha, weightedBottomAlpha, alpha);
+
+            using var tmp = weightedBottomAlpha.CvtColor(ColorConversionCodes.GRAY2BGR);
             Cv2.Multiply(tmp, bColor, tmp);
 
-            using var alpha = aAlpha.Add(invBottomAlpha.Mul(bAlpha)).ToMat();
             using var alpha3C = alpha.CvtColor(ColorConversionCodes.GRAY2BGR);
 
             using var result = aAlpha.CvtColor(ColorConversionCodes.GRAY2BGR);
@@ -196,11 +199,15 @@ namespace RatEye
             result.ConvertTo(result, MatType.CV_8UC3, 255);
 
             var output = new Mat(a.Size(), MatType.CV_8UC4);
-            result.ExtractChannel(0).InsertChannel(output, 0);
-            result.ExtractChannel(1).InsertChannel(output, 1);
-            result.ExtractChannel(2).InsertChannel(output, 2);
+            using var blue = result.ExtractChannel(0);
+            using var green = result.ExtractChannel(1);
+            using var red = result.ExtractChannel(2);
+            blue.InsertChannel(output, 0);
+            green.InsertChannel(output, 1);
+            red.InsertChannel(output, 2);
             alpha.ConvertTo(alpha, MatType.CV_8UC1, 255);
-            alpha.ExtractChannel(0).InsertChannel(output, 3);
+            using var outputAlpha = alpha.ExtractChannel(0);
+            outputAlpha.InsertChannel(output, 3);
             return output;
         }
 
@@ -212,10 +219,13 @@ namespace RatEye
         internal static Mat RemoveChannel4(this Mat src)
         {
             var type = src.Type() == MatType.CV_8UC4 ? MatType.CV_8UC3 : MatType.CV_32FC3;
-            var output = Mat.Ones(src.Size(), type).ToMat();
-            src.ExtractChannel(0).InsertChannel(output, 0);
-            src.ExtractChannel(1).InsertChannel(output, 1);
-            src.ExtractChannel(2).InsertChannel(output, 2);
+            var output = new Mat(src.Size(), type);
+            using var blue = src.ExtractChannel(0);
+            using var green = src.ExtractChannel(1);
+            using var red = src.ExtractChannel(2);
+            blue.InsertChannel(output, 0);
+            green.InsertChannel(output, 1);
+            red.InsertChannel(output, 2);
             return output;
         }
 
@@ -226,7 +236,7 @@ namespace RatEye
         /// <returns>Matrix of type 8UC4</returns>
         internal static Mat RemoveTransparency(this Mat src)
         {
-            var output = Mat.Ones(src.Size(), MatType.CV_8UC4).ToMat();
+            var output = new Mat(src.Size(), MatType.CV_8UC4);
             using var clear = new Mat(src.Size(), MatType.CV_8UC4).SetTo(new Scalar(1, 1, 1, 0));
             using var full = new Mat(src.Size(), MatType.CV_8UC4).SetTo(new Scalar(0, 0, 0, 255));
             Cv2.Multiply(src, clear, output);
@@ -303,13 +313,8 @@ namespace RatEye
         /// <returns>Levenshtein distance</returns>
         public static float NormedLevenshteinDistance(this string source, string target)
         {
-            if (string.IsNullOrEmpty(source))
-            {
-                return string.IsNullOrEmpty(target) ? 0 : target.Length;
-            }
-
-            if (string.IsNullOrEmpty(target))
-                return source.Length;
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(target))
+                return 0;
 
             if (source.Length > target.Length)
                 (source, target) = (target, source);
@@ -348,7 +353,8 @@ namespace RatEye
         public static string SHA256Hash(this string value)
         {
             var buffer = Encoding.UTF8.GetBytes(value);
-            var hash = SHA256.Create().ComputeHash(buffer);
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(buffer);
             return string.Concat(hash.Select(x => x.ToString("X2")));
         }
 
