@@ -7,7 +7,7 @@
 
 ![Rat Scanner logo](media/RatLogo.png)
 
-Originally created by Moritz / Blightbuster ([original repo](https://github.com/RatScanner/RatScanner)). This is a modified community fork.
+This is a **modified** community fork. Support: [TarkovTracker Discord](https://discord.gg/M8nBgA2sT6) · [this repo](https://github.com/tarkovtracker-org/RatScanner). Original project attribution is in the [README](README.md#attribution--license).
 
 ## Table of Contents
 

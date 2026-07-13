@@ -13,20 +13,26 @@
             <img src="RatLogoMedium.png" alt="" />
             <strong>@Constants.Branding.Name</strong>
             <span>@Localizer["TarkovTrackerEdition"]</span>
-            <small>v@(MenuVM.Version)</small>
         </div>
         <nav aria-label="Primary navigation">
             <NavLink href="/app" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>Scan</span></NavLink>
             <NavLink href="/app/history"><MudIcon Icon="@Icons.Material.Filled.History" /> <span>History</span></NavLink>
             <NavLink href="/app/settings/general"><MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>Settings</span></NavLink>
-            <NavLink href="/app/credits"><MudIcon Icon="@Icons.Material.Filled.Info" /> <span>About</span></NavLink>
+            <NavLink href="/app/credits"><MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span></NavLink>
         </nav>
         <div class="sidebar-spacer"></div>
-        <section class="scanner-card @(!IsScannerActive ? "paused" : null)" aria-label="Scanner status" aria-live="polite">
-            <div><span class="status-dot" aria-hidden="true"></span><strong>@(IsScannerActive ? "Scanner active" : "Scanner paused")</strong></div>
-            <span>@(IsScannerActive ? "Waiting for an item" : "Enable scanning in Settings")</span>
+        <section class="scanner-status @(!IsScannerActive ? "paused" : null) @(_needsAttention ? "alert" : null)"
+                 aria-label="Scanner status"
+                 aria-live="polite">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+                <strong>@(IsScannerActive ? "Scanner active" : "Scanner paused")</strong>
+                <span>@(IsScannerActive ? "Waiting for an item" : "Enable scanning in Settings")</span>
+            </div>
         </section>
-        <footer><span>TarkovTracker.org Fork</span><a href="https://github.com/RatScanner/RatScanner" target="_blank" rel="noopener">Support the original project</a></footer>
+        <footer aria-label="Application version">
+            <span>v@(MenuVM.Version)</span>
+        </footer>
     </aside>
     @if (_drawerOpen) { <button class="scrim" aria-label="Close navigation" @onclick="CloseDrawer"></button> }
     <main class="main-content">@Body</main>
@@ -35,6 +41,8 @@
 @code {
     private bool _drawerOpen;
     private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
+    // Expand styling only when intervention is needed; idle active stays compact.
+    private bool _needsAttention => !IsScannerActive;
     private void OpenDrawer() => _drawerOpen = true;
     private void CloseDrawer() => _drawerOpen = false;
     private void HandleKey(KeyboardEventArgs e) { if (e.Key == "Escape") CloseDrawer(); }

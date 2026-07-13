@@ -14,6 +14,14 @@ if errorlevel 1 (
 	exit /b 1
 )
 
+:: Ensure LICENSE is always present for redistributed packages (license notice requirement)
+if not exist "publish\LICENSE" (
+	if exist "LICENSE" copy /y "LICENSE" "publish\LICENSE" >nul
+)
+if not exist "publish\LICENSE" (
+	echo WARNING: LICENSE file missing from publish output.
+)
+
 :: Include runtime data (use shared extractor that falls back if Expand-Archive is broken)
 echo Adding latest RatScanner data...
 curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
