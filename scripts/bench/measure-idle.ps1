@@ -51,9 +51,9 @@ function Get-ProcessTreeSnapshot {
         if ($null -eq $process) { continue }
         $processCount++
         # A process in the tree can exit between enumeration and property access.
-        try { $cpuMilliseconds += [double]$process.TotalProcessorTime.TotalMilliseconds } catch { }
-        try { $privateBytes += [long]$process.PrivateMemorySize64 } catch { }
-        try { $workingSetBytes += [long]$process.WorkingSet64 } catch { }
+        try { $cpuMilliseconds += [double]$process.TotalProcessorTime.TotalMilliseconds } catch { Write-Verbose "Process $($process.Id) exited before CPU time could be read." }
+        try { $privateBytes += [long]$process.PrivateMemorySize64 } catch { Write-Verbose "Process $($process.Id) exited before private memory could be read." }
+        try { $workingSetBytes += [long]$process.WorkingSet64 } catch { Write-Verbose "Process $($process.Id) exited before working set could be read." }
     }
 
     return [pscustomobject]@{

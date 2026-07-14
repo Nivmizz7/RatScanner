@@ -66,9 +66,21 @@ jobs:
       - name: Dependency vulnerability audit
         run: |
           # Console output does not reliably expose severity. Parse JSON and fail on any reported vulnerability.
-          $jsonText = dotnet list RatScanner.sln package --vulnerable --include-transitive --format json 2>&1 | Out-String
+          # Keep stdout JSON separate from stderr diagnostics (.NET 10 list package restore noise).
+          $stdoutPath = Join-Path $env:RUNNER_TEMP 'vulnerable-packages.json'
+          $stderrPath = Join-Path $env:RUNNER_TEMP 'vulnerable-packages.err'
+          $proc = Start-Process -FilePath 'dotnet' `
+            -ArgumentList @('list','RatScanner.sln','package','--vulnerable','--include-transitive','--format','json') `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+          if (Test-Path $stderrPath) {
+            $stderrText = Get-Content -LiteralPath $stderrPath -Raw
+            if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Host $stderrText }
+          }
+          $jsonText = Get-Content -LiteralPath $stdoutPath -Raw
           Write-Host $jsonText
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($proc.ExitCode -ne 0) { exit $proc.ExitCode }
           $report = $jsonText | ConvertFrom-Json
           $severities = @(
             $report.projects

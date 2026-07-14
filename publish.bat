@@ -25,7 +25,7 @@ if not exist "publish\LICENSE" (
 
 :: Include runtime data (use shared extractor that falls back if Expand-Archive is broken)
 echo Adding latest RatScanner data...
-curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
+curl -fL --retry 3 --retry-all-errors "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
 if errorlevel 1 (
 	echo Failed to download RatScanner data.
 	exit /b 1

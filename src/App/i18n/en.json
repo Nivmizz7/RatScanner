@@ -227,5 +227,13 @@
   "RecognitionHigh": "High",
   "RecognitionMedium": "Medium",
   "RecognitionLow": "Low",
-  "PriceSourceTarkovDev": "Tarkov.dev"
+  "PriceSourceTarkovDev": "Tarkov.dev",
+  "JumpShowUI": "Show UI",
+  "JumpShowUIDescription": "Opens the main interface of RatScanner",
+  "JumpShowMinimalUI": "Show Minimal UI",
+  "JumpShowMinimalUIDescription": "Opens the minimal interface of RatScanner",
+  "JumpShowOverlay": "Show Overlay",
+  "JumpShowOverlayDescription": "Opens the interactive overlay of RatScanner",
+  "TrayShow": "Show",
+  "TrayExit": "Exit"
 }

@@ -155,27 +155,36 @@ public partial class PageSwitcher : Window
     {
         JumpTask showUITask = new()
         {
-            Title = "Show UI",
+            Title = Presentation.PresentationText.T("JumpShowUI", "Show UI"),
             Arguments = "/showUI",
-            Description = "Opens the main interface of RatScanner",
+            Description = Presentation.PresentationText.T(
+                "JumpShowUIDescription",
+                "Opens the main interface of RatScanner"
+            ),
             IconResourcePath = Environment.ProcessPath,
             ApplicationPath = Environment.ProcessPath,
         };
 
         JumpTask showMinimalUITask = new()
         {
-            Title = "Show Minimal UI",
+            Title = Presentation.PresentationText.T("JumpShowMinimalUI", "Show Minimal UI"),
             Arguments = "/showMinimalUI",
-            Description = "Opens the minimal interface of RatScanner",
+            Description = Presentation.PresentationText.T(
+                "JumpShowMinimalUIDescription",
+                "Opens the minimal interface of RatScanner"
+            ),
             IconResourcePath = Environment.ProcessPath,
             ApplicationPath = Environment.ProcessPath,
         };
 
         JumpTask showOverlayTask = new()
         {
-            Title = "Show Overlay",
+            Title = Presentation.PresentationText.T("JumpShowOverlay", "Show Overlay"),
             Arguments = "/showOverlay",
-            Description = "Opens the interactive overlay of RatScanner",
+            Description = Presentation.PresentationText.T(
+                "JumpShowOverlayDescription",
+                "Opens the interactive overlay of RatScanner"
+            ),
             IconResourcePath = Environment.ProcessPath,
             ApplicationPath = Environment.ProcessPath,
         };
@@ -195,15 +204,31 @@ public partial class PageSwitcher : Window
     {
         _notifyIcon = new NotifyIcon
         {
-            Text = "Show",
+            Text = Presentation.PresentationText.T("TrayShow", "Show"),
             Visible = true,
             Icon = Properties.Resources.RatLogoSmall,
         };
 
-        _contextMenuStrip.Items.Add("Show UI", null, OnContextMenuShowUI);
-        _contextMenuStrip.Items.Add("Show Minimal UI", null, OnContextMenuShowMinimalUI);
-        _contextMenuStrip.Items.Add("Show Overlay", null, OnContextMenuShowOverlay);
-        _contextMenuStrip.Items.Add("Exit", null, OnContextMenuExitApplication);
+        _contextMenuStrip.Items.Add(
+            Presentation.PresentationText.T("JumpShowUI", "Show UI"),
+            null,
+            OnContextMenuShowUI
+        );
+        _contextMenuStrip.Items.Add(
+            Presentation.PresentationText.T("JumpShowMinimalUI", "Show Minimal UI"),
+            null,
+            OnContextMenuShowMinimalUI
+        );
+        _contextMenuStrip.Items.Add(
+            Presentation.PresentationText.T("JumpShowOverlay", "Show Overlay"),
+            null,
+            OnContextMenuShowOverlay
+        );
+        _contextMenuStrip.Items.Add(
+            Presentation.PresentationText.T("TrayExit", "Exit"),
+            null,
+            OnContextMenuExitApplication
+        );
 
         _notifyIcon.ContextMenuStrip = _contextMenuStrip;
 

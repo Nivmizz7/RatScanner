@@ -36,7 +36,7 @@
              @onkeydown="OnPopoverKeyDown">
             <strong>@_title</strong>
             <p>@_detail</p>
-            <button type="button" class="scanner-status-action" @ref="_action" @onclick="OpenSettings">
+            <button type="button" class="scanner-status-action" @ref="_action" @onclick="OpenSettingsAsync">
                 @_actionLabel
             </button>
         </div>
@@ -208,9 +208,9 @@
 
     private void Close() => _ = CloseAsync();
 
-    private void OpenSettings()
+    private async Task OpenSettingsAsync()
     {
-        _open = false;
+        await CloseAsync();
         Navigation.NavigateTo(_settingsPath);
     }
 
