@@ -5,6 +5,7 @@
 @using RatScanner.TarkovDev
 @using System.Diagnostics
 @using System.ComponentModel
+@using System.Threading
 @inject MenuVM MenuVM
 @inject SessionHistoryService History
 @implements IDisposable
@@ -22,7 +23,7 @@
                              MaxItems="8"
                              Clearable="true"
                              ResetValueOnEmptyText="true"
-                             DisableUnderLine="true"
+                             Underline="false"
                              FullWidth="true"
                              Margin="Margin.None"
                              Variant="Variant.Text"
@@ -466,8 +467,10 @@
         _copiedId = false;
     }
 
-    private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value)
+    private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         string locale = RatConfig.NameScan.Language.ToTarkovDevLocale();
         TarkovDev.GameMode gameMode = RatConfig.GameMode;
         if (
@@ -497,7 +500,7 @@
         );
     }
 
-    private void SelectItem(Item item)
+    private void SelectItem(Item? item)
     {
         if (item is not null)
             MenuVM.ItemScans.Enqueue(new DefaultItemScan(item));

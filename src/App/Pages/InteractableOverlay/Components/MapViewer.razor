@@ -1,27 +1,29 @@
 @using RatScanner.TarkovDev
-@using TTask = RatScanner.TarkovDev.Task;
+@inject LocalizationService Localizer
 
-<div class="map-viewer-overlay" @onclick="OnClose">
+<div class="map-viewer-overlay"
+     role="dialog"
+     aria-modal="true"
+     aria-label="@Localizer.Format("NamedMapViewer", Map.Name ?? Localizer["UnknownMap"])"
+     @onclick="OnClose">
     <div class="map-viewer-header" @onclick:stopPropagation="true">
         <MudPaper Class="pa-2">
             <MudText Typo="Typo.h5">@Map.Name</MudText>
-            @if (Task != null && Objective != null) {
-                <MudDivider Class="my-1" />
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                    <MudIcon Icon="@Constants.Icon.TaskObjective.FromType(Objective.Type)" Size="Size.Small" />
-                    <MudText Typo="Typo.body2">@Task.Name</MudText>
-                </MudStack>
-                <MudText Typo="Typo.caption" Class="mt-1">@Objective.Description</MudText>
-            }
-            <MudText Typo="Typo.caption" Class="mt-1">Scroll to zoom • Drag to pan</MudText>
+            <MudText Typo="Typo.caption" Class="mt-1">@Localizer["MapViewerInstructions"]</MudText>
         </MudPaper>
     </div>
     <div class="map-viewer-close" @onclick:stopPropagation="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Large" Color="Color.Error" OnClick="OnClose" />
+        <MudIconButton @ref="_closeButton"
+                       Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Large"
+                       Color="Color.Error"
+                       aria-label="@Localizer["CloseMapViewer"]"
+                       OnClick="OnClose" />
     </div>
     <div class="map-viewer-container" 
          @onclick:stopPropagation="true"
          @onwheel="HandleWheel"
+         @onwheel:preventDefault="true"
          @onmousedown="HandleMouseDown"
          @onmousemove="HandleMouseMove"
          @onmouseup="HandleMouseUp"
@@ -30,6 +32,7 @@
              style="transform: translate(@(_translateX)px, @(_translateY)px) translate(-50%, -50%) scale(@(_scale.ToString(System.Globalization.CultureInfo.InvariantCulture)));">
             <img src="@MapDataLoader.GetMapSvgUrl(Map?.Id)"
                  class="map-image"
+                 alt="@Localizer.Format("MapImageAlt", Map?.Name ?? Localizer["UnknownMap"])"
                  draggable="false" />
             
             @* Zone markers require coordinate projection; not sourced from json.tarkov.dev yet. *@
@@ -97,8 +100,6 @@
         display: block;
         pointer-events: none;
         position: relative;
-        left: -50%;
-        top: -50%;
     }
 
     .objective-marker {
@@ -151,18 +152,9 @@
     public required Map Map { get; set; }
 
     [Parameter]
-    public TTask? Task { get; set; }
-
-    [Parameter]
-    public TaskObjective? Objective { get; set; }
-
-    /// <summary>Reserved for map-zone overlays; JSON tasks do not project zones yet.</summary>
-    [Parameter]
-    public List<object?>? ObjectiveZones { get; set; }
-
-    [Parameter]
     public EventCallback OnClose { get; set; }
 
+    private MudIconButton? _closeButton;
     private double _scale = 1.0;
     private double _translateX = 0;
     private double _translateY = 0;
@@ -176,6 +168,12 @@
         _translateX = 0;
         _translateY = 0;
         _isDragging = false;
+    }
+
+    protected override async System.Threading.Tasks.Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _closeButton is not null)
+            await _closeButton.FocusAsync();
     }
 
     private void HandleWheel(WheelEventArgs e) {
@@ -202,7 +200,7 @@
         _lastMouseY = e.ClientY;
     }
 
-    private void HandleMouseUp(MouseEventArgs e) {
+    private void HandleMouseUp() {
         _isDragging = false;
     }
 }

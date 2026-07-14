@@ -4,8 +4,10 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
+using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 
 namespace RatScanner.View;
 
@@ -14,6 +16,8 @@ namespace RatScanner.View;
 /// </summary>
 public partial class BlazorInteractableOverlay : Window
 {
+    private WebView2CompositionControl? _initializedWebView;
+
     public BlazorInteractableOverlay(ServiceProvider serviceProvider)
     {
         Resources.Add("services", serviceProvider);
@@ -21,14 +25,26 @@ public partial class BlazorInteractableOverlay : Window
         InitializeComponent();
     }
 
-    private void BlazorInteractableOverlay_Loaded(object? sender, RoutedEventArgs e)
+    private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
-        blazorInteractableOverlayWebView.WebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
+        if (_initializedWebView is not null)
+            _initializedWebView.NavigationCompleted -= WebView_Loaded;
+
+        _initializedWebView = e.WebView;
+        _initializedWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         SetWindowStyle();
         SetPosition();
         ApplyBlurBehind();
-        blazorInteractableOverlayWebView.WebView.NavigationCompleted += WebView_Loaded;
-        blazorInteractableOverlayWebView.WebView.CoreWebView2InitializationCompleted += CoreWebView_Loaded;
+        _initializedWebView.NavigationCompleted += WebView_Loaded;
+
+        CoreWebView2 coreWebView = _initializedWebView.CoreWebView2;
+        coreWebView.SetVirtualHostNameToFolderMapping(
+            "local.data",
+            RatConfig.Paths.Data,
+            CoreWebView2HostResourceAccessKind.Allow
+        );
+        coreWebView.Settings.AreDefaultContextMenusEnabled = false;
+        coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
     }
 
     private void SetPosition()
@@ -81,18 +97,16 @@ public partial class BlazorInteractableOverlay : Window
     {
         // if we are running in a debug mode, open dev tools to help out
         if (Debugger.IsAttached)
-            blazorInteractableOverlayWebView.WebView.CoreWebView2.OpenDevToolsWindow();
+            _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
-    private void CoreWebView_Loaded(object? sender, CoreWebView2InitializationCompletedEventArgs e)
+    protected override void OnClosed(System.EventArgs e)
     {
-        blazorInteractableOverlayWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-            "local.data",
-            "Data",
-            CoreWebView2HostResourceAccessKind.Allow
-        );
-        blazorInteractableOverlayWebView.WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-        blazorInteractableOverlayWebView.WebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+        if (_initializedWebView is not null)
+            _initializedWebView.NavigationCompleted -= WebView_Loaded;
+        blazorInteractableOverlayWebView.WebView.Dispose();
+        Resources.Remove("services");
+        base.OnClosed(e);
     }
 
     private static class NativeMethods

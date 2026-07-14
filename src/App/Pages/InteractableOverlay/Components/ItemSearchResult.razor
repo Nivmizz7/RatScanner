@@ -12,14 +12,12 @@
             </MudPaper>
 
             <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.End" Style="width: 4vw;">
-                <MudChip OnClose="() => { }" CloseIcon="@Icons.Material.Filled.Checklist" Size="Size.Small"
-                         Variant="Variant.Outlined" Color="@(Item.GetTaskRemaining().Item1 > 0 ? Color.Success : Color.Default)">
-                    @Item.GetTaskRemaining().Item1.ToShortString()
-                </MudChip>
-                <MudChip OnClose="() => { }" CloseIcon="@Icons.Material.Filled.House" Size="Size.Small"
-                         Variant="Variant.Outlined" Color="@(Item.GetHideoutRemaining() > 0 ? Color.Success : Color.Default)">
-                    @Item.GetHideoutRemaining().ToShortString()
-                </MudChip>
+                <MudChip T="string" Icon="@Icons.Material.Filled.Checklist" Size="Size.Small"
+                         Variant="Variant.Outlined" Color="@(Item.GetTaskRemaining().Item1 > 0 ? Color.Success : Color.Default)"
+                         Text="@Item.GetTaskRemaining().Item1.ToShortString()" />
+                <MudChip T="string" Icon="@Icons.Material.Filled.House" Size="Size.Small"
+                         Variant="Variant.Outlined" Color="@(Item.GetHideoutRemaining() > 0 ? Color.Success : Color.Default)"
+                         Text="@Item.GetHideoutRemaining().ToShortString()" />
             </MudStack>
 
             <MudDivider Vertical="true" FlexItem="true" />

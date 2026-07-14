@@ -19,7 +19,7 @@
         Height="100" Width="100">
 	<Grid>
 		<blazor:BlazorWebView HostPage="wwwroot/interactableOverlay.html" Services="{StaticResource services}" Panel.ZIndex="99"
-		                      x:Name="blazorInteractableOverlayWebView" Loaded="BlazorInteractableOverlay_Loaded">
+		                      x:Name="blazorInteractableOverlayWebView" BlazorWebViewInitialized="BlazorWebView_Initialized">
 			<blazor:BlazorWebView.RootComponents>
 				<blazor:RootComponent Selector="#app" ComponentType="{x:Type local:InteractableOverlay}" />
 			</blazor:BlazorWebView.RootComponents>

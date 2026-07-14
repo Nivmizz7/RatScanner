@@ -54,39 +54,90 @@ public static class UiLanguageExtensions
 
 public class LocalizationService
 {
-    private static Dictionary<string, string>? Translations;
+    private readonly string _translationDirectory;
+    private Dictionary<string, string> _translations = new(StringComparer.Ordinal);
+    private Dictionary<string, string> _englishTranslations = new(StringComparer.Ordinal);
+
+    public LocalizationService()
+        : this(RatConfig.Paths.I18nDir, RatConfig.UserInterface.Language) { }
+
+    internal LocalizationService(string translationDirectory, UiLanguage language = UiLanguage.English)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(translationDirectory);
+        _translationDirectory = translationDirectory;
+        SetLanguage(language);
+    }
 
     public void SetLanguage(UiLanguage language)
     {
+        bool englishLoaded = TryLoadLanguage(UiLanguage.English, out Dictionary<string, string> english);
+        _englishTranslations = englishLoaded
+            ? english
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (language == UiLanguage.English)
+        {
+            _translations = _englishTranslations;
+            return;
+        }
+
+        if (TryLoadLanguage(language, out Dictionary<string, string> translations))
+        {
+            _translations = translations;
+            return;
+        }
+
+        if (englishLoaded)
+        {
+            Logger.LogWarning(
+                $"Falling back to English UI translations after {language.ToCultureCode()} failed to load."
+            );
+            _translations = _englishTranslations;
+            return;
+        }
+
+        // Never retain a previously selected language after a load failure. Returning
+        // keys is deterministic and keeps the UI usable even when the packaged English
+        // catalog is also unavailable or malformed.
+        _translations = new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private bool TryLoadLanguage(UiLanguage language, out Dictionary<string, string> translations)
+    {
+        string filePath = Path.Combine(_translationDirectory, language.GetTranslationFileName());
         try
         {
-            var filePath = Path.Combine(RatConfig.Paths.I18nDir, language.GetTranslationFileName());
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+            if (!File.Exists(filePath))
             {
                 Logger.LogWarning($"Translation file not found: {filePath}");
+                translations = null!;
+                return false;
             }
-            var json = File.ReadAllText(filePath);
-            Translations = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+
+            string json = File.ReadAllText(filePath);
+            Dictionary<string, string>? loaded = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+            if (loaded is null)
+                throw new JsonSerializationException("The translation catalog contained no JSON object.");
+
+            translations = new Dictionary<string, string>(loaded, StringComparer.Ordinal);
+            return true;
         }
         catch (Exception ex)
         {
-            // We do not want to crash the application if the translation file is missing or malformed
+            // A packaged translation failure must not prevent application startup.
             Logger.LogWarning($"Failed to load translation file for language {language.ToCultureCode()}", ex);
+            translations = null!;
+            return false;
         }
-    }
-
-    public LocalizationService()
-    {
-        SetLanguage(RatConfig.UserInterface.Language);
     }
 
     public string this[string key] => Translate(key);
 
     public string Translate(string key)
     {
-        if (Translations == null)
-            return key;
-        return Translations.TryGetValue(key, out var value) ? value : key;
+        if (_translations.TryGetValue(key, out string? value))
+            return value;
+        return _englishTranslations.TryGetValue(key, out value) ? value : key;
     }
 
     public string Format(string key, params object[] args)

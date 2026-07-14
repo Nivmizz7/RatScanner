@@ -64,7 +64,7 @@
                 </dl>
 
                 <MudDivider Class="my-3" />
-                <MudCheckBox @bind-Checked="SettingsVM.UseCustomGameResolution"
+                <MudCheckBox @bind-Value="SettingsVM.UseCustomGameResolution"
                              Label="@Localizer["UseCustomGameResolution"]"
                              Dense="true"
                              Size="Size.Small"
@@ -113,7 +113,7 @@
                             </div>
                         </div>
 
-                        <MudCheckBox @bind-Checked="SettingsVM.UseCustomDisplayScale"
+                        <MudCheckBox @bind-Value="SettingsVM.UseCustomDisplayScale"
                                      Label="@Localizer["OverrideDisplayScaling"]"
                                      Dense="true"
                                      Size="Size.Small"
@@ -123,18 +123,17 @@
                         </MudText>
                         @if (SettingsVM.UseCustomDisplayScale)
                         {
-                            <MudNumericField @bind-Value="SettingsVM.CustomDisplayScale"
-                                             Label="@Localizer["DisplayScaling"]"
-                                             Variant="Variant.Outlined"
-                                             Margin="Margin.Dense"
-                                             HideSpinButtons="true"
-                                             Immediate="true"
-                                             Converter="@percentageConverter"
-                                             Min="@((float)GameDisplayValidation.MinimumScale)"
-                                             Max="@((float)GameDisplayValidation.MaximumScale)"
-                                             Error="@(SettingsVM.CustomDisplayScaleError is not null)"
-                                             ErrorText="@SettingsVM.CustomDisplayScaleError"
-                                             Class="mt-2" />
+                            <MudTextField @bind-Value="SettingsVM.CustomDisplayScaleText"
+                                          Label="@Localizer["DisplayScaling"]"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          Immediate="true"
+                                          InputMode="@DecimalInputMode"
+                                          Adornment="Adornment.End"
+                                          AdornmentText="%"
+                                          Error="@(SettingsVM.CustomDisplayScaleError is not null)"
+                                          ErrorText="@SettingsVM.CustomDisplayScaleError"
+                                          Class="mt-2" />
                         }
                     </div>
                 }
@@ -163,9 +162,9 @@
         <MudItem xs="12">
             <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
                 <MudGrid Spacing="0" Class="pa-0 ma-0">
-                    <MudCheckBox @bind-Checked="SettingsVM.GameMode" Label="@Localizer["UsePveData"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" Converter="@gameModeConverter" />
-                    <MudCheckBox @bind-Checked="SettingsVM.AlwaysOnTop" Label="@Localizer["AlwaysOnTop"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
-                    <MudCheckBox @bind-Checked="SettingsVM.LogDebug" Label="@Localizer["LogDebugInfo"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
+                    <MudCheckBox @bind-Value="SettingsVM.GameMode" Label="@Localizer["UsePveData"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" Converter="@gameModeConverter" />
+                    <MudCheckBox @bind-Value="SettingsVM.AlwaysOnTop" Label="@Localizer["AlwaysOnTop"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
+                    <MudCheckBox @bind-Value="SettingsVM.LogDebug" Label="@Localizer["LogDebugInfo"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
                 </MudGrid>
             </MudPaper>
         </MudItem>
@@ -173,20 +172,15 @@
 </div>
 
 @code {
+    private static InputMode DecimalInputMode => InputMode.@decimal;
+
     private bool _refreshing;
 
-    private readonly MudBlazor.Converter<GameMode, bool?> gameModeConverter = new() {
-        SetFunc = value => value == GameMode.Pve,
-        GetFunc = value => value ?? false ? GameMode.Pve : GameMode.Regular,
-    };
-
-    private readonly Converter<float> percentageConverter = new() {
-        SetFunc = value => (int)(value * 100) + "%",
-        GetFunc = text => {
-            text = text?.TrimEnd('%') ?? "";
-            return int.TryParse(text, out int number) ? number / 100f : 1;
-        },
-    };
+    // GameMode is stored as enum; checkbox Value is bool — map via explicit convert funcs.
+    private readonly IConverter<GameMode, bool?> gameModeConverter = Conversions.From<GameMode, bool?>(
+        value => value == GameMode.Pve,
+        value => value ?? false ? GameMode.Pve : GameMode.Regular
+    );
 
     private IEnumerable<UiLanguage> GetUiLanguages() => Enum.GetValues<UiLanguage>().OrderBy(language => language.ToCultureName());
 

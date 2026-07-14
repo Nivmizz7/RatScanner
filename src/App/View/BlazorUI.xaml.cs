@@ -6,8 +6,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Navigation;
+using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.Wpf;
 using MudBlazor.Services;
 using RatScanner.Presentation;
 using RatScanner.ViewModel;
@@ -51,7 +53,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     public static BlazorInteractableOverlay BlazorInteractableOverlay { get; set; } = null!;
 
     private readonly ServiceProvider _serviceProvider;
-    private bool _webViewEventsAttached;
+    private WebView2CompositionControl? _initializedWebView;
     private bool _disposed;
 
     private BlazorUI()
@@ -101,33 +103,30 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         InitializeComponent();
     }
 
-    private void BlazorUI_Loaded(object? sender, RoutedEventArgs e)
+    private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
-        if (_webViewEventsAttached)
-            return;
-        _webViewEventsAttached = true;
+        if (_initializedWebView is not null)
+            _initializedWebView.NavigationCompleted -= WebView_Loaded;
 
-        blazorWebView.WebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
-        blazorWebView.WebView.NavigationCompleted += WebView_Loaded;
-        blazorWebView.WebView.CoreWebView2InitializationCompleted += CoreWebView_Loaded;
+        _initializedWebView = e.WebView;
+        _initializedWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
+        _initializedWebView.NavigationCompleted += WebView_Loaded;
+
+        CoreWebView2 coreWebView = _initializedWebView.CoreWebView2;
+        coreWebView.SetVirtualHostNameToFolderMapping(
+            "local.data",
+            RatConfig.Paths.Data,
+            CoreWebView2HostResourceAccessKind.Allow
+        );
+        coreWebView.Settings.AreDefaultContextMenusEnabled = false;
+        coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
     }
 
     private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         // If we are running in a development/debugger mode, open dev tools to help out
         if (Debugger.IsAttached)
-            blazorWebView.WebView.CoreWebView2.OpenDevToolsWindow();
-    }
-
-    private void CoreWebView_Loaded(object? sender, CoreWebView2InitializationCompletedEventArgs e)
-    {
-        blazorWebView.WebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-            "local.data",
-            "Data",
-            CoreWebView2HostResourceAccessKind.Allow
-        );
-        blazorWebView.WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-        blazorWebView.WebView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+            _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
     private void UpdateElements() { }
@@ -168,11 +167,8 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
             return;
         _disposed = true;
 
-        if (_webViewEventsAttached)
-        {
-            blazorWebView.WebView.NavigationCompleted -= WebView_Loaded;
-            blazorWebView.WebView.CoreWebView2InitializationCompleted -= CoreWebView_Loaded;
-        }
+        if (_initializedWebView is not null)
+            _initializedWebView.NavigationCompleted -= WebView_Loaded;
 
         BlazorInteractableOverlay?.Close();
         BlazorOverlay?.Close();

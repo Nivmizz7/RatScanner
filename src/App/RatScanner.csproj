@@ -25,6 +25,8 @@
 		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
 		<RootNamespace>RatScanner</RootNamespace>
 		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+		<!-- OpenCvSharp4.runtime.win 4.13 ships Windows native binaries for x64 only. -->
+		<PlatformTarget>x64</PlatformTarget>
 		<nullable>Enable</nullable>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
@@ -37,7 +39,6 @@
 		<DebugSymbols>false</DebugSymbols>
 		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
 		<DefineConstants>TRACE</DefineConstants>
-		<PlatformTarget>x64</PlatformTarget>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
 		<DefineConstants>DEBUG;TRACE</DefineConstants>
@@ -45,13 +46,12 @@
 
 	<ItemGroup>
 		<!-- Bulk catalog/tasks/hideout/maps come from json.tarkov.dev (no GraphQL generator). -->
-		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="8.0.71" />
-		<PackageReference Include="MudBlazor" Version="6.10.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.80" />
+		<PackageReference Include="MudBlazor" Version="9.7.0" />
 		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.9" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="RatStash" Version="6.0.0" />
 		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
-		<PackageReference Include="Tesseract" Version="5.2.0" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -3,6 +3,7 @@ using System.Linq;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.Threading.Tasks;
 using RatScanner.Display;
 using RatStash;
@@ -48,6 +49,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private int _customGameHeight = 1080;
     private bool _useCustomDisplayScale;
     private float _customDisplayScale = 1;
+    private string _customDisplayScaleText = "100";
 
     public string SelectedGameDisplayId
     {
@@ -119,6 +121,23 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             if (Math.Abs(_customDisplayScale - value) < 0.0001)
                 return;
             _customDisplayScale = value;
+            _customDisplayScaleText = FormatDisplayScalePercentage(value);
+            UpdateDisplayPreview();
+        }
+    }
+
+    public string CustomDisplayScaleText
+    {
+        get => _customDisplayScaleText;
+        set
+        {
+            value ??= "";
+            if (string.Equals(_customDisplayScaleText, value, StringComparison.Ordinal))
+                return;
+
+            _customDisplayScaleText = value;
+            if (TryParseDisplayScalePercentage(value, out float scale))
+                _customDisplayScale = scale;
             UpdateDisplayPreview();
         }
     }
@@ -143,7 +162,11 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             : null;
 
     public string? CustomDisplayScaleError =>
-        UseCustomDisplayScale && !GameDisplayValidation.IsValidScale(CustomDisplayScale)
+        UseCustomDisplayScale
+        && (
+            !TryParseDisplayScalePercentage(CustomDisplayScaleText, out float scale)
+            || !GameDisplayValidation.IsValidScale(scale)
+        )
             ? _localizationService.Format(
                 "CustomScaleValidation",
                 (int)(GameDisplayValidation.MinimumScale * 100),
@@ -354,8 +377,28 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         _customGameHeight = preferences.CustomGameHeight;
         _useCustomDisplayScale = preferences.UseCustomDisplayScale;
         _customDisplayScale = (float)preferences.CustomDisplayScale;
+        _customDisplayScaleText = FormatDisplayScalePercentage(_customDisplayScale);
         UpdateDisplayPreview();
     }
+
+    internal static bool TryParseDisplayScalePercentage(string? text, out float scale)
+    {
+        string value = text?.Trim().TrimEnd('%').Trim() ?? "";
+        if (
+            !float.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out float percentage)
+            && !float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out percentage)
+        )
+        {
+            scale = default;
+            return false;
+        }
+
+        scale = percentage / 100f;
+        return float.IsFinite(scale);
+    }
+
+    private static string FormatDisplayScalePercentage(float scale) =>
+        (scale * 100).ToString("0.##", CultureInfo.CurrentCulture);
 
     private void ApplyDisplayConfiguration(GameDisplayConfiguration configuration, bool resetDraft)
     {

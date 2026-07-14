@@ -4,7 +4,7 @@
 
 <MudButton @ref="Button" @onclick="() => StartListening()"
            Color="Color.Primary" Size="Size.Small"
-           Variant="Variant.Filled" DisableElevation="true"
+           Variant="Variant.Filled" DropShadow="false"
            Class="px-1 py-1" @attributes="InputAttributes"
            Disabled="@_listening">
     <MudStack Spacing="0" AlignItems="AlignItems.Stretch" Justify="Justify.Center">
@@ -13,19 +13,15 @@
         } else {
             <MudStack Spacing="1" Row="true" Justify="Justify.SpaceBetween">
                 @foreach (var key in _tmpHotkey.KeyboardKeys) {
-                    <MudChip Variant="Variant.Outlined" Label="true"
+                    <MudChip T="string" Variant="Variant.Outlined" Text="@key.ToString().ToLower().Replace("left", "l-").Replace("right", "r-")"
                              Size="Size.Small" Color="Color.Default"
-                             Class="px-2 ma-0">
-                        @key.ToString().ToLower().Replace("left", "l-").Replace("right", "r-")
-                    </MudChip>
+                             Class="px-2 ma-0" />
                 }
                 @foreach (var button in _tmpHotkey.MouseButtons) {
-                    <MudChip Variant="Variant.Outlined" Label="true"
+                    <MudChip T="string" Variant="Variant.Outlined"
+                             Text="@((button.ToString().ToLower().Replace("left", "l-").Replace("right", "r-") + "-mouse").Replace("--", "-").Replace("button", ""))"
                              Size="Size.Small" Color="Color.Default"
-                             Class="px-2 ma-0">
-                        @((button.ToString().ToLower().Replace("left", "l-").Replace("right", "r-") + "-mouse")
-                            .Replace("--", "-").Replace("button", ""))
-                    </MudChip>
+                             Class="px-2 ma-0" />
                 }
             </MudStack>
         }

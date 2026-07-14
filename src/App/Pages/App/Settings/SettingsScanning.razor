@@ -1,4 +1,4 @@
-﻿@page "/app/settings/scanning"
+@page "/app/settings/scanning"
 @using RatScanner.Components;
 @inject SettingsVM SettingsVM
 @inject IJSRuntime JSRuntime
@@ -24,17 +24,17 @@
                             </MudSelectItem>
                         }
                     </MudSelect>
-                    <MudCheckBox @bind-Checked="@SettingsVM.EnableNameScan" Label="@Localizer["EnableNameScan"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="@SettingsVM.EnableAutoNameScan" Label="@Localizer["AutomaticScanning"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="@SettingsVM.EnableNameScan" Label="@Localizer["EnableNameScan"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="@SettingsVM.EnableAutoNameScan" Label="@Localizer["AutomaticScanning"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
                 </MudGrid>
             </MudPaper>
         </MudItem>
         <MudItem xs="12">
             <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
                 <MudStack Spacing="0" Class="pa-0 ma-0">
-                    <MudCheckBox @bind-Checked="@SettingsVM.EnableIconScan" Label="@Localizer["EnableIconScan"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="@SettingsVM.ScanRotatedIcons" Label="@Localizer["ScanRotatedIcons"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="@SettingsVM.UseCachedIcons" Label="@Localizer["UseCachedIcons"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="@SettingsVM.EnableIconScan" Label="@Localizer["EnableIconScan"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="@SettingsVM.ScanRotatedIcons" Label="@Localizer["ScanRotatedIcons"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="@SettingsVM.UseCachedIcons" Label="@Localizer["UseCachedIcons"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
                 </MudStack>
             </MudPaper>
         </MudItem>

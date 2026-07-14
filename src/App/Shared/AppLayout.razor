@@ -5,7 +5,11 @@
 
 <div class="app-shell">
     <header class="compact-bar">
-        <button class="icon-button" aria-label="Open navigation" @onclick="OpenDrawer">
+        <button class="icon-button"
+                aria-label="@Localizer["OpenNavigation"]"
+                aria-controls="primary-sidebar"
+                aria-expanded="@_drawerOpen"
+                @onclick="OpenDrawer">
             <MudIcon Icon="@Icons.Material.Filled.Menu" />
         </button>
         <span class="compact-title">@Constants.Branding.Name</span>
@@ -13,34 +17,34 @@
             <ScannerStatus Compact="true" />
         </div>
     </header>
-    <aside class="sidebar @(_drawerOpen ? "open" : null)" @onkeydown="HandleKey">
+    <aside id="primary-sidebar" class="sidebar @(_drawerOpen ? "open" : null)" @onkeydown="HandleKey">
         <div class="product-identity">
             <img src="RatLogoMedium.png" alt="" />
             <strong>@Constants.Branding.Name</strong>
             <span>@Localizer["TarkovTrackerEdition"]</span>
         </div>
-        <nav aria-label="Primary navigation">
+        <nav aria-label="@Localizer["PrimaryNavigation"]">
             <NavLink href="/app" Match="NavLinkMatch.All">
-                <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>Scan</span>
+                <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>@Localizer["ScanNav"]</span>
             </NavLink>
             <NavLink href="/app/history">
-                <MudIcon Icon="@Icons.Material.Filled.History" /> <span>History</span>
+                <MudIcon Icon="@Icons.Material.Filled.History" /> <span>@Localizer["HistoryNav"]</span>
             </NavLink>
             <NavLink href="/app/settings/general">
-                <MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>Settings</span>
+                <MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>@Localizer["SettingsNavGroup"]</span>
             </NavLink>
             <NavLink href="/app/credits">
                 <MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span>
             </NavLink>
         </nav>
         <div class="sidebar-spacer"></div>
-        <footer aria-label="Application version">
+        <footer aria-label="@Localizer["ApplicationVersion"]">
             <span>@MenuVM.VersionDisplay</span>
         </footer>
     </aside>
     @if (_drawerOpen)
     {
-        <button class="scrim" aria-label="Close navigation" @onclick="CloseDrawer"></button>
+        <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawer"></button>
     }
     <main class="main-content">@Body</main>
 </div>

@@ -1,10 +1,9 @@
-# Re-enable CS8618 for real source after .globalconfig silences pathless generated trees.
-dotnet_diagnostic.CS8618.severity = warning
-
-# On-disk GraphQlClientGenerator output under obj/ is also opened by the IDE;
-# path-based rules override the re-enable above so those trees stay quiet.
-[**/GraphQlClientGenerator/**/*.cs]
-dotnet_diagnostic.CS8618.severity = none
+# MudBlazor analyzer: surface component parameters that no longer exist (or are typos) as
+# build warnings so a MudBlazor 6->9 style regression cannot be silently splatted onto the
+# root element as an HTML attribute. MUD0001 = illegal attribute, MUD0002 = unknown parameter.
+[*.razor]
+dotnet_diagnostic.MUD0001.severity = warning
+dotnet_diagnostic.MUD0002.severity = warning
 
 [*.{appxmanifest,build,config,csproj,dbml,discomap,dtd,json,jsproj,lsproj,njsproj,nuspec,proj,props,resjson,resw,resx,StyleCop,targets,tasks,vbproj,xaml,xamlx,xml,xoml,xsd}]
 indent_size=2

@@ -1,5 +1,6 @@
 @using RatScanner.Display
 @inject NavigationManager Navigation
+@inject LocalizationService Localizer
 @implements IDisposable
 @using Task = System.Threading.Tasks.Task
 
@@ -23,7 +24,7 @@
     {
         <button type="button"
                 class="scanner-status-scrim"
-                aria-label="Close scanner status details"
+                aria-label="@Localizer["ScannerStatusClose"]"
                 @onclick="Close"></button>
         <div class="scanner-status-popover @(Compact ? "from-header" : "from-toolbar")"
              role="dialog"
@@ -59,34 +60,36 @@
     private string _label =>
         _state switch
         {
-            ScannerState.Ready => "Ready",
-            ScannerState.Paused => "Paused",
-            ScannerState.Attention => "Attention",
-            _ => "Paused",
+            ScannerState.Ready => Localizer["StatusReady"],
+            ScannerState.Paused => Localizer["StatusPaused"],
+            ScannerState.Attention => Localizer["StatusAttention"],
+            _ => Localizer["StatusPaused"],
         };
 
     private string _title =>
         _state switch
         {
-            ScannerState.Ready => "Scanner ready",
-            ScannerState.Paused => "Scanner paused",
-            ScannerState.Attention => "Scanner unavailable",
-            _ => "Scanner status",
+            ScannerState.Ready => Localizer["ScannerReady"],
+            ScannerState.Paused => Localizer["ScannerPaused"],
+            ScannerState.Attention => Localizer["ScannerUnavailable"],
+            _ => Localizer["ScannerStatusTitle"],
         };
 
     private string _detail =>
         _state switch
         {
             ScannerState.Ready =>
-                "RatScanner is running normally and can detect items from the configured game display.",
+                Localizer["ScannerReadyDetail"],
             ScannerState.Paused =>
-                "Scanning is turned off. Enable name or icon scanning in Settings to resume.",
+                Localizer["ScannerPausedDetail"],
             ScannerState.Attention => FormatDisplayProblem(),
             _ => string.Empty,
         };
 
     private string _actionLabel =>
-        _state == ScannerState.Attention ? "Review display settings" : "Open scanner settings";
+        _state == ScannerState.Attention
+            ? Localizer["ReviewDisplaySettings"]
+            : Localizer["OpenScannerSettings"];
 
     private string _settingsPath =>
         _state == ScannerState.Attention ? "/app/settings/general" : "/app/settings/scanning";
@@ -94,7 +97,7 @@
     private string _hoverTitle => $"{_title}. {_detail}";
 
     private string _ariaLabel =>
-        Compact ? $"{_title}. Activate for details." : $"{_title}. {_detail}";
+        Compact ? $"{_title}. {Localizer["ActivateForDetails"]}" : $"{_title}. {_detail}";
 
     protected override void OnInitialized()
     {
@@ -136,17 +139,17 @@
         return config.StatusCode switch
         {
             GameDisplayStatusCode.SavedDisplayUnavailable =>
-                "The configured display could not be found.",
-            GameDisplayStatusCode.NoDisplays => "No displays were detected.",
+                Localizer["DisplayMissing"],
+            GameDisplayStatusCode.NoDisplays => Localizer["NoDisplaysDetected"],
             GameDisplayStatusCode.InvalidCustomConfiguration =>
-                "The custom game display configuration is invalid.",
+                Localizer["InvalidDisplayConfig"],
             GameDisplayStatusCode.GameWindowOnDifferentDisplay =>
-                "Escape from Tarkov is on a different display than the one configured.",
+                Localizer["GameOnDifferentDisplay"],
             GameDisplayStatusCode.GameWindowSpansDisplays =>
-                "The game window spans multiple displays.",
+                Localizer["GameSpansDisplays"],
             GameDisplayStatusCode.DpiUnavailable =>
-                "Display scaling could not be determined for the configured screen.",
-            _ => "The configured game display is not available for scanning.",
+                Localizer["DisplayScaleUnknown"],
+            _ => Localizer["DisplayUnavailable"],
         };
     }
 

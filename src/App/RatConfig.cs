@@ -119,7 +119,7 @@ internal static class RatConfig
 
         internal static class TarkovTracker
         {
-            internal static TarkovTrackerBackend Backend = TarkovTrackerBackend.TarkovTrackerIO;
+            internal static TarkovTrackerBackend Backend = TarkovTrackerBackend.TarkovTrackerORG;
             internal static string Endpoint =>
                 Backend == TarkovTrackerBackend.TarkovTrackerIO
                     ? "https://tarkovtracker.io/api/v2"
@@ -191,32 +191,70 @@ internal static class RatConfig
 
     internal static float GameScale => RatScannerMain.Instance.RatEyeEngine.Config.ProcessingConfig.Scale;
 
-    private static bool IsSupportedConfigVersion()
+    internal readonly record struct ConfigLoadPlan(
+        bool FileExists,
+        bool IsSupported,
+        bool ShouldSave,
+        int ExistingVersion,
+        string? BackupPath
+    );
+
+    internal static ConfigLoadPlan PrepareConfigForLoad(string configPath)
     {
-        SimpleConfig config = new(Paths.ConfigFile, "Other");
-        int readConfigVersion = config.ReadInt(nameof(ConfigVersion), -1);
-        bool isSupportedConfigVersion = ConfigVersion == readConfigVersion;
-        if (!isSupportedConfigVersion)
-            Logger.LogWarning("Config version (" + readConfigVersion + ") is not supported!");
-        return isSupportedConfigVersion;
+        if (!File.Exists(configPath))
+            return new ConfigLoadPlan(false, true, true, -1, null);
+
+        SimpleConfig config = new(configPath, "Other");
+        int existingVersion = config.ReadInt(nameof(ConfigVersion), -1);
+        if (existingVersion == ConfigVersion)
+            return new ConfigLoadPlan(true, true, false, existingVersion, null);
+
+        string backupPath = CreateConfigBackup(configPath, existingVersion);
+        return new ConfigLoadPlan(true, false, true, existingVersion, backupPath);
+    }
+
+    private static string CreateConfigBackup(string configPath, int existingVersion)
+    {
+        string baseBackupPath = $"{configPath}.v{existingVersion}.bak";
+        string backupPath = baseBackupPath;
+        for (int suffix = 1; File.Exists(backupPath); suffix++)
+            backupPath = $"{baseBackupPath}.{suffix}";
+
+        File.Copy(configPath, backupPath, overwrite: false);
+        return backupPath;
     }
 
     internal static void LoadConfig()
     {
-        bool configFileExists = File.Exists(Paths.ConfigFile);
-        bool isSupportedConfigVersion = !configFileExists || IsSupportedConfigVersion();
-        bool existingSupportedConfig = configFileExists && isSupportedConfigVersion;
-        bool shouldSaveConfig = !configFileExists;
-        if (configFileExists && !isSupportedConfigVersion)
+        ConfigLoadPlan loadPlan;
+        try
         {
-            string message = "Old config version detected!\n\n";
-            message += "It will be removed and replaced with a new config file.\n";
-            message += "Please make sure to reconfigure your settings after.";
-            Logger.ShowMessage(message);
+            loadPlan = PrepareConfigForLoad(Paths.ConfigFile);
+        }
+        catch (Exception exception)
+        {
+            // Never rewrite an unsupported config unless its original bytes were preserved first.
+            Logger.LogWarning("Unable to back up the existing configuration; automatic migration was skipped.", exception);
+            loadPlan = new ConfigLoadPlan(File.Exists(Paths.ConfigFile), false, false, -1, null);
+        }
 
-            File.Delete(Paths.ConfigFile);
-            configFileExists = false;
-            shouldSaveConfig = true;
+        bool configFileExists = loadPlan.FileExists;
+        bool shouldSaveConfig = loadPlan.ShouldSave;
+        if (configFileExists && !loadPlan.IsSupported)
+        {
+            Logger.LogWarning($"Config version ({loadPlan.ExistingVersion}) is not supported.");
+            string message = "Old config version detected.\n\n";
+            if (loadPlan.BackupPath is not null)
+            {
+                message += $"Your original settings were backed up to:\n{loadPlan.BackupPath}\n\n";
+                message += "RatScanner will migrate every setting it can read and keep safe defaults for the rest.";
+            }
+            else
+            {
+                message += "RatScanner could not create a backup, so it will use readable settings for this session "
+                    + "without rewriting the file. Back up config.cfg manually before saving new settings.";
+            }
+            Logger.ShowMessage(message);
         }
 
         SimpleConfig config = new(Paths.ConfigFile) { Section = nameof(NameScan) };
@@ -305,7 +343,7 @@ internal static class RatConfig
             GameDisplayConfiguration automaticConfiguration = GameDisplayService.Detect(
                 GameDisplayPreferences.Automatic
             );
-            GameDisplayPreferences migratedPreferences = existingSupportedConfig
+            GameDisplayPreferences migratedPreferences = configFileExists
                 ? GameDisplayMigration.FromLegacy(ScreenWidth, ScreenHeight, ScreenScale, automaticConfiguration)
                 : CreateFirstRunPreferences(automaticConfiguration);
             SetGameDisplayPreferences(migratedPreferences);

@@ -1,4 +1,4 @@
-﻿@page "/app/settings/minimal"
+@page "/app/settings/minimal"
 @inject SettingsVM SettingsVM
 @inject IJSRuntime JSRuntime;
 @inject LocalizationService Localizer;
@@ -13,15 +13,15 @@
         <MudItem xs="12">
             <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
                 <MudStack Spacing="0">
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowName" Label="@Localizer["NameLabel"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowAvgDayPrice" Label="@Localizer["AvgDailyPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowPricePerSlot" Label="@Localizer["PricePerSlot"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowTraderPrice" Label="@Localizer["TraderPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowKappa" Label="@Localizer["KappaNeeded"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowQuestHideoutTracker" Label="@Localizer["NeededQuestHideout"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowQuestHideoutTeamTracker" Label="@Localizer["NeededQuestHideoutTeam"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Checked="SettingsVM.ShowUpdated" Label="@Localizer["UpdatedTimestamp"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudSlider Step="10" @bind-Value="SettingsVM.Opacity" Min="0" Max="100" Dense="true" Color="Color.Primary">
+                    <MudCheckBox @bind-Value="SettingsVM.ShowName" Label="@Localizer["NameLabel"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowAvgDayPrice" Label="@Localizer["AvgDailyPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowPricePerSlot" Label="@Localizer["PricePerSlot"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowTraderPrice" Label="@Localizer["TraderPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowKappa" Label="@Localizer["KappaNeeded"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowQuestHideoutTracker" Label="@Localizer["NeededQuestHideout"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowQuestHideoutTeamTracker" Label="@Localizer["NeededQuestHideoutTeam"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudCheckBox @bind-Value="SettingsVM.ShowUpdated" Label="@Localizer["UpdatedTimestamp"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
+                    <MudSlider Step="10" @bind-Value="SettingsVM.Opacity" Min="0" Max="100" Color="Color.Primary">
                         <MudText Typo="Typo.subtitle2" Class="mt-0">@Localizer.Format("OpacityLabel", SettingsVM.Opacity)</MudText>
                     </MudSlider>
                 </MudStack>

@@ -1,0 +1,19 @@
+.map-search-result {
+    width: 100%;
+    padding: 0;
+    border: 0;
+    display: block;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+}
+
+.map-search-result ::deep .mud-paper {
+    transition: background-color 0.12s ease;
+}
+
+.map-search-result:hover ::deep .mud-paper,
+.map-search-result:focus-visible ::deep .mud-paper {
+    background: var(--mud-palette-action-default-hover);
+}

@@ -1,16 +1,22 @@
 @using RatScanner.TarkovDev
+@inject LocalizationService Localizer
 
-<MudPaper Class="pa-2" Elevation="3" Style="cursor: pointer;" @onclick="OnMapClick">
-    <MudStack Row="true" Justify="Justify.SpaceBetween" Style="height: 6vh;">
-        <MudStack Row="true" Justify="Justify.FlexStart" Class="flex-1" AlignItems="AlignItems.Center">
-            <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" Color="Color.Primary" />
-            <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Start">
-                <MudText Class="ellipsis" Typo="Typo.h6" Style="max-width: 16vw">@Map.Name</MudText>
-                <MudText Typo="Typo.caption">Click to view map</MudText>
+<button type="button"
+        class="map-search-result"
+        aria-label="@Localizer.Format("OpenNamedMap", Map.Name ?? Localizer["UnknownMap"])"
+        @onclick="OnMapClick">
+    <MudPaper Class="pa-2" Elevation="3">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Style="height: 6vh;">
+            <MudStack Row="true" Justify="Justify.FlexStart" Class="flex-1" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" Color="Color.Primary" />
+                <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Start">
+                    <MudText Class="ellipsis" Typo="Typo.h6" Style="max-width: 16vw">@Map.Name</MudText>
+                    <MudText Typo="Typo.caption">@Localizer["ClickToViewMap"]</MudText>
+                </MudStack>
             </MudStack>
         </MudStack>
-    </MudStack>
-</MudPaper>
+    </MudPaper>
+</button>
 
 <style>
     .ellipsis {
