@@ -401,8 +401,7 @@ namespace RatEye.Processing
             if (!System.IO.File.Exists(traineddataPath))
             {
                 var message = "Could not find traineddata at: " + traineddataPath;
-                var ex = new ArgumentException(message, PathConfig.TrainedData);
-                throw ex;
+                throw new System.IO.FileNotFoundException(message, traineddataPath);
             }
 
             // Load additional language to expand the primary one

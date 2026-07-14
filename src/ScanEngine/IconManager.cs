@@ -120,7 +120,18 @@ namespace RatEye
 
             var iconConfig = _config.ProcessingConfig.IconConfig;
             if (iconConfig.UseStaticIcons)
-                LoadStaticCorrelationData();
+            {
+                if (Directory.Exists(_config.PathConfig.StaticIcons))
+                {
+                    LoadStaticCorrelationData();
+                }
+                else
+                {
+                    Logger.LogDebug(
+                        "Static icon folder is missing; name scanning remains available but icon matching is disabled."
+                    );
+                }
+            }
         }
 
         #region Icon loading
@@ -144,7 +155,6 @@ namespace RatEye
                         "Static icon folder is missing; icon matching for this slot size will stay empty until data is installed.",
                         e
                     );
-                    _loadedStaticIconSizes.Add(slotSize);
                     return;
                 }
 
@@ -171,8 +181,7 @@ namespace RatEye
         private Dictionary<Vector2, Dictionary<string, Mat>> LoadNewIcons(
             string folderPath,
             IconType iconType,
-            Vector2 slotSizeFilter = null,
-            int retryCount = 0
+            Vector2 slotSizeFilter = null
         )
         {
             if (!Directory.Exists(folderPath))
@@ -203,53 +212,66 @@ namespace RatEye
                         iconPathArray,
                         iconPath =>
                         {
-                            var iconKey = GetIconKey(iconPath, iconType);
-
-                            var item = GetItemUnsafe(iconKey);
-                            if (item == null)
-                                return;
-                            if (slotSizeFilter != null && new Vector2(item.GetSlotSize()) != slotSizeFilter)
-                                return;
-
-                            // Skip existing icons
-                            if (iconType == IconType.Static && StaticIcons.Any(x => x.Value.ContainsKey(iconKey)))
-                                return;
-                            if (iconType == IconType.Dynamic && DynamicIcons.Any(x => x.Value.ContainsKey(iconKey)))
-                                return;
-
-                            var useCache = _config.ProcessingConfig.UseCache;
-                            var cacheIconPath = Path.Combine(_cacheDirectory, $"{iconKey.CacheKey(configHash)}.bmp");
-                            var icon = useCache ? TryLoadCachedIcon(cacheIconPath) : null;
-                            var cacheHit = icon != null;
-
-                            if (!cacheHit)
+                            Mat icon = null;
+                            try
                             {
-                                using var mat = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
-                                icon = GetIconWithBackground(mat, item);
-                            }
+                                var iconKey = GetIconKey(iconPath, iconType);
 
-                            // Do not add the icon to the list, if its size cannot be converted to slots
-                            if (!IsValidPixelSize(icon.Width) || !IsValidPixelSize(icon.Height))
-                            {
-                                icon.Dispose();
-                                return;
-                            }
+                                var item = GetItemUnsafe(iconKey);
+                                if (item == null)
+                                    return;
+                                if (slotSizeFilter != null && new Vector2(item.GetSlotSize()) != slotSizeFilter)
+                                    return;
 
-                            // Add the icon to the cache if caching is enabled and doesn't already contain it
-                            if (useCache && !cacheHit)
-                                SaveCacheIconAtomic(icon, cacheIconPath);
+                                // Skip existing icons
+                                if (iconType == IconType.Static && StaticIcons.Any(x => x.Value.ContainsKey(iconKey)))
+                                    return;
+                                if (iconType == IconType.Dynamic && DynamicIcons.Any(x => x.Value.ContainsKey(iconKey)))
+                                    return;
 
-                            var size = new Vector2(PixelsToSlots(icon.Width), PixelsToSlots(icon.Height));
-                            lock (loadedIcons)
-                            {
-                                if (!loadedIcons.ContainsKey(size))
+                                var useCache = _config.ProcessingConfig.UseCache;
+                                var cacheIconPath = Path.Combine(
+                                    _cacheDirectory,
+                                    $"{iconKey.CacheKey(configHash)}.bmp"
+                                );
+                                icon = useCache ? TryLoadCachedIcon(cacheIconPath) : null;
+                                var cacheHit = icon != null;
+
+                                if (!cacheHit)
                                 {
-                                    loadedIcons.Add(size, new Dictionary<string, Mat>());
+                                    using var mat = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
+                                    if (mat.Empty())
+                                        throw new InvalidDataException("The icon image is empty or unreadable.");
+                                    icon = GetIconWithBackground(mat, item);
                                 }
 
-                                // Add icon to icon and path dictionary
-                                loadedIcons[size][iconKey] = icon;
-                                _iconPaths[iconKey] = cacheHit ? cacheIconPath : iconPath;
+                                // Do not add the icon to the list, if its size cannot be converted to slots
+                                if (!IsValidPixelSize(icon.Width) || !IsValidPixelSize(icon.Height))
+                                    return;
+
+                                // Add the icon to the cache if caching is enabled and doesn't already contain it
+                                if (useCache && !cacheHit)
+                                    SaveCacheIconAtomic(icon, cacheIconPath);
+
+                                var size = new Vector2(PixelsToSlots(icon.Width), PixelsToSlots(icon.Height));
+                                lock (loadedIcons)
+                                {
+                                    if (!loadedIcons.ContainsKey(size))
+                                        loadedIcons.Add(size, new Dictionary<string, Mat>());
+
+                                    // Ownership of the Mat transfers to the returned collection.
+                                    loadedIcons[size][iconKey] = icon;
+                                    _iconPaths[iconKey] = cacheHit ? cacheIconPath : iconPath;
+                                    icon = null;
+                                }
+                            }
+                            catch (Exception e) when (IsRecoverableIconLoadException(e))
+                            {
+                                Logger.LogDebug("Could not load icon: " + iconPath, e);
+                            }
+                            finally
+                            {
+                                icon?.Dispose();
                             }
                         }
                     );
@@ -268,14 +290,11 @@ namespace RatEye
                     }
                 }
             }
-            catch (Exception e)
+            catch
             {
-                Logger.LogDebug("Could not load icons!", e);
-                if (retryCount > 0)
-                {
-                    Thread.Sleep(100);
-                    return LoadNewIcons(folderPath, iconType, slotSizeFilter, retryCount - 1);
-                }
+                foreach (Mat icon in loadedIcons.Values.SelectMany(group => group.Values))
+                    icon.Dispose();
+                throw;
             }
 
             if (_config.ProcessingConfig.UseCache)
@@ -283,6 +302,18 @@ namespace RatEye
 
             return loadedIcons;
         }
+
+        private static bool IsRecoverableIconLoadException(Exception exception) =>
+            IsRecoverableFileSystemException(exception)
+            || exception is ArgumentException or OpenCVException or OpenCvSharpException;
+
+        private static bool IsRecoverableFileSystemException(Exception exception) =>
+            exception
+                is IOException
+                    or InvalidDataException
+                    or UnauthorizedAccessException
+                    or NotSupportedException
+                    or System.Security.SecurityException;
 
         private Mat TryLoadCachedIcon(string cacheIconPath)
         {
@@ -307,7 +338,7 @@ namespace RatEye
                 Logger.LogDebug("Regenerating invalid cached icon: " + cacheIconPath);
                 return null;
             }
-            catch (Exception e)
+            catch (Exception e) when (IsRecoverableIconLoadException(e))
             {
                 icon?.Dispose();
                 DeleteCacheFileBestEffort(cacheIconPath);
@@ -348,6 +379,7 @@ namespace RatEye
                 }
             }
             catch (Exception e)
+                when (IsRecoverableFileSystemException(e) || e is OpenCVException or OpenCvSharpException)
             {
                 // Cache persistence must never prevent the in-memory icon from being used.
                 Logger.LogDebug("Could not persist cached icon: " + cacheIconPath, e);
@@ -410,7 +442,7 @@ namespace RatEye
                     fileCount--;
                 }
             }
-            catch (Exception e)
+            catch (Exception e) when (IsRecoverableFileSystemException(e))
             {
                 // Cleanup is opportunistic; cache failures must not block scanning.
                 Logger.LogDebug("Could not prune the icon cache.", e);
@@ -424,7 +456,7 @@ namespace RatEye
                 File.Delete(path);
                 return !File.Exists(path);
             }
-            catch
+            catch (Exception e) when (IsRecoverableFileSystemException(e))
             {
                 return false;
             }
@@ -719,12 +751,11 @@ namespace RatEye
             _dynamicCorrelationDataLock.EnterReadLock();
             try
             {
-                // We want First() to throw if there is no matching item
-                return _dynamicCorrelationData.First(x => x.Value.Item1 == item && x.Value.Item2 == itemExtraInfo).Key;
-            }
-            catch
-            {
-                // ignored
+                string dynamicPath = _dynamicCorrelationData
+                    .FirstOrDefault(entry => entry.Value.Item1 == item && entry.Value.Item2 == itemExtraInfo)
+                    .Key;
+                if (dynamicPath != null)
+                    return dynamicPath;
             }
             finally
             {
@@ -734,19 +765,12 @@ namespace RatEye
             _staticCorrelationDataLock.EnterReadLock();
             try
             {
-                // We want First() to throw if there is no matching item
-                return _staticCorrelationData.First(entry => entry.Value == item).Key;
-            }
-            catch
-            {
-                // ignored
+                return _staticCorrelationData.FirstOrDefault(entry => entry.Value == item).Key;
             }
             finally
             {
                 _staticCorrelationDataLock.ExitReadLock();
             }
-
-            return null;
         }
 
         /// <summary>

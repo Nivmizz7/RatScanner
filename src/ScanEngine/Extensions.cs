@@ -134,8 +134,10 @@ namespace RatEye
             using var mat = image.ToMat();
             using var mat3 = new Mat<Vec3b>(mat);
             var indexer = mat3.GetIndexer();
+            // Cache Width before the loop — property access is a P/Invoke each time (OCVS002).
+            int width = mat.Width;
 
-            for (var x = start; x < mat.Width; x++)
+            for (var x = start; x < width; x++)
             {
                 var (blue, green, red) = indexer[searchHeight, x];
 

@@ -187,22 +187,33 @@ namespace RatEye.Processing
         /// </summary>
         private void ParseInventoryGridNormal()
         {
-            var gridIndexer = _grid.GetGenericIndexer<byte>();
-            var vertGrindIndexer = _vertGrid.GetGenericIndexer<byte>();
-
+            var gridIndexer = GetByteGridIndexer(_grid, nameof(_grid));
+            var vertGridIndexer = GetByteGridIndexer(_vertGrid, nameof(_vertGrid));
             var scaledSlotSize = (int)(_config.ProcessingConfig.ScaledSlotSize);
+            if (scaledSlotSize < 2)
+            {
+                throw new InvalidOperationException(
+                    "The scaled inventory slot size must be at least two pixels for grid parsing."
+                );
+            }
 
             var maxRows = _vertGrid.Rows;
-            var maxCols = _vertGrid.Cols - scaledSlotSize / 2;
+            var vertGridCols = _vertGrid.Cols;
+            var gridRows = _grid.Rows;
+            var gridCols = _grid.Cols;
+            if (gridRows != maxRows || gridCols != vertGridCols)
+                throw new InvalidOperationException("Inventory grid matrices must have matching dimensions.");
+
+            var maxCols = vertGridCols - scaledSlotSize / 2;
 
             for (var y = scaledSlotSize / 2; y < maxRows; y += scaledSlotSize)
             {
                 for (var x = 0; x < maxCols; x++)
                 {
-                    if (!vertGrindIndexer[y, x].Equals(0xFF))
+                    if (vertGridIndexer[y, x] != 0xFF)
                         continue;
 
-                    TryAddIcon(gridIndexer, x, y);
+                    TryAddIcon(gridIndexer, gridRows, gridCols, x, y);
                 }
             }
 
@@ -238,6 +249,25 @@ namespace RatEye.Processing
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Creates the stride-aware fast indexer used by the grid hot path.
+        /// </summary>
+        /// <remarks>
+        /// OpenCvSharp's unsafe indexer skips per-access type and bounds checks, but retains the matrix row steps so it also
+        /// works for non-contiguous submatrices. Validate the matrix contract once before entering the pixel loops.
+        /// </remarks>
+        private static Mat.UnsafeIndexer<byte> GetByteGridIndexer(Mat mat, string name)
+        {
+            if (mat.Empty() || mat.Dims != 2 || mat.Type() != MatType.CV_8UC1)
+            {
+                throw new InvalidOperationException(
+                    $"Inventory {name} must be a non-empty two-dimensional CV_8UC1 matrix."
+                );
+            }
+
+            return mat.GetUnsafeGenericIndexer<byte>();
         }
 
         private void SmoothJaggedLines(Mat mat, bool horizontal)
@@ -299,11 +329,13 @@ namespace RatEye.Processing
         /// <summary>
         /// If the position at the indexer is part of a rectangle, it will be added to <see cref="_icons"/>
         /// </summary>
-        /// <param name="indexer">The indexer of the mat</param>
+        /// <param name="indexer">Stride-aware byte indexer of the binary grid mat</param>
+        /// <param name="rows">Number of rows in the grid</param>
+        /// <param name="cols">Number of columns in the grid</param>
         /// <param name="x">X position of the assumed icon</param>
         /// <param name="y">Y position of the assumed icon</param>
         /// <returns><see langword="true"/> if it is a valid icon, else <see langword="false"/></returns>
-        private bool TryAddIcon(Mat.Indexer<byte> indexer, int x, int y)
+        private bool TryAddIcon(Mat.UnsafeIndexer<byte> indexer, int rows, int cols, int x, int y)
         {
             /*
              * The idea is, that we walk along the most inner
@@ -315,9 +347,6 @@ namespace RatEye.Processing
              * There are some optimizations to reduce the amount
              * of loop iterations down to a minimum
              */
-
-            var rows = _grid.Rows;
-            var cols = _grid.Cols;
 
             Vector2 bottomLeft = null;
             Vector2 bottomRight = null;
@@ -333,9 +362,9 @@ namespace RatEye.Processing
             // Go south
             for (a = y; a < rows; a++)
             {
-                if (indexer[a, x].Equals(0x00))
+                if (indexer[a, x] == 0x00)
                     return false;
-                if (indexer[a, x + 1].Equals(0xFF))
+                if (indexer[a, x + 1] == 0xFF)
                 {
                     bottomLeft = new Vector2(x, a);
                     break;
@@ -348,9 +377,9 @@ namespace RatEye.Processing
             // Go east
             for (b = x + 1; b < cols; b++)
             {
-                if (indexer[a, b].Equals(0x00))
+                if (indexer[a, b] == 0x00)
                     return false;
-                if (indexer[a - 1, b].Equals(0xFF))
+                if (indexer[a - 1, b] == 0xFF)
                 {
                     bottomRight = new Vector2(b, a);
                     break;
@@ -363,9 +392,9 @@ namespace RatEye.Processing
             // Go north
             for (c = a - 1; c > 0; c--)
             {
-                if (indexer[c, b].Equals(0x00))
+                if (indexer[c, b] == 0x00)
                     return false;
-                if (indexer[c, b - 1].Equals(0xFF))
+                if (indexer[c, b - 1] == 0xFF)
                 {
                     topRight = new Vector2(b, c);
                     break;
@@ -378,9 +407,9 @@ namespace RatEye.Processing
             // Go west
             for (d = b - 1; d >= x; d--)
             {
-                if (indexer[c, d].Equals(0x00))
+                if (indexer[c, d] == 0x00)
                     return false;
-                if (indexer[c + 1, d].Equals(0xFF))
+                if (indexer[c + 1, d] == 0xFF)
                 {
                     topLeft = new Vector2(d, c);
                     break;
@@ -393,7 +422,7 @@ namespace RatEye.Processing
             // Go south to origin
             for (e = c + 1; e <= y; e++)
             {
-                if (indexer[e, d].Equals(0x00))
+                if (indexer[e, d] == 0x00)
                     return false;
                 if (!(e == y && d == x))
                     continue;
