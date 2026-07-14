@@ -16,3 +16,86 @@ body { font-family: "Segoe UI", system-ui, sans-serif; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/*
+  Compact item search (MudAutocomplete inside .search).
+  Loaded after MudBlazor.min.css. Work with Mud metrics instead of forcing
+  height:100% over content-box padding (which re-biases the caret low).
+*/
+.search .mud-autocomplete,
+.search .mud-select,
+.search .mud-input-control,
+.search .mud-input-control-input-container,
+.search .mud-input {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+}
+
+.search .mud-input-control {
+    flex: 1 1 auto;
+    padding: 0;
+}
+
+.search .mud-input-control-input-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Mud default is inline-flex (content width); stretch to the shell. */
+.search .mud-input {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+}
+
+/*
+  Mud Text: height 1.1876em + padding 6px 0 7px (content-box) is bottom-heavy.
+  Dense only trims top to 3px. Equalize top/bottom and drop fixed em height so
+  the caret/text sit on the visual center of a short field.
+*/
+.search .mud-input > input.mud-input-root,
+.search .mud-input > input.mud-input-root.mud-input-root-margin-dense {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    height: auto;
+    margin: 0;
+    padding: 7px 0;
+    line-height: 1.25;
+    font-size: 0.875rem;
+    box-sizing: content-box;
+}
+
+.search .mud-input-adornment {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    align-self: center;
+}
+
+.search .mud-input-adornment .mud-icon-root {
+    font-size: 18px;
+}
+
+.search .mud-input-adornment-end {
+    margin-left: 6px;
+    margin-inline-start: 6px;
+    margin-right: 0;
+    margin-inline-end: 0;
+}
+
+.search .mud-input-adornment-end .mud-button-root.mud-icon-button,
+.search .mud-input-adornment-end button {
+    width: 28px;
+    height: 28px;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.search .mud-input-control > .mud-input-control-helper-container {
+    display: none;
+}
