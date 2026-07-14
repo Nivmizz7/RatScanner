@@ -10,10 +10,15 @@
 }
 
 .utility-bar {
-    display: grid;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
 }
 
 .search {
+    flex: 1 1 auto;
+    min-width: 0;
     height: 42px;
     padding: 0 12px;
     border: 1px solid var(--rs-border);
@@ -744,6 +749,11 @@ label {
         height: auto;
         min-height: calc(100vh - 56px);
         padding: 12px;
+    }
+
+    /* Status lives in the compact header as a dot; keep search full-width. */
+    .utility-bar > ::deep .scanner-status-root {
+        display: none;
     }
 
     .recent {

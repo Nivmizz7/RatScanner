@@ -1,0 +1,185 @@
+@using RatScanner.Display
+@inject NavigationManager Navigation
+@implements IDisposable
+@using Task = System.Threading.Tasks.Task
+
+<div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown">
+    <button type="button"
+            class="scanner-status-control @_stateClass @(Compact ? "compact" : "expanded")"
+            title="@_hoverTitle"
+            aria-label="@_ariaLabel"
+            aria-expanded="@_open"
+            aria-haspopup="dialog"
+            @onclick="Toggle"
+            @onclick:stopPropagation="true">
+        <span class="scanner-status-dot" aria-hidden="true"></span>
+        @if (!Compact)
+        {
+            <span class="scanner-status-label">@_label</span>
+        }
+    </button>
+
+    @if (_open)
+    {
+        <button type="button"
+                class="scanner-status-scrim"
+                aria-label="Close scanner status details"
+                @onclick="Close"></button>
+        <div class="scanner-status-popover @(Compact ? "from-header" : "from-toolbar")"
+             role="dialog"
+             aria-label="@_title"
+             @onclick:stopPropagation="true">
+            <strong>@_title</strong>
+            <p>@_detail</p>
+            <button type="button" class="scanner-status-action" @onclick="OpenSettings">
+                @_actionLabel
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Dot-only control for the compact mobile header.</summary>
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private bool _open;
+    private bool _subscribed;
+    private ScannerState _state = ScannerState.Paused;
+
+    private string _stateClass =>
+        _state switch
+        {
+            ScannerState.Ready => "state-ready",
+            ScannerState.Paused => "state-paused",
+            ScannerState.Attention => "state-attention",
+            _ => "state-paused",
+        };
+
+    private string _label =>
+        _state switch
+        {
+            ScannerState.Ready => "Ready",
+            ScannerState.Paused => "Paused",
+            ScannerState.Attention => "Attention",
+            _ => "Paused",
+        };
+
+    private string _title =>
+        _state switch
+        {
+            ScannerState.Ready => "Scanner ready",
+            ScannerState.Paused => "Scanner paused",
+            ScannerState.Attention => "Scanner unavailable",
+            _ => "Scanner status",
+        };
+
+    private string _detail =>
+        _state switch
+        {
+            ScannerState.Ready =>
+                "RatScanner is running normally and can detect items from the configured game display.",
+            ScannerState.Paused =>
+                "Scanning is turned off. Enable name or icon scanning in Settings to resume.",
+            ScannerState.Attention => FormatDisplayProblem(),
+            _ => string.Empty,
+        };
+
+    private string _actionLabel =>
+        _state == ScannerState.Attention ? "Review display settings" : "Open scanner settings";
+
+    private string _settingsPath =>
+        _state == ScannerState.Attention ? "/app/settings/general" : "/app/settings/scanning";
+
+    private string _hoverTitle => $"{_title}. {_detail}";
+
+    private string _ariaLabel =>
+        Compact ? $"{_title}. Activate for details." : $"{_title}. {_detail}";
+
+    protected override void OnInitialized()
+    {
+        RefreshState();
+        RatConfig.GameDisplayConfigurationChanged += OnDisplayChanged;
+        _subscribed = true;
+    }
+
+    private void OnDisplayChanged(GameDisplayConfiguration configuration)
+    {
+        _ = InvokeAsync(() =>
+        {
+            RefreshState();
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
+
+    private void RefreshState()
+    {
+        bool scanningEnabled = RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
+        bool displayBroken =
+            RatConfig.GameDisplayConfiguration.RequiresAttention
+            && RatConfig.GameDisplayConfiguration.StatusKind
+                is GameDisplayStatusKind.Error
+                    or GameDisplayStatusKind.Warning;
+
+        if (!scanningEnabled)
+            _state = ScannerState.Paused;
+        else if (displayBroken)
+            _state = ScannerState.Attention;
+        else
+            _state = ScannerState.Ready;
+    }
+
+    private string FormatDisplayProblem()
+    {
+        GameDisplayConfiguration config = RatConfig.GameDisplayConfiguration;
+        return config.StatusCode switch
+        {
+            GameDisplayStatusCode.SavedDisplayUnavailable =>
+                "The configured display could not be found.",
+            GameDisplayStatusCode.NoDisplays => "No displays were detected.",
+            GameDisplayStatusCode.InvalidCustomConfiguration =>
+                "The custom game display configuration is invalid.",
+            GameDisplayStatusCode.GameWindowOnDifferentDisplay =>
+                "Escape from Tarkov is on a different display than the one configured.",
+            GameDisplayStatusCode.GameWindowSpansDisplays =>
+                "The game window spans multiple displays.",
+            GameDisplayStatusCode.DpiUnavailable =>
+                "Display scaling could not be determined for the configured screen.",
+            _ => "The configured game display is not available for scanning.",
+        };
+    }
+
+    private void Toggle()
+    {
+        RefreshState();
+        _open = !_open;
+    }
+
+    private void Close() => _open = false;
+
+    private void OpenSettings()
+    {
+        _open = false;
+        Navigation.NavigateTo(_settingsPath);
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            Close();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribed)
+            RatConfig.GameDisplayConfigurationChanged -= OnDisplayChanged;
+    }
+
+    private enum ScannerState
+    {
+        Ready,
+        Paused,
+        Attention,
+    }
+}

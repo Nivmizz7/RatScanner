@@ -1,0 +1,161 @@
+.scanner-status-root {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+}
+
+.scanner-status-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: 0;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    color: var(--rs-success);
+    background: var(--rs-success-surface);
+    border-color: rgba(88, 209, 123, 0.28);
+}
+
+.scanner-status-control.expanded {
+    min-width: 84px;
+    height: 42px;
+    padding: 0 12px 0 10px;
+    border-radius: 999px;
+}
+
+.scanner-status-control.compact {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.scanner-status-dot {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.16);
+}
+
+.scanner-status-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.scanner-status-control.state-ready .scanner-status-dot {
+    animation: scanner-status-pulse 2.4s ease-in-out infinite;
+}
+
+.scanner-status-control.state-paused {
+    color: var(--rs-warning);
+    background: rgba(231, 173, 85, 0.10);
+    border-color: rgba(231, 173, 85, 0.35);
+}
+
+.scanner-status-control.state-paused .scanner-status-dot {
+    box-shadow: 0 0 0 3px rgba(231, 173, 85, 0.16);
+    animation: none;
+}
+
+.scanner-status-control.state-attention {
+    color: var(--rs-danger);
+    background: rgba(235, 108, 115, 0.10);
+    border-color: rgba(235, 108, 115, 0.35);
+}
+
+.scanner-status-control.state-attention .scanner-status-dot {
+    box-shadow: 0 0 0 3px rgba(235, 108, 115, 0.16);
+    animation: none;
+}
+
+.scanner-status-control:hover,
+.scanner-status-control:focus-visible {
+    filter: brightness(1.08);
+}
+
+.scanner-status-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+}
+
+.scanner-status-popover {
+    position: absolute;
+    z-index: 50;
+    width: min(280px, calc(100vw - 32px));
+    padding: 12px 14px;
+    border-radius: var(--rs-radius);
+    border: 1px solid var(--rs-border);
+    background: var(--rs-elevated);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    color: var(--rs-text-2);
+    font-size: 13px;
+    line-height: 1.4;
+    display: grid;
+    gap: 8px;
+}
+
+.scanner-status-popover.from-toolbar {
+    top: calc(100% + 8px);
+    right: 0;
+}
+
+.scanner-status-popover.from-header {
+    top: calc(100% + 8px);
+    right: 0;
+}
+
+.scanner-status-popover strong {
+    color: var(--rs-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.scanner-status-popover p {
+    margin: 0;
+}
+
+.scanner-status-action {
+    justify-self: start;
+    margin: 2px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--rs-purple-hover);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+.scanner-status-action:hover,
+.scanner-status-action:focus-visible {
+    color: var(--rs-text);
+    text-decoration: underline;
+}
+
+@keyframes scanner-status-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.14); opacity: 1; }
+    50% { box-shadow: 0 0 0 5px rgba(88, 209, 123, 0.08); opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scanner-status-control.state-ready .scanner-status-dot {
+        animation: none;
+    }
+}

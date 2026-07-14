@@ -5,8 +5,13 @@
 
 <div class="app-shell">
     <header class="compact-bar">
-        <button class="icon-button" aria-label="Open navigation" @onclick="OpenDrawer"><MudIcon Icon="@Icons.Material.Filled.Menu" /></button>
-        <span>@Constants.Branding.Name</span>
+        <button class="icon-button" aria-label="Open navigation" @onclick="OpenDrawer">
+            <MudIcon Icon="@Icons.Material.Filled.Menu" />
+        </button>
+        <span class="compact-title">@Constants.Branding.Name</span>
+        <div class="compact-status">
+            <ScannerStatus Compact="true" />
+        </div>
     </header>
     <aside class="sidebar @(_drawerOpen ? "open" : null)" @onkeydown="HandleKey">
         <div class="product-identity">
@@ -15,47 +20,39 @@
             <span>@Localizer["TarkovTrackerEdition"]</span>
         </div>
         <nav aria-label="Primary navigation">
-            <NavLink href="/app" Match="NavLinkMatch.All"><MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>Scan</span></NavLink>
-            <NavLink href="/app/history"><MudIcon Icon="@Icons.Material.Filled.History" /> <span>History</span></NavLink>
-            <NavLink href="/app/settings/general"><MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>Settings</span></NavLink>
-            <NavLink href="/app/credits"><MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span></NavLink>
+            <NavLink href="/app" Match="NavLinkMatch.All">
+                <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>Scan</span>
+            </NavLink>
+            <NavLink href="/app/history">
+                <MudIcon Icon="@Icons.Material.Filled.History" /> <span>History</span>
+            </NavLink>
+            <NavLink href="/app/settings/general">
+                <MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>Settings</span>
+            </NavLink>
+            <NavLink href="/app/credits">
+                <MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span>
+            </NavLink>
         </nav>
         <div class="sidebar-spacer"></div>
-        <section class="scanner-status @(IsScannerActive ? "active" : "paused")"
-                 aria-label="@StatusAriaLabel"
-                 aria-live="polite">
-            <span class="status-chip" title="@StatusDetail">
-                <span class="status-dot" aria-hidden="true"></span>
-                <span class="status-label">@(IsScannerActive ? "Active" : "Paused")</span>
-            </span>
-            <button type="button"
-                    class="status-help"
-                    title="@StatusDetail"
-                    aria-label="@StatusDetail">
-                <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Small" />
-            </button>
-        </section>
         <footer aria-label="Application version">
             <span>@MenuVM.VersionDisplay</span>
         </footer>
     </aside>
-    @if (_drawerOpen) { <button class="scrim" aria-label="Close navigation" @onclick="CloseDrawer"></button> }
+    @if (_drawerOpen)
+    {
+        <button class="scrim" aria-label="Close navigation" @onclick="CloseDrawer"></button>
+    }
     <main class="main-content">@Body</main>
 </div>
 
 @code {
     private bool _drawerOpen;
-    private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
-
-    private string StatusDetail =>
-        IsScannerActive
-            ? "Scanner is listening. Inspect or click an item in Escape from Tarkov."
-            : "Scanner is off. Enable name or icon scanning in Settings.";
-
-    private string StatusAriaLabel =>
-        IsScannerActive ? "Scanner active. Waiting for an item." : "Scanner paused.";
 
     private void OpenDrawer() => _drawerOpen = true;
     private void CloseDrawer() => _drawerOpen = false;
-    private void HandleKey(KeyboardEventArgs e) { if (e.Key == "Escape") CloseDrawer(); }
+    private void HandleKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseDrawer();
+    }
 }
