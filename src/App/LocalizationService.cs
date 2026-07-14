@@ -71,9 +71,7 @@ public class LocalizationService
     public void SetLanguage(UiLanguage language)
     {
         bool englishLoaded = TryLoadLanguage(UiLanguage.English, out Dictionary<string, string> english);
-        _englishTranslations = englishLoaded
-            ? english
-            : new Dictionary<string, string>(StringComparer.Ordinal);
+        _englishTranslations = englishLoaded ? english : new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (language == UiLanguage.English)
         {

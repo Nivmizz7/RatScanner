@@ -88,7 +88,8 @@ public sealed class LocalizationServiceTests
 
         public string Path { get; }
 
-        public void Write(string name, string contents) => File.WriteAllText(System.IO.Path.Combine(Path, name), contents);
+        public void Write(string name, string contents) =>
+            File.WriteAllText(System.IO.Path.Combine(Path, name), contents);
 
         public void Dispose() => Directory.Delete(Path, recursive: true);
     }

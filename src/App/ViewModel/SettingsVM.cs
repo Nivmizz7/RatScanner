@@ -1,9 +1,9 @@
-﻿using System.ComponentModel;
-using System.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using RatScanner.Display;
 using RatStash;
@@ -181,9 +181,10 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     public string GameViewportResolution => FormatSize(_displayPreview.GameViewport);
     public string DisplayScaling => $"{Math.Round(_displayPreview.DisplayScale * 100):0}%";
     public string CaptureRegion => FormatCaptureBounds(_displayPreview.CaptureBounds);
-    public string DisplayDetectionMode => _displayPreview.UsesCustomGameResolution || _displayPreview.UsesCustomDisplayScale
-        ? _localizationService["CustomMode"]
-        : _localizationService["AutomaticMode"];
+    public string DisplayDetectionMode =>
+        _displayPreview.UsesCustomGameResolution || _displayPreview.UsesCustomDisplayScale
+            ? _localizationService["CustomMode"]
+            : _localizationService["AutomaticMode"];
     public TarkovDev.GameMode GameMode { get; set; }
     public bool MinimizeToTray { get; set; }
     public bool AlwaysOnTop { get; set; }
@@ -403,8 +404,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private void ApplyDisplayConfiguration(GameDisplayConfiguration configuration, bool resetDraft)
     {
         _displayPreview = configuration;
-        GameDisplayOptions = configuration.Displays
-            .Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
+        GameDisplayOptions = configuration
+            .Displays.Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
             .ToArray();
 
         if (resetDraft)
@@ -423,8 +424,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private void UpdateDisplayPreview()
     {
         _displayPreview = RatConfig.DetectGameDisplayConfiguration(CreateDraftDisplayPreferences());
-        GameDisplayOptions = _displayPreview.Displays
-            .Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
+        GameDisplayOptions = _displayPreview
+            .Displays.Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
             .ToArray();
         ScreenWidth = _displayPreview.GameViewport.Width;
         ScreenHeight = _displayPreview.GameViewport.Height;
@@ -473,14 +474,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                 "GameDisplayStatusDetected",
                 display
             ),
-            GameDisplayStatusCode.SavedDisplay => _localizationService.Format(
-                "GameDisplayStatusSaved",
-                display
-            ),
-            GameDisplayStatusCode.PrimaryFallback => _localizationService.Format(
-                "GameDisplayStatusPrimary",
-                display
-            ),
+            GameDisplayStatusCode.SavedDisplay => _localizationService.Format("GameDisplayStatusSaved", display),
+            GameDisplayStatusCode.PrimaryFallback => _localizationService.Format("GameDisplayStatusPrimary", display),
             GameDisplayStatusCode.FirstAvailableFallback => _localizationService.Format(
                 "GameDisplayStatusFallback",
                 display
@@ -497,13 +492,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                 "GameDisplayStatusSpanning",
                 display
             ),
-            GameDisplayStatusCode.DpiUnavailable => _localizationService.Format(
-                "GameDisplayStatusDpi",
-                display
-            ),
-            GameDisplayStatusCode.InvalidCustomConfiguration => _localizationService[
-                "GameDisplayStatusInvalidCustom"
-            ],
+            GameDisplayStatusCode.DpiUnavailable => _localizationService.Format("GameDisplayStatusDpi", display),
+            GameDisplayStatusCode.InvalidCustomConfiguration => _localizationService["GameDisplayStatusInvalidCustom"],
             _ => _localizationService["GameDisplayStatusNone"],
         };
     }
@@ -512,9 +502,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         size is { Width: > 0, Height: > 0 } value ? $"{value.Width} × {value.Height}" : "—";
 
     private static string FormatCaptureBounds(Rectangle bounds) =>
-        bounds.Width > 0 && bounds.Height > 0
-            ? $"{bounds.Width} × {bounds.Height} @ ({bounds.X}, {bounds.Y})"
-            : "—";
+        bounds.Width > 0 && bounds.Height > 0 ? $"{bounds.Width} × {bounds.Height} @ ({bounds.X}, {bounds.Y})" : "—";
 
     private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration)
     {

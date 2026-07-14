@@ -83,12 +83,7 @@ internal sealed record RequirementViewModel(
 /// Alternate ways to get the item. Craft outputs are always FIR in-game;
 /// barters are not. Visual FIR check on the scan is not implemented.
 /// </summary>
-internal sealed record AcquisitionViewModel(
-    bool CanCraft,
-    int CraftRecipeCount,
-    bool CanBarter,
-    int BarterOfferCount
-)
+internal sealed record AcquisitionViewModel(bool CanCraft, int CraftRecipeCount, bool CanBarter, int BarterOfferCount)
 {
     public bool Any => CanCraft || CanBarter;
 }

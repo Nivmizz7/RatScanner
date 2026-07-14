@@ -13,7 +13,8 @@ public sealed class ConfigurationMigrationTests
         try
         {
             string configPath = Path.Combine(root, "config.cfg");
-            const string original = "[Other]\r\nconfigversion=1\r\n[Tracking.TarkovTracker]\r\ntoken=encrypted-value\r\n";
+            const string original =
+                "[Other]\r\nconfigversion=1\r\n[Tracking.TarkovTracker]\r\ntoken=encrypted-value\r\n";
             File.WriteAllText(configPath, original);
 
             RatConfig.ConfigLoadPlan plan = RatConfig.PrepareConfigForLoad(configPath);

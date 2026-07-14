@@ -24,14 +24,15 @@ internal static class GameDisplayPreferencesStore
 
         int boundsWidth = config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsWidth), 0);
         int boundsHeight = config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsHeight), 0);
-        Rectangle? bounds = boundsWidth > 0 && boundsHeight > 0
-            ? new Rectangle(
-                config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsX), 0),
-                config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsY), 0),
-                boundsWidth,
-                boundsHeight
-            )
-            : null;
+        Rectangle? bounds =
+            boundsWidth > 0 && boundsHeight > 0
+                ? new Rectangle(
+                    config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsX), 0),
+                    config.ReadInt(nameof(RatConfig.PreferredGameDisplayBoundsY), 0),
+                    boundsWidth,
+                    boundsHeight
+                )
+                : null;
 
         preferences = new GameDisplayPreferences(
             config.ReadString(nameof(RatConfig.PreferredGameDisplayId), ""),
@@ -54,7 +55,10 @@ internal static class GameDisplayPreferencesStore
         config.WriteInt(nameof(RatConfig.PreferredGameDisplayBoundsX), preferences.LastPhysicalBounds?.X ?? 0);
         config.WriteInt(nameof(RatConfig.PreferredGameDisplayBoundsY), preferences.LastPhysicalBounds?.Y ?? 0);
         config.WriteInt(nameof(RatConfig.PreferredGameDisplayBoundsWidth), preferences.LastPhysicalBounds?.Width ?? 0);
-        config.WriteInt(nameof(RatConfig.PreferredGameDisplayBoundsHeight), preferences.LastPhysicalBounds?.Height ?? 0);
+        config.WriteInt(
+            nameof(RatConfig.PreferredGameDisplayBoundsHeight),
+            preferences.LastPhysicalBounds?.Height ?? 0
+        );
         config.WriteBool(nameof(RatConfig.UseCustomGameResolution), preferences.UseCustomGameResolution);
         config.WriteInt(nameof(RatConfig.CustomGameWidth), preferences.CustomGameWidth);
         config.WriteInt(nameof(RatConfig.CustomGameHeight), preferences.CustomGameHeight);

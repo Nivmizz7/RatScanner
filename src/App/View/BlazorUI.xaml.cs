@@ -72,9 +72,9 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         LocalizationService localizationService = new();
         serviceCollection.AddSingleton(localizationService);
 
-        serviceCollection.AddSingleton<SettingsVM>(services =>
-            new SettingsVM(services.GetRequiredService<LocalizationService>())
-        );
+        serviceCollection.AddSingleton<SettingsVM>(services => new SettingsVM(
+            services.GetRequiredService<LocalizationService>()
+        ));
 
         System.Collections.Generic.IEnumerable<System.Drawing.Rectangle> bounds =
             System.Windows.Forms.Screen.AllScreens.Select(screen => screen.Bounds);

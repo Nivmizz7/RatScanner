@@ -42,8 +42,7 @@ public static class TarkovDevAPI
     private const string GraphqlApiUrl = "https://api.tarkov.dev/graphql";
 
     // Keep field selection locked to the three app-facing Map properties.
-    private const string SlimMapsQuery =
-        """
+    private const string SlimMapsQuery = """
         query RatScannerMaps($lang: LanguageCode, $gameMode: GameMode) {
           maps(lang: $lang, gameMode: $gameMode) {
             id
@@ -77,10 +76,7 @@ public static class TarkovDevAPI
         }
         catch (Exception e)
         {
-            Logger.LogWarning(
-                "Failed to set user-agent header; falling back to default RatScanner-TT user-agent.",
-                e
-            );
+            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner-TT user-agent.", e);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("RatScanner-TT");
         }
         return client;
@@ -93,8 +89,7 @@ public static class TarkovDevAPI
         TypeNameHandling = TypeNameHandling.None,
     };
 
-    private static string GameModePath(GameMode mode) =>
-        mode == GameMode.Pve ? "pve" : "regular";
+    private static string GameModePath(GameMode mode) => mode == GameMode.Pve ? "pve" : "regular";
 
     private static string LocaleCode() => RatConfig.NameScan.Language.ToTarkovDevLocale();
 
@@ -109,14 +104,9 @@ public static class TarkovDevAPI
 
     private static async Task<string> PostGraphqlAsync(string query, object variables)
     {
-        string payload = JsonConvert.SerializeObject(
-            new { query, variables },
-            JsonSettings
-        );
+        string payload = JsonConvert.SerializeObject(new { query, variables }, JsonSettings);
         using StringContent content = new(payload, System.Text.Encoding.UTF8, "application/json");
-        using HttpResponseMessage response = await HttpClient
-            .PostAsync(GraphqlApiUrl, content)
-            .ConfigureAwait(false);
+        using HttpResponseMessage response = await HttpClient.PostAsync(GraphqlApiUrl, content).ConfigureAwait(false);
         return await ReadSuccessBodyAsync(response, GraphqlApiUrl).ConfigureAwait(false);
     }
 
@@ -352,7 +342,12 @@ public static class TarkovDevAPI
         return task;
     }
 
-    private static T[] GetCached<T>(string baseQueryKey, Func<Task<object>> fetchAndMaterialize, long ttl, bool isItems = false)
+    private static T[] GetCached<T>(
+        string baseQueryKey,
+        Func<Task<object>> fetchAndMaterialize,
+        long ttl,
+        bool isItems = false
+    )
         where T : class
     {
         try
@@ -524,7 +519,12 @@ public static class TarkovDevAPI
     }
 
     public static Item[] GetItems(string locale, GameMode gameMode) =>
-        GetCached<Item>(ItemsQueryKey(locale, gameMode), () => FetchItemsAsync(locale, gameMode), RatConfig.MediumTTL, isItems: true);
+        GetCached<Item>(
+            ItemsQueryKey(locale, gameMode),
+            () => FetchItemsAsync(locale, gameMode),
+            RatConfig.MediumTTL,
+            isItems: true
+        );
 
     public static Item[] GetItems() =>
         GetCached<Item>(ItemsQueryKey(), FetchItemsAsync, RatConfig.MediumTTL, isItems: true);
@@ -575,7 +575,9 @@ public static class TarkovDevAPI
         !string.IsNullOrEmpty(itemId) && BarterProductIds.Contains(itemId);
 
     public static int CraftRecipeCount(string? itemId) =>
-        string.IsNullOrEmpty(itemId) ? 0 : CraftProductIds.Contains(itemId) ? CraftCounts.GetValueOrDefault(itemId) : 0;
+        string.IsNullOrEmpty(itemId) ? 0
+        : CraftProductIds.Contains(itemId) ? CraftCounts.GetValueOrDefault(itemId)
+        : 0;
 
     public static int BarterOfferCount(string? itemId) =>
         string.IsNullOrEmpty(itemId) ? 0 : BarterCounts.GetValueOrDefault(itemId);
@@ -715,9 +717,7 @@ public static class TarkovDevAPI
                         continue;
                     traders.TryGetValue(offer.Trader, out JsonApiModels.RawTrader? trader);
                     string? traderName =
-                        ResolveLocale(traderLocale, trader?.Name)
-                        ?? trader?.NormalizedName
-                        ?? offer.Trader;
+                        ResolveLocale(traderLocale, trader?.Name) ?? trader?.NormalizedName ?? offer.Trader;
                     sellFor.Add(
                         new ItemSellPrice
                         {
@@ -726,11 +726,7 @@ public static class TarkovDevAPI
                             {
                                 Name = traderName,
                                 NormalizedName = trader?.NormalizedName,
-                                Trader = new Trader
-                                {
-                                    Id = offer.Trader,
-                                    ImageLink = trader?.ImageLink,
-                                },
+                                Trader = new Trader { Id = offer.Trader, ImageLink = trader?.ImageLink },
                             },
                         }
                     );
@@ -820,7 +816,9 @@ public static class TarkovDevAPI
                     JToken? itemsTok = o["items"];
                     if (itemsTok is JArray arr)
                     {
-                        itemIds = arr.Select(t => t.Type == JTokenType.String ? t.Value<string>() : t["id"]?.Value<string>())
+                        itemIds = arr.Select(t =>
+                                t.Type == JTokenType.String ? t.Value<string>() : t["id"]?.Value<string>()
+                            )
                             .Where(s => !string.IsNullOrEmpty(s))
                             .Cast<string>()
                             .ToList();
@@ -834,7 +832,8 @@ public static class TarkovDevAPI
                         {
                             Id = o.Value<string>("id"),
                             Type = type,
-                            Description = ResolveLocale(taskLocale, o.Value<string>("description"))
+                            Description =
+                                ResolveLocale(taskLocale, o.Value<string>("description"))
                                 ?? o.Value<string>("description"),
                             Count = o.Value<int?>("count") ?? 1,
                             FoundInRaid = o.Value<bool?>("foundInRaid") ?? false,
@@ -847,7 +846,10 @@ public static class TarkovDevAPI
             }
 
             string? traderImage = null;
-            if (!string.IsNullOrEmpty(raw.TraderId) && traders.TryGetValue(raw.TraderId, out JsonApiModels.RawTrader? trader))
+            if (
+                !string.IsNullOrEmpty(raw.TraderId)
+                && traders.TryGetValue(raw.TraderId, out JsonApiModels.RawTrader? trader)
+            )
                 traderImage = trader.ImageLink;
 
             projected.Add(
@@ -879,10 +881,9 @@ public static class TarkovDevAPI
         string hideoutJson = await dataTask.ConfigureAwait(false);
         string hideoutLocaleJson = await localeTask.ConfigureAwait(false);
 
-        var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<Dictionary<string, JsonApiModels.RawHideoutStation>>>(
-            hideoutJson,
-            JsonSettings
-        );
+        var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<
+            Dictionary<string, JsonApiModels.RawHideoutStation>
+        >>(hideoutJson, JsonSettings);
         Dictionary<string, string>? localeMap = ParseLocaleMap(hideoutLocaleJson);
         Dictionary<string, JsonApiModels.RawHideoutStation>? rawStations = envelope?.Data;
         if (rawStations == null || rawStations.Count == 0)
@@ -942,11 +943,7 @@ public static class TarkovDevAPI
         {
             string body = await PostGraphqlAsync(
                     SlimMapsQuery,
-                    new
-                    {
-                        lang = locale,
-                        gameMode = gameMode == GameMode.Pve ? "pve" : "regular",
-                    }
+                    new { lang = locale, gameMode = gameMode == GameMode.Pve ? "pve" : "regular" }
                 )
                 .ConfigureAwait(false);
 
@@ -1074,9 +1071,9 @@ public static class TarkovDevAPI
 
     private static Dictionary<string, JsonApiModels.RawTrader> ParseTraderMap(string json)
     {
-        var envelope = JsonConvert.DeserializeObject<
-            JsonApiModels.Envelope<Dictionary<string, JsonApiModels.RawTrader>>
-        >(json, JsonSettings);
+        var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<
+            Dictionary<string, JsonApiModels.RawTrader>
+        >>(json, JsonSettings);
         return envelope?.Data ?? new Dictionary<string, JsonApiModels.RawTrader>();
     }
 

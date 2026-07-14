@@ -106,23 +106,13 @@ internal static class Logger
     internal static void ShowMessage(string message, string? title = null)
     {
         LogInfo(message);
-        MessageBox.Show(
-            message,
-            title ?? RatConfig.FullVersionLabel,
-            MessageBoxButton.OK,
-            MessageBoxImage.Information
-        );
+        MessageBox.Show(message, title ?? RatConfig.FullVersionLabel, MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     internal static void ShowWarning(string message, string? title = null)
     {
         LogWarning(message);
-        MessageBox.Show(
-            message,
-            title ?? RatConfig.FullVersionLabel,
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning
-        );
+        MessageBox.Show(message, title ?? RatConfig.FullVersionLabel, MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     private static string GetUniquePath(string basePath, string fileName, string extension)

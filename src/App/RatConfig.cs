@@ -27,8 +27,7 @@ internal static class RatConfig
         Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion?.Trim() ?? "Unknown";
 
     /// <summary>Compact display form, e.g. <c>v4.0.0</c>.</summary>
-    public static string VersionDisplay =>
-        Version.StartsWith('v') || Version.StartsWith('V') ? Version : "v" + Version;
+    public static string VersionDisplay => Version.StartsWith('v') || Version.StartsWith('V') ? Version : "v" + Version;
 
     /// <summary>Full branded label for logs/dialogs, e.g. <c>RatScanner TarkovTracker Edition v4.0.0</c>.</summary>
     public static string FullVersionLabel => $"{Constants.Branding.ProductName} {VersionDisplay}";
@@ -234,7 +233,10 @@ internal static class RatConfig
         catch (Exception exception)
         {
             // Never rewrite an unsupported config unless its original bytes were preserved first.
-            Logger.LogWarning("Unable to back up the existing configuration; automatic migration was skipped.", exception);
+            Logger.LogWarning(
+                "Unable to back up the existing configuration; automatic migration was skipped.",
+                exception
+            );
             loadPlan = new ConfigLoadPlan(File.Exists(Paths.ConfigFile), false, false, -1, null);
         }
 
@@ -251,7 +253,8 @@ internal static class RatConfig
             }
             else
             {
-                message += "RatScanner could not create a backup, so it will use readable settings for this session "
+                message +=
+                    "RatScanner could not create a backup, so it will use readable settings for this session "
                     + "without rewriting the file. Back up config.cfg manually before saving new settings.";
             }
             Logger.ShowMessage(message);
@@ -535,14 +538,15 @@ internal static class RatConfig
 
     internal static GameDisplayPreferences GetGameDisplayPreferences()
     {
-        Rectangle? bounds = PreferredGameDisplayBoundsWidth > 0 && PreferredGameDisplayBoundsHeight > 0
-            ? new Rectangle(
-                PreferredGameDisplayBoundsX,
-                PreferredGameDisplayBoundsY,
-                PreferredGameDisplayBoundsWidth,
-                PreferredGameDisplayBoundsHeight
-            )
-            : null;
+        Rectangle? bounds =
+            PreferredGameDisplayBoundsWidth > 0 && PreferredGameDisplayBoundsHeight > 0
+                ? new Rectangle(
+                    PreferredGameDisplayBoundsX,
+                    PreferredGameDisplayBoundsY,
+                    PreferredGameDisplayBoundsWidth,
+                    PreferredGameDisplayBoundsHeight
+                )
+                : null;
         return new GameDisplayPreferences(
             PreferredGameDisplayId,
             PreferredGameDisplayDeviceName,
@@ -585,10 +589,7 @@ internal static class RatConfig
         );
     }
 
-    private static bool HasMaterialDisplayChange(
-        GameDisplayConfiguration previous,
-        GameDisplayConfiguration current
-    ) =>
+    private static bool HasMaterialDisplayChange(GameDisplayConfiguration previous, GameDisplayConfiguration current) =>
         previous.ActiveDisplay?.StableId != current.ActiveDisplay?.StableId
         || previous.GameClientBounds != current.GameClientBounds
         || previous.GameViewport != current.GameViewport

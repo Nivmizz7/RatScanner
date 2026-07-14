@@ -112,14 +112,7 @@ public class TarkovDevJsonApiTests
     public void MenuUpdated_tolerates_missing_or_invalid_timestamps(string? updated)
     {
         // MenuVM.Updated must not throw for seed/placeholder items with empty Updated.
-        Assert.False(
-            DateTime.TryParse(
-                updated,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind,
-                out _
-            )
-        );
+        Assert.False(DateTime.TryParse(updated, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _));
     }
 
     [Fact]
@@ -127,12 +120,7 @@ public class TarkovDevJsonApiTests
     {
         const string raw = "2026-07-13T21:58:01.000Z";
         Assert.True(
-            DateTime.TryParse(
-                raw,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind,
-                out DateTime parsed
-            )
+            DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTime parsed)
         );
         Assert.Equal(2026, parsed.ToUniversalTime().Year);
     }
@@ -148,10 +136,7 @@ public class ApiClientUserAgentTests
             new DelegateHandler(request =>
             {
                 userAgent = request.Headers.UserAgent.ToString();
-                return new HttpResponseMessage(HttpStatusCode.OK)
-                {
-                    Content = new StringContent("ok"),
-                };
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("ok") };
             })
         );
 

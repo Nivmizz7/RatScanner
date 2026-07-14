@@ -207,7 +207,10 @@ public sealed class GameDisplayConfigurationTests
         GameDisplayConfiguration customConfiguration = Build([display], preferences: custom);
         GameDisplayConfiguration automaticConfiguration = Build(
             [display],
-            preferences: custom with { UseCustomGameResolution = false }
+            preferences: custom with
+            {
+                UseCustomGameResolution = false,
+            }
         );
 
         Assert.Equal(new Size(1920, 1080), customConfiguration.GameViewport);
@@ -369,17 +372,7 @@ public sealed class GameDisplayConfigurationTests
         double scale = 1,
         bool dpiReliable = true,
         int number = 1
-    ) =>
-        new(
-            id,
-            $@"\\.\DISPLAY{number}",
-            "",
-            new Rectangle(x, y, width, height),
-            primary,
-            scale,
-            dpiReliable,
-            number
-        );
+    ) => new(id, $@"\\.\DISPLAY{number}", "", new Rectangle(x, y, width, height), primary, scale, dpiReliable, number);
 
     private static GameDisplayPreferences Preferences(GameDisplayInfo display) =>
         new(display.StableId, display.DeviceName, display.PhysicalBounds, false, 1920, 1080, false, 1);

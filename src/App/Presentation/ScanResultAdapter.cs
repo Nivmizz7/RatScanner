@@ -78,14 +78,7 @@ internal static class ScanResultAdapter
             traderPrice is null
                 ? null
                 : new TraderViewModel(trader?.Name, trader?.Trader?.ImageLink, traderPrice, traderPrice / slots),
-            RecommendationSelector.Select(
-                fleaPrice,
-                traderPrice,
-                trader?.Name,
-                quests,
-                hideout,
-                acquisition
-            ),
+            RecommendationSelector.Select(fleaPrice, traderPrice, trader?.Name, quests, hideout, acquisition),
             MapRequirement(quests),
             MapRequirement(hideout),
             new AcquisitionViewModel(

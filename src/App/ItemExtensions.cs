@@ -249,8 +249,7 @@ public static class ItemExtensions
         return TarkovDevAPI
             .GetItems()
             .Where(i =>
-                i.Properties is { IsAmmo: true } a
-                && string.Equals(ammo.Caliber, a.Caliber, StringComparison.Ordinal)
+                i.Properties is { IsAmmo: true } a && string.Equals(ammo.Caliber, a.Caliber, StringComparison.Ordinal)
             );
     }
 }

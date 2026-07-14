@@ -28,8 +28,8 @@ internal sealed class WindowsGameDisplayService
     {
         try
         {
-            return Screen.AllScreens
-                .Select((screen, index) => CreateDisplayInfo(screen, index + 1))
+            return Screen
+                .AllScreens.Select((screen, index) => CreateDisplayInfo(screen, index + 1))
                 .OrderBy(display => display.DisplayNumber)
                 .ToArray();
         }
@@ -47,7 +47,14 @@ internal sealed class WindowsGameDisplayService
         try
         {
             DisplayDevice monitor = DisplayDevice.Create();
-            if (NativeMethods.EnumDisplayDevices(screen.DeviceName, 0, ref monitor, NativeMethods.EddGetDeviceInterfaceName))
+            if (
+                NativeMethods.EnumDisplayDevices(
+                    screen.DeviceName,
+                    0,
+                    ref monitor,
+                    NativeMethods.EddGetDeviceInterfaceName
+                )
+            )
             {
                 stableId = FirstNonEmpty(monitor.DeviceID, monitor.DeviceKey, screen.DeviceName);
                 friendlyName = monitor.DeviceString?.Trim() ?? "";
@@ -117,7 +124,11 @@ internal sealed class WindowsGameDisplayService
                             continue;
                         if (!TryGetPhysicalClientBounds(handle, out Rectangle bounds))
                             continue;
-                        if (largestBounds is null || (long)bounds.Width * bounds.Height > (long)largestBounds.Value.Width * largestBounds.Value.Height)
+                        if (
+                            largestBounds is null
+                            || (long)bounds.Width * bounds.Height
+                                > (long)largestBounds.Value.Width * largestBounds.Value.Height
+                        )
                             largestBounds = bounds;
                     }
                     catch (Exception exception)
@@ -139,7 +150,9 @@ internal sealed class WindowsGameDisplayService
 
         NativePoint topLeft = new(client.Left, client.Top);
         NativePoint bottomRight = new(client.Right, client.Bottom);
-        if (!NativeMethods.ClientToScreen(window, ref topLeft) || !NativeMethods.ClientToScreen(window, ref bottomRight))
+        if (
+            !NativeMethods.ClientToScreen(window, ref topLeft) || !NativeMethods.ClientToScreen(window, ref bottomRight)
+        )
             return false;
 
         int width = bottomRight.X - topLeft.X;
@@ -266,18 +279,30 @@ internal static class GameGraphicsSettingsReader
             int? width = root["DisplaySettings"]?["Resolution"]?["Width"]?.ToObject<int>();
             int? height = root["DisplaySettings"]?["Resolution"]?["Height"]?.ToObject<int>();
 
-            if (!(width.HasValue && height.HasValue && GameDisplayValidation.IsValidResolution(width.Value, height.Value)))
+            if (
+                !(
+                    width.HasValue
+                    && height.HasValue
+                    && GameDisplayValidation.IsValidResolution(width.Value, height.Value)
+                )
+            )
             {
                 int? displayIndex = root["DisplaySettings"]?["Display"]?.ToObject<int>();
-                JToken? stored = root["Stored"]?
-                    .Children()
+                JToken? stored = root["Stored"]
+                    ?.Children()
                     .FirstOrDefault(entry => entry["Index"]?.ToObject<int>() == displayIndex);
                 JToken? storedResolution = stored?["WindowResolution"] ?? stored?["FullScreenResolution"];
                 width = storedResolution?["Width"]?.ToObject<int>();
                 height = storedResolution?["Height"]?.ToObject<int>();
             }
 
-            if (!(width.HasValue && height.HasValue && GameDisplayValidation.IsValidResolution(width.Value, height.Value)))
+            if (
+                !(
+                    width.HasValue
+                    && height.HasValue
+                    && GameDisplayValidation.IsValidResolution(width.Value, height.Value)
+                )
+            )
                 return false;
 
             viewport = new Size(width.Value, height.Value);

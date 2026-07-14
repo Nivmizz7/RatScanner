@@ -94,20 +94,21 @@ internal sealed record GameDisplayConfiguration(
     bool UsesCustomDisplayScale
 )
 {
-    internal static GameDisplayConfiguration Empty { get; } = new(
-        Array.Empty<GameDisplayInfo>(),
-        null,
-        null,
-        new Size(1920, 1080),
-        Rectangle.Empty,
-        1,
-        GameDisplaySelectionSource.None,
-        GameDisplayStatusCode.NoDisplays,
-        GameDisplayStatusKind.Error,
-        true,
-        false,
-        false
-    );
+    internal static GameDisplayConfiguration Empty { get; } =
+        new(
+            Array.Empty<GameDisplayInfo>(),
+            null,
+            null,
+            new Size(1920, 1080),
+            Rectangle.Empty,
+            1,
+            GameDisplaySelectionSource.None,
+            GameDisplayStatusCode.NoDisplays,
+            GameDisplayStatusKind.Error,
+            true,
+            false,
+            false
+        );
 
     internal string NotificationKey => $"{StatusCode}:{ActiveDisplay?.StableId}";
 }
@@ -132,8 +133,7 @@ internal static class DisplayCoordinateConverter
         );
     }
 
-    private static double NormalizeScale(double dpiScale) =>
-        double.IsFinite(dpiScale) && dpiScale > 0 ? dpiScale : 1;
+    private static double NormalizeScale(double dpiScale) => double.IsFinite(dpiScale) && dpiScale > 0 ? dpiScale : 1;
 }
 
 internal static class GameDisplayValidation
@@ -166,7 +166,11 @@ internal static class GameDisplaySelectionPolicy
         GameDisplayPreferences preferences
     )
     {
-        GameDisplayInfo? savedDisplay = FindSavedDisplay(displays, preferences, out GameDisplaySelectionSource savedSource);
+        GameDisplayInfo? savedDisplay = FindSavedDisplay(
+            displays,
+            preferences,
+            out GameDisplaySelectionSource savedSource
+        );
         bool savedDisplayUnavailable = preferences.HasSavedDisplay && savedDisplay is null;
 
         if (gameClientBounds is { Width: > 0, Height: > 0 } gameBounds)
@@ -192,7 +196,11 @@ internal static class GameDisplaySelectionPolicy
                     savedDisplayUnavailable,
                     overlaps.Length > 1,
                     savedDisplay is not null
-                        && !string.Equals(savedDisplay.StableId, gameDisplay.StableId, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(
+                            savedDisplay.StableId,
+                            gameDisplay.StableId,
+                            StringComparison.OrdinalIgnoreCase
+                        )
                 );
             }
         }
@@ -248,7 +256,9 @@ internal static class GameDisplaySelectionPolicy
 
         if (preferences.LastPhysicalBounds is { Width: > 0, Height: > 0 } savedBounds)
         {
-            GameDisplayInfo[] boundsMatches = displays.Where(display => display.PhysicalBounds == savedBounds).ToArray();
+            GameDisplayInfo[] boundsMatches = displays
+                .Where(display => display.PhysicalBounds == savedBounds)
+                .ToArray();
             if (boundsMatches.Length == 1)
             {
                 source = GameDisplaySelectionSource.SavedBounds;
@@ -333,8 +343,10 @@ internal static class GameDisplayConfigurationBuilder
     {
         if (gameClientBounds is { Width: > 0, Height: > 0 } gameBounds)
             return gameBounds.Size;
-        if (graphicsViewport is { Width: > 0, Height: > 0 } configuredViewport
-            && GameDisplayValidation.IsValidResolution(configuredViewport.Width, configuredViewport.Height))
+        if (
+            graphicsViewport is { Width: > 0, Height: > 0 } configuredViewport
+            && GameDisplayValidation.IsValidResolution(configuredViewport.Width, configuredViewport.Height)
+        )
             return configuredViewport;
         return display?.PhysicalResolution ?? new Size(1920, 1080);
     }
@@ -359,9 +371,12 @@ internal static class GameDisplayConfigurationBuilder
             return (GameDisplayStatusCode.DpiUnavailable, GameDisplayStatusKind.Warning, true);
         if (selection.Source == GameDisplaySelectionSource.GameWindow)
             return (GameDisplayStatusCode.GameWindowDetected, GameDisplayStatusKind.Success, false);
-        if (selection.Source is GameDisplaySelectionSource.SavedStableId
-            or GameDisplaySelectionSource.SavedDeviceName
-            or GameDisplaySelectionSource.SavedBounds)
+        if (
+            selection.Source
+            is GameDisplaySelectionSource.SavedStableId
+                or GameDisplaySelectionSource.SavedDeviceName
+                or GameDisplaySelectionSource.SavedBounds
+        )
             return (GameDisplayStatusCode.SavedDisplay, GameDisplayStatusKind.Information, false);
         if (selection.Source == GameDisplaySelectionSource.PrimaryFallback)
             return (GameDisplayStatusCode.PrimaryFallback, GameDisplayStatusKind.Information, false);
@@ -381,8 +396,10 @@ internal static class GameDisplayMigration
         GameDisplayInfo? display = automaticConfiguration.ActiveDisplay;
         bool preserveResolution =
             GameDisplayValidation.IsValidResolution(legacyWidth, legacyHeight)
-            && (legacyWidth != automaticConfiguration.GameViewport.Width
-                || legacyHeight != automaticConfiguration.GameViewport.Height);
+            && (
+                legacyWidth != automaticConfiguration.GameViewport.Width
+                || legacyHeight != automaticConfiguration.GameViewport.Height
+            );
         bool preserveScale =
             GameDisplayValidation.IsValidScale(legacyScale)
             && Math.Abs(legacyScale - automaticConfiguration.DisplayScale) > 0.01;

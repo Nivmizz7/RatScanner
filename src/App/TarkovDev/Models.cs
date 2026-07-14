@@ -27,6 +27,7 @@ public sealed class Item
     public string? BaseImageLink { get; set; }
     public int? Avg24HPrice { get; set; }
     public string? BackgroundColor { get; set; }
+
     /// <summary>Raw type tags from JSON (e.g. gun, ammo, mods) — lowercase.</summary>
     public IReadOnlyList<string>? Types { get; set; }
     public ItemProperties? Properties { get; set; }
@@ -48,7 +49,10 @@ public sealed class ItemProperties
 
     public bool IsAmmo =>
         string.Equals(PropertiesType, "ItemPropertiesAmmo", System.StringComparison.OrdinalIgnoreCase)
-        || (!string.IsNullOrEmpty(Caliber) && PropertiesType?.Contains("Ammo", System.StringComparison.OrdinalIgnoreCase) == true);
+        || (
+            !string.IsNullOrEmpty(Caliber)
+            && PropertiesType?.Contains("Ammo", System.StringComparison.OrdinalIgnoreCase) == true
+        );
 }
 
 public sealed class ItemSellPrice
@@ -115,6 +119,7 @@ public sealed class RequirementItem
     public string? Id { get; set; }
     public int Count { get; set; }
     public string? ItemId { get; set; }
+
     /// <summary>Whether hideout upgrade requires FIR — used later for keep/sell advice.</summary>
     public bool FoundInRaid { get; set; }
 }
