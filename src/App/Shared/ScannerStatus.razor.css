@@ -25,9 +25,9 @@
 }
 
 .scanner-status-control.expanded {
-    min-width: 84px;
-    height: 42px;
-    padding: 0 12px 0 10px;
+    min-width: 78px;
+    height: 36px;
+    padding: 0 11px 0 9px;
     border-radius: 999px;
 }
 
