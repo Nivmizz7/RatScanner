@@ -238,8 +238,13 @@ public class TarkovTrackerDB
         {
             // Drop the cached token so the next refresh re-validates instead of reusing a
             // token the server just rejected (which would otherwise repeat the 401).
+            // Only mutate when this configuration is still current so a concurrent token
+            // change is not clobbered by a stale 401 from an older request.
             lock (_stateLock)
-                _token = null;
+            {
+                if (IsCurrentLocked(configuration))
+                    _token = null;
+            }
             Logger.LogWarning("TarkovTracker rejected a progression request; existing data was retained.", e);
         }
         catch (Exception e)

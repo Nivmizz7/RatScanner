@@ -45,12 +45,12 @@ internal static class ScanResultAdapter
         bool manual = scan is DefaultItemScan;
         float? confidence = manual ? null : Math.Clamp(scan.Confidence, 0, 1);
         string confidenceLabel = manual
-            ? "Manual selection"
+            ? PresentationText.T("RecognitionManual", "Manual selection")
             : confidence switch
             {
-                >= .9f => "High",
-                >= .7f => "Medium",
-                _ => "Low",
+                >= .9f => PresentationText.T("RecognitionHigh", "High"),
+                >= .7f => PresentationText.T("RecognitionMedium", "Medium"),
+                _ => PresentationText.T("RecognitionLow", "Low"),
             };
 
         DateTimeOffset? updatedAt = DateTimeOffset.TryParse(item.Updated, out DateTimeOffset updated) ? updated : null;
@@ -74,7 +74,12 @@ internal static class ScanResultAdapter
                 item.Height
             ),
             new RecognitionViewModel(confidence, confidenceLabel, manual),
-            new PricingViewModel(fleaPrice, fleaPrice / slots, "Tarkov.dev", updatedAt),
+            new PricingViewModel(
+                fleaPrice,
+                fleaPrice / slots,
+                PresentationText.T("PriceSourceTarkovDev", "Tarkov.dev"),
+                updatedAt
+            ),
             traderPrice is null
                 ? null
                 : new TraderViewModel(trader?.Name, trader?.Trader?.ImageLink, traderPrice, traderPrice / slots),

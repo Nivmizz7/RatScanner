@@ -71,6 +71,8 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         LocalizationService localizationService = new();
         serviceCollection.AddSingleton(localizationService);
+        // Presentation helpers build user-visible strings outside Razor; share the same catalog.
+        Presentation.PresentationText.Localizer = localizationService;
 
         serviceCollection.AddSingleton<SettingsVM>(services => new SettingsVM(
             services.GetRequiredService<LocalizationService>()

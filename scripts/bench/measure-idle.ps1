@@ -42,21 +42,25 @@ function Get-ProcessTreeSnapshot {
         Get-Process -Id $id -ErrorAction SilentlyContinue
     }
 
-    $cpuMilliseconds = (
-        $processes
-        | ForEach-Object {
-            # A process in the tree can exit between enumeration and property access.
-            try { $_.TotalProcessorTime.TotalMilliseconds }
-            catch { 0 }
-        }
-        | Measure-Object -Sum
-    ).Sum
+    $cpuMilliseconds = 0.0
+    $privateBytes = [long]0
+    $workingSetBytes = [long]0
+    $processCount = 0
+
+    foreach ($process in $processes) {
+        if ($null -eq $process) { continue }
+        $processCount++
+        # A process in the tree can exit between enumeration and property access.
+        try { $cpuMilliseconds += [double]$process.TotalProcessorTime.TotalMilliseconds } catch { }
+        try { $privateBytes += [long]$process.PrivateMemorySize64 } catch { }
+        try { $workingSetBytes += [long]$process.WorkingSet64 } catch { }
+    }
 
     return [pscustomobject]@{
-        ProcessCount = @($processes).Count
-        CpuMilliseconds = [double]$cpuMilliseconds
-        PrivateBytes = [long](($processes | Measure-Object -Property PrivateMemorySize64 -Sum).Sum)
-        WorkingSetBytes = [long](($processes | Measure-Object -Property WorkingSet64 -Sum).Sum)
+        ProcessCount = $processCount
+        CpuMilliseconds = $cpuMilliseconds
+        PrivateBytes = $privateBytes
+        WorkingSetBytes = $workingSetBytes
     }
 }
 
@@ -77,6 +81,9 @@ if ([string]::IsNullOrWhiteSpace($Executable)) {
 
 $resolvedExecutable = (Resolve-Path -LiteralPath $Executable).Path
 $root = Start-Process -FilePath $resolvedExecutable -WorkingDirectory (Split-Path $resolvedExecutable) -PassThru
+# Capture a stable identity before sampling so cleanup never targets a recycled PID.
+$rootStartTime = $null
+try { $rootStartTime = $root.StartTime } catch { $rootStartTime = $null }
 
 try {
     Start-Sleep -Seconds $WarmupSeconds
@@ -90,6 +97,9 @@ try {
 
     for ($i = 0; $i -lt $SampleCount; $i++) {
         Start-Sleep -Milliseconds $SampleIntervalMilliseconds
+        if ($root.HasExited) {
+            throw "RatScanner exited during benchmark sampling with code $($root.ExitCode)."
+        }
         $now = [DateTimeOffset]::UtcNow
         $current = Get-ProcessTreeSnapshot -RootProcessId $root.Id
         $elapsedMilliseconds = ($now - $previousAt).TotalMilliseconds
@@ -153,19 +163,33 @@ try {
     Write-Host "Raw benchmark: $outputPath"
 }
 finally {
-    $treeIds = Get-ProcessTreeIds -RootProcessId $root.Id
-    if (-not $root.HasExited) {
-        [void]$root.CloseMainWindow()
-        if (-not $root.WaitForExit(5000)) {
-            Stop-Process -Id $root.Id -Force -ErrorAction SilentlyContinue
+    $rootStillOurs = $false
+    if ($null -ne $root) {
+        try {
+            $live = Get-Process -Id $root.Id -ErrorAction SilentlyContinue
+            if ($null -ne $live -and ($null -eq $rootStartTime -or $live.StartTime -eq $rootStartTime)) {
+                $rootStillOurs = $true
+            }
+        } catch {
+            $rootStillOurs = $false
         }
     }
 
-    # WebView2 child processes can outlive their WPF parent. Only stop processes
-    # captured from this benchmark's tree so unrelated WebView sessions are untouched.
-    foreach ($processId in $treeIds) {
-        if ($processId -ne $root.Id) {
-            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+    if ($rootStillOurs) {
+        $treeIds = Get-ProcessTreeIds -RootProcessId $root.Id
+        if (-not $root.HasExited) {
+            [void]$root.CloseMainWindow()
+            if (-not $root.WaitForExit(5000)) {
+                Stop-Process -Id $root.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        # WebView2 child processes can outlive their WPF parent. Only stop processes
+        # captured from this benchmark's tree so unrelated WebView sessions are untouched.
+        foreach ($processId in $treeIds) {
+            if ($processId -ne $root.Id) {
+                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 }

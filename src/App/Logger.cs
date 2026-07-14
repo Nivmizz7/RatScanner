@@ -262,19 +262,27 @@ internal static class Logger
         url += "&labels=" + WebUtility.UrlEncode(labels);
 
         // Common practical ceiling for opening URLs in Windows shell / browsers.
+        // Shrink the body until the fully encoded URL fits (or the body is essentially empty).
         if (url.Length > 2000)
         {
-            AppendToLog("[Warning] GitHub issue URL exceeds safe length; truncated body retry.");
-            body = LimitLength(body, 1500);
-            url =
-                Constants.Links.GitHub
-                + "/issues/new"
-                + "?body="
-                + WebUtility.UrlEncode(body)
-                + "&title="
-                + WebUtility.UrlEncode(title)
-                + "&labels="
-                + WebUtility.UrlEncode(labels);
+            AppendToLog("[Warning] GitHub issue URL exceeds safe length; truncating body until it fits.");
+            int bodyLimit = Math.Min(1500, body.Length);
+            while (bodyLimit > 0)
+            {
+                body = LimitLength(body, bodyLimit);
+                url =
+                    Constants.Links.GitHub
+                    + "/issues/new"
+                    + "?body="
+                    + WebUtility.UrlEncode(body)
+                    + "&title="
+                    + WebUtility.UrlEncode(title)
+                    + "&labels="
+                    + WebUtility.UrlEncode(labels);
+                if (url.Length <= 2000)
+                    break;
+                bodyLimit = Math.Max(0, bodyLimit - 250);
+            }
         }
 
         OpenURL(url);

@@ -38,17 +38,34 @@ if errorlevel 1 (
 )
 del /f /q "publish\Data.zip"
 
-:: If archive nested under Data/, flatten is not needed (we already extract into publish\Data).
-:: Validate expected files exist.
+:: If archive nested under Data/, flatten then validate the same package contract as CI.
 if not exist "publish\Data\maps.json" (
 	if exist "publish\Data\Data\maps.json" (
 		echo Flattening nested Data\Data layout...
 		robocopy "publish\Data\Data" "publish\Data" /E /MOVE >nul
+		rem robocopy: 0-7 = success/partial; 8+ = failure. Use errorlevel form so block parse-time expansion is safe.
+		if errorlevel 8 (
+			echo Failed to flatten nested Data layout.
+			exit /b 1
+		)
 		if exist "publish\Data\Data" rmdir /s /q "publish\Data\Data"
 	)
 )
 if not exist "publish\Data\maps.json" (
-	echo publish\Data looks incomplete after extract.
+	echo publish\Data looks incomplete after extract: missing maps.json.
+	exit /b 1
+)
+if not exist "publish\Data\unknown.png" (
+	echo publish\Data looks incomplete after extract: missing unknown.png.
+	exit /b 1
+)
+if not exist "publish\Data\traineddata\eng.traineddata" (
+	echo publish\Data looks incomplete after extract: missing traineddata\eng.traineddata.
+	exit /b 1
+)
+dir /b "publish\Data\icons\*.png" >nul 2>&1
+if errorlevel 1 (
+	echo publish\Data looks incomplete after extract: no item icons found.
 	exit /b 1
 )
 
@@ -57,9 +74,21 @@ where 7z >nul 2>&1
 if errorlevel 1 (
 	echo 7-Zip not found; packing with Compress-Archive instead...
 	powershell -NoProfile -Command "Compress-Archive -Path '.\publish\*' -DestinationPath 'RatScanner.zip' -Force"
+	if errorlevel 1 (
+		echo Failed to create RatScanner.zip.
+		exit /b 1
+	)
 ) else (
 	echo Packing publish folder into RatScanner.zip...
 	7z a -r RatScanner.zip ./publish/*
+	if errorlevel 1 (
+		echo Failed to create RatScanner.zip.
+		exit /b 1
+	)
+)
+if not exist "RatScanner.zip" (
+	echo Failed to create RatScanner.zip.
+	exit /b 1
 )
 
 :: Finalize publish

@@ -39,8 +39,14 @@ internal static class RecommendationSelector
             string craftHint = CraftHint(acquisition, quests.HasFirNeed);
             return new(
                 RecommendationType.KeepForQuest,
-                "Keep for quest",
-                $"{quests.Total} still required for active quests.{firNote}{craftHint}",
+                PresentationText.T("RecKeepForQuest", "Keep for quest"),
+                PresentationText.F(
+                    "RecQuestRequired",
+                    "{0} still required for active quests.{1}{2}",
+                    quests.Total,
+                    firNote,
+                    craftHint
+                ),
                 null,
                 null
             );
@@ -52,8 +58,14 @@ internal static class RecommendationSelector
             string craftHint = CraftHint(acquisition, hideout.HasFirNeed);
             return new(
                 RecommendationType.KeepForHideout,
-                "Keep for hideout",
-                $"{hideout.Total} still required for hideout upgrades.{firNote}{craftHint}",
+                PresentationText.T("RecKeepForHideout", "Keep for hideout"),
+                PresentationText.F(
+                    "RecHideoutRequired",
+                    "{0} still required for hideout upgrades.{1}{2}",
+                    hideout.Total,
+                    firNote,
+                    craftHint
+                ),
                 null,
                 null
             );
@@ -64,8 +76,8 @@ internal static class RecommendationSelector
             string acquire = AcquireFallback(acquisition);
             return new(
                 RecommendationType.PriceUnavailable,
-                "Price unavailable",
-                "No current market or trader value is available." + acquire,
+                PresentationText.T("RecPriceUnavailable", "Price unavailable"),
+                PresentationText.T("RecNoMarketValue", "No current market or trader value is available.") + acquire,
                 null,
                 null
             );
@@ -75,18 +87,32 @@ internal static class RecommendationSelector
         {
             int? difference = trader is int traderValue ? fleaValue - traderValue : null;
             int? percent = trader is > 0 ? (int)Math.Round((double)difference!.Value / trader.Value * 100) : null;
+            string bestTrader = traderName ?? PresentationText.T("RecBestTrader", "the best trader");
             string explanation = difference is null
-                ? "No comparable trader offer is available."
-                : $"{PriceFormatter.Format(difference)} more than {traderName ?? "the best trader"}.";
+                ? PresentationText.T("RecNoTraderOffer", "No comparable trader offer is available.")
+                : PresentationText.F(
+                    "RecMoreThanTrader",
+                    "{0} more than {1}.",
+                    PriceFormatter.Format(difference),
+                    bestTrader
+                );
             explanation += AcquireFallback(acquisition);
-            return new(RecommendationType.SellOnFlea, "Sell on Flea Market", explanation, difference, percent);
+            return new(
+                RecommendationType.SellOnFlea,
+                PresentationText.T("RecSellOnFleaMarket", "Sell on Flea Market"),
+                explanation,
+                difference,
+                percent
+            );
         }
 
+        string sellTraderName = traderName ?? PresentationText.T("RecBestTraderShort", "best trader");
         string sellTrader =
-            "The trader offer meets or exceeds the current market value." + AcquireFallback(acquisition);
+            PresentationText.T("RecTraderMeetsOrExceeds", "The trader offer meets or exceeds the current market value.")
+            + AcquireFallback(acquisition);
         return new(
             RecommendationType.SellToTrader,
-            $"Sell to {traderName ?? "best trader"}",
+            PresentationText.F("RecSellToNamed", "Sell to {0}", sellTraderName),
             sellTrader,
             trader - flea,
             flea is > 0 ? (int)Math.Round((double)(trader!.Value - flea.Value) / flea.Value * 100) : null
@@ -96,10 +122,18 @@ internal static class RecommendationSelector
     private static string FirNote(RequirementBreakdown breakdown)
     {
         if (breakdown.HasFirNeed && breakdown.HasNonFirNeed)
-            return $" {breakdown.FoundInRaid} must be found in raid; {breakdown.NonFoundInRaid} can be non-FIR.";
+            return PresentationText.F(
+                "RecFirMixed",
+                " {0} must be found in raid; {1} can be non-FIR.",
+                breakdown.FoundInRaid,
+                breakdown.NonFoundInRaid
+            );
         if (breakdown.HasFirNeed)
-            return $" Requires found in raid (confirm FIR on the item — visual FIR detection is not available yet).";
-        return " Non-FIR is OK for these needs.";
+            return PresentationText.T(
+                "RecFirRequired",
+                " Requires found in raid (confirm FIR on the item — visual FIR detection is not available yet)."
+            );
+        return PresentationText.T("RecNonFirOk", " Non-FIR is OK for these needs.");
     }
 
     private static string CraftHint(AcquisitionInfo acquisition, bool needsFir)
@@ -108,8 +142,8 @@ internal static class RecommendationSelector
             return string.Empty;
         // Crafted items are always FIR in EFT — especially useful when quest/hideout needs FIR.
         return needsFir
-            ? " Craftable in hideout (crafted items are always found in raid)."
-            : " Also craftable in hideout.";
+            ? PresentationText.T("RecCraftableFir", " Craftable in hideout (crafted items are always found in raid).")
+            : PresentationText.T("RecAlsoCraftable", " Also craftable in hideout.");
     }
 
     private static string AcquireFallback(AcquisitionInfo acquisition)
@@ -119,12 +153,25 @@ internal static class RecommendationSelector
         StringBuilder sb = new(" ");
         if (acquisition.CanCraft && acquisition.CanBarter)
             sb.Append(
-                $"Can be crafted ({acquisition.CraftRecipeCount}) or bartered for ({acquisition.BarterOfferCount})."
+                PresentationText.F(
+                    "RecCraftOrBarter",
+                    "Can be crafted ({0}) or bartered for ({1}).",
+                    acquisition.CraftRecipeCount,
+                    acquisition.BarterOfferCount
+                )
             );
         else if (acquisition.CanCraft)
-            sb.Append($"Can be crafted in hideout ({acquisition.CraftRecipeCount} recipe(s); output is always FIR).");
+            sb.Append(
+                PresentationText.F(
+                    "RecCraftOnly",
+                    "Can be crafted in hideout ({0} recipe(s); output is always FIR).",
+                    acquisition.CraftRecipeCount
+                )
+            );
         else
-            sb.Append($"Can be bartered for ({acquisition.BarterOfferCount} offer(s)).");
+            sb.Append(
+                PresentationText.F("RecBarterOnly", "Can be bartered for ({0} offer(s)).", acquisition.BarterOfferCount)
+            );
         return sb.ToString();
     }
 }
@@ -132,7 +179,9 @@ internal static class RecommendationSelector
 internal static class PriceFormatter
 {
     internal static string Format(int? value) =>
-        value is > 0 ? string.Format(CultureInfo.CurrentCulture, "{0:N0} ₽", value) : "Unavailable";
+        value is > 0
+            ? string.Format(CultureInfo.CurrentCulture, "{0:N0} ₽", value)
+            : PresentationText.T("PriceUnavailable", "Unavailable");
 }
 
 internal static class FreshnessFormatter
@@ -143,13 +192,13 @@ internal static class FreshnessFormatter
             return string.Empty;
         TimeSpan age = (now ?? DateTimeOffset.UtcNow) - updatedAt.Value.ToUniversalTime();
         if (age.TotalMinutes < 1)
-            return "Updated just now";
+            return PresentationText.T("UpdatedJustNow", "Updated just now");
         if (age.TotalHours < 1)
-            return $"Updated {(int)age.TotalMinutes} min ago";
+            return PresentationText.F("UpdatedMinutesAgo", "Updated {0} min ago", (int)age.TotalMinutes);
         if (age.TotalDays < 1)
-            return $"Updated {(int)age.TotalHours} hr ago";
+            return PresentationText.F("UpdatedHoursAgo", "Updated {0} h ago", (int)age.TotalHours);
         int days = Math.Max(1, (int)age.TotalDays);
-        return $"Updated {days} {(days == 1 ? "day" : "days")} ago";
+        return PresentationText.F("UpdatedDaysAgo", "Updated {0} d ago", days);
     }
 }
 
@@ -159,7 +208,7 @@ internal static class ItemTypeLabel
     internal static string Format(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
-            return "Item";
+            return PresentationText.T("ItemTypeGeneric", "Item");
 
         // JSON types are lowercase/camelCase; tolerate accidental PascalCase.
         string key = raw.Trim();
@@ -167,32 +216,32 @@ internal static class ItemTypeLabel
 
         return folded switch
         {
-            "ammo" => "Ammunition",
-            "ammoBox" => "Ammunition container",
-            "armor" => "Armor",
-            "armorPlate" => "Armor plate",
-            "backpack" => "Backpack",
-            "barter" => "Barter item",
-            "container" => "Container",
-            "glasses" => "Eyewear",
-            "grenade" => "Grenade",
-            "gun" => "Weapon",
-            "headphones" => "Headset",
-            "helmet" => "Helmet",
-            "injectors" => "Injector",
-            "keys" => "Key",
-            "markedOnly" => "Marked only",
-            "meds" => "Medical item",
-            "mods" => "Modification",
-            "noFlea" => "Not flea-listed",
-            "pistolGrip" => "Pistol grip",
-            "preset" => "Weapon preset",
-            "provisions" => "Provision",
-            "rig" => "Tactical rig",
-            "suppressor" => "Suppressor",
-            "wearable" => "Wearable",
-            "poster" => "Poster",
-            "specialSlot" => "Special slot",
+            "ammo" => PresentationText.T("ItemTypeAmmo", "Ammunition"),
+            "ammoBox" => PresentationText.T("ItemTypeAmmoBox", "Ammunition container"),
+            "armor" => PresentationText.T("ItemTypeArmor", "Armor"),
+            "armorPlate" => PresentationText.T("ItemTypeArmorPlate", "Armor plate"),
+            "backpack" => PresentationText.T("ItemTypeBackpack", "Backpack"),
+            "barter" => PresentationText.T("ItemTypeBarter", "Barter item"),
+            "container" => PresentationText.T("ItemTypeContainer", "Container"),
+            "glasses" => PresentationText.T("ItemTypeGlasses", "Eyewear"),
+            "grenade" => PresentationText.T("ItemTypeGrenade", "Grenade"),
+            "gun" => PresentationText.T("ItemTypeGun", "Weapon"),
+            "headphones" => PresentationText.T("ItemTypeHeadphones", "Headset"),
+            "helmet" => PresentationText.T("ItemTypeHelmet", "Helmet"),
+            "injectors" => PresentationText.T("ItemTypeInjectors", "Injector"),
+            "keys" => PresentationText.T("ItemTypeKeys", "Key"),
+            "markedOnly" => PresentationText.T("ItemTypeMarkedOnly", "Marked only"),
+            "meds" => PresentationText.T("ItemTypeMeds", "Medical item"),
+            "mods" => PresentationText.T("ItemTypeMods", "Modification"),
+            "noFlea" => PresentationText.T("ItemTypeNoFlea", "Not flea-listed"),
+            "pistolGrip" => PresentationText.T("ItemTypePistolGrip", "Pistol grip"),
+            "preset" => PresentationText.T("ItemTypePreset", "Weapon preset"),
+            "provisions" => PresentationText.T("ItemTypeProvisions", "Provision"),
+            "rig" => PresentationText.T("ItemTypeRig", "Tactical rig"),
+            "suppressor" => PresentationText.T("ItemTypeSuppressor", "Suppressor"),
+            "wearable" => PresentationText.T("ItemTypeWearable", "Wearable"),
+            "poster" => PresentationText.T("ItemTypePoster", "Poster"),
+            "specialSlot" => PresentationText.T("ItemTypeSpecialSlot", "Special slot"),
             _ => SplitCamelCase(key),
         };
     }

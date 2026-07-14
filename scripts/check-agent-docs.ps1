@@ -62,7 +62,7 @@ function Assert-PathExists {
     )
 
     $full = Join-Path $RepoRoot $RelativePath
-    if (-not (Test-Path -LiteralPath $full)) {
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) {
         Add-Failure ($Reason + " - missing: " + $RelativePath)
         return $false
     }

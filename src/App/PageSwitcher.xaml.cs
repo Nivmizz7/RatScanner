@@ -210,10 +210,7 @@ public partial class PageSwitcher : Window
         _notifyIcon.MouseClick += (sender, e) =>
         {
             if (e.Button == System.Windows.Forms.MouseButtons.Left)
-            {
-                Show();
-                WindowState = WindowState.Normal;
-            }
+                RestoreWindow();
         };
     }
 

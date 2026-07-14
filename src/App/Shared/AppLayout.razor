@@ -1,3 +1,4 @@
+@using System.Collections.Generic
 @inherits LayoutComponentBase
 @layout MainLayout
 @inject MenuVM MenuVM
@@ -53,7 +54,10 @@
     {
         <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawerAsync"></button>
     }
-    <main class="main-content">@Body</main>
+    @* inert + aria-hidden keep Tab out of main content while the drawer is open. *@
+    <main class="main-content"
+          aria-hidden="@(_drawerOpen ? "true" : null)"
+          @attributes="_mainAttributes">@Body</main>
 </div>
 
 @code {
@@ -61,6 +65,11 @@
     private ElementReference _sidebar;
     private ElementReference _toggleButton;
     private bool _subscribed;
+
+    private Dictionary<string, object> _mainAttributes =>
+        _drawerOpen
+            ? new Dictionary<string, object> { ["inert"] = true }
+            : new Dictionary<string, object>();
 
     protected override void OnInitialized()
     {

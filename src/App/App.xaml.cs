@@ -39,7 +39,9 @@ public partial class App : Application, ISingleInstance
         SetupExceptionHandling();
 #endif
 
-        if (!IsWebView2RuntimeAvailable() && !InstallWebView2Runtime())
+        // Install off the WPF dispatcher so a stalled download/installer cannot freeze the UI pump.
+        // Still block startup (UI cannot run without WebView2), but do the work on a worker thread.
+        if (!IsWebView2RuntimeAvailable() && !Task.Run(InstallWebView2Runtime).GetAwaiter().GetResult())
         {
             MessageBox.Show(
                 "RatScanner requires the Microsoft Edge WebView2 Runtime. Automatic installation failed. "
@@ -195,8 +197,24 @@ public partial class App : Application, ISingleInstance
     {
         try
         {
-            RatScannerMain.DisposeInstance();
-            BlazorUI.DisposeInstance();
+            // Isolate each disposal so one failure cannot skip WebView/service cleanup.
+            try
+            {
+                RatScannerMain.DisposeInstance();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Failed to dispose RatScannerMain during exit.", ex);
+            }
+
+            try
+            {
+                BlazorUI.DisposeInstance();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Failed to dispose BlazorUI during exit.", ex);
+            }
         }
         finally
         {

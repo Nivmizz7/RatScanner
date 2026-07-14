@@ -62,7 +62,7 @@
 	<ItemGroup>
 		<None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
 		<!-- UI locale catalogs: required at runtime and for packaging/localization tests. -->
-		<None Include="i18n\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<None Update="i18n\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 		<!-- ELv2: anyone who receives a copy must also receive the license terms. -->
 		<None Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>

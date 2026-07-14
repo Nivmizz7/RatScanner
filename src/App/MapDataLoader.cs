@@ -11,6 +11,8 @@ public static class MapDataLoader
 {
     private static Dictionary<string, InteractiveMapData.Map>? _mapsByIdCache;
     private static DateTime _mapsByIdCacheWriteTimeUtc;
+    private static List<InteractiveMapData>? _parsedMapsDataCache;
+    private static DateTime _parsedMapsDataWriteTimeUtc;
 
     /// <summary>
     /// Loads and caches the maps.json data
@@ -34,14 +36,28 @@ public static class MapDataLoader
             {
                 // LogWarning: map overlay data is optional. LogError would call Environment.Exit.
                 Logger.LogWarning($"maps.json not found at {mapsJsonPath}; interactive maps will be unavailable.");
+                _parsedMapsDataCache = new();
+                _parsedMapsDataWriteTimeUtc = currentWriteTimeUtc;
                 _mapsByIdCache = new();
                 _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
                 return _mapsByIdCache;
             }
 
-            string json = File.ReadAllText(mapsJsonPath);
-            var mapsData =
-                JsonConvert.DeserializeObject<List<InteractiveMapData>>(json) ?? new List<InteractiveMapData>();
+            // Keep the parsed JSON independently of the id-matching cache so retries while the
+            // tarkov.dev catalog is still empty do not re-read/re-parse maps.json on every call.
+            List<InteractiveMapData> mapsData;
+            if (_parsedMapsDataCache != null && currentWriteTimeUtc == _parsedMapsDataWriteTimeUtc)
+            {
+                mapsData = _parsedMapsDataCache;
+            }
+            else
+            {
+                string json = File.ReadAllText(mapsJsonPath);
+                mapsData =
+                    JsonConvert.DeserializeObject<List<InteractiveMapData>>(json) ?? new List<InteractiveMapData>();
+                _parsedMapsDataCache = mapsData;
+                _parsedMapsDataWriteTimeUtc = currentWriteTimeUtc;
+            }
 
             // Build the map ID cache. Empty catalog = not ready yet; keep retryable until loaded.
             if (!TryBuildMapIdCache(mapsData, out Dictionary<string, InteractiveMapData.Map> cache))
@@ -56,6 +72,8 @@ public static class MapDataLoader
         {
             // LogWarning: corrupt or unreadable map data must not terminate the process.
             Logger.LogWarning("Failed to load maps.json; interactive maps will be unavailable.", e);
+            _parsedMapsDataCache = new();
+            _parsedMapsDataWriteTimeUtc = currentWriteTimeUtc;
             _mapsByIdCache = new();
             _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
             return _mapsByIdCache;

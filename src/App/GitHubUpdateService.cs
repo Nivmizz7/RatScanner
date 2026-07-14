@@ -284,15 +284,6 @@ internal static class GitHubUpdateService
                 return $false
             }
 
-            # Give the main process a moment to call Environment.Exit.
-            Start-Sleep -Milliseconds 500
-            if (-not (Wait-ProcessExit -ProcessId $appPid)) {
-                throw "RatScanner did not exit before the update timeout."
-            }
-
-            # Extra wait: single-file publish can hold locks briefly.
-            Start-Sleep -Seconds 1
-
             function Copy-PayloadEntry {
                 param(
                     [Parameter(Mandatory = $true)]
@@ -314,28 +305,52 @@ internal static class GitHubUpdateService
                 }
             }
 
-            # Copy payload over install, excluding user config files if present in zip.
-            Get-ChildItem -LiteralPath $payloadDir -Force | ForEach-Object {
-                $name = $_.Name
-                $dest = Join-Path $installDir $name
-                if ($preserve -contains $name) {
-                    # Only copy config from package if the user does not already have one.
-                    if (-not (Test-Path -LiteralPath $dest)) {
-                        Copy-PayloadEntry -Entry $_ -Destination $dest
-                    }
-                    return
+            function Remove-StagingRoot {
+                param([string]$Path)
+                if ([string]::IsNullOrWhiteSpace($Path)) { return }
+                Start-Sleep -Seconds 1
+                try { Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+            }
+
+            try {
+                # Give the main process a moment to call Environment.Exit.
+                Start-Sleep -Milliseconds 500
+                if (-not (Wait-ProcessExit -ProcessId $appPid)) {
+                    throw "RatScanner did not exit before the update timeout."
                 }
-                Copy-PayloadEntry -Entry $_ -Destination $dest
-            }
 
-            $exe = Join-Path $installDir 'RatScanner.exe'
-            if (Test-Path -LiteralPath $exe) {
-                Start-Process -FilePath $exe -WorkingDirectory $installDir
-            }
+                # Extra wait: single-file publish can hold locks briefly.
+                Start-Sleep -Seconds 1
 
-            # Best-effort cleanup of staging (this script lives there).
-            Start-Sleep -Seconds 1
-            try { Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+                # Copy payload over install, excluding user config files if present in zip.
+                Get-ChildItem -LiteralPath $payloadDir -Force | ForEach-Object {
+                    $name = $_.Name
+                    $dest = Join-Path $installDir $name
+                    if ($preserve -contains $name) {
+                        # Only copy config from package if the user does not already have one.
+                        if (-not (Test-Path -LiteralPath $dest)) {
+                            Copy-PayloadEntry -Entry $_ -Destination $dest
+                        }
+                        return
+                    }
+                    Copy-PayloadEntry -Entry $_ -Destination $dest
+                }
+
+                $exe = Join-Path $installDir 'RatScanner.exe'
+                if (Test-Path -LiteralPath $exe) {
+                    Start-Process -FilePath $exe -WorkingDirectory $installDir
+                }
+            } catch {
+                # Best-effort restart even after a partial copy so the user is not left with a stopped app.
+                $exe = Join-Path $installDir 'RatScanner.exe'
+                if (Test-Path -LiteralPath $exe) {
+                    try { Start-Process -FilePath $exe -WorkingDirectory $installDir } catch {}
+                }
+                throw
+            } finally {
+                # Staging always lives outside the install tree; remove it whether apply succeeded or failed.
+                Remove-StagingRoot -Path $stagingRoot
+            }
             """
         );
 
