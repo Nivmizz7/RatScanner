@@ -1,126 +1,125 @@
-# RatScanner Agent Guide
+# RatScanner — Agent Control Plane
 
-## Project Overview
+**Authority:** implementation and project files override this document when they disagree. Keep this file and `docs/agent-context/` synchronized when architecture, commands, packages, workflows, or behavior change.
 
-RatScanner is a Windows-only .NET WPF application for Escape from Tarkov that scans items in-game via screenshots and image processing, then displays pricing and item data from the [tarkov.dev](https://tarkov.dev) API.
+## Product (one paragraph)
 
-- **Framework:** .NET 10.0 WPF (`net10.0-windows10.0.22621.0`)
-- **UI:** MudBlazor via WebView, WPF host
-- **Key deps:** in-repo scan engine (vendored RatEye sources), RatStash (item database NuGet), Tesseract (OCR), Newtonsoft.Json
-- **Platform:** Windows only — cannot be built or run in WSL/Linux
+Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed an in-repo scan engine (vendored RatEye sources under `src/ScanEngine/`). Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. This is the **TarkovTracker Edition** fork (`tarkovtracker-org/RatScanner`), semver **4.x** (`v4.x.x · TT`).
 
-## Repository Layout
+**Stack snapshot:** `net10.0-windows10.0.22621.0` · WPF + WinForms · Blazor WebView · MudBlazor · RatStash · OpenCvSharp · Tesseract · Newtonsoft.Json. Package versions live in `.csproj` files — do not copy versions into docs.
 
-One product repo; two main projects under `src/` (not nested product names at the root):
+## Non-negotiable constraints
 
-```
-src/
-  App/           # WPF + MudBlazor application (assembly RatScanner)
-  ScanEngine/    # Image processing / OCR (assembly still named RatEye)
-tests/
-  RatScanner.Tests/
-scripts/
-  dev.ps1, setup-data.ps1, Expand-Zip.ps1, ...
-```
+1. **Windows x64 only** — the OpenCvSharp native runtime is x64-only. Do not design, build, test, or document x86, Linux/WSL, or macOS runs.
+2. **Scan engine is in-tree** — edit `src/ScanEngine/`. Never re-add a NuGet `PackageReference` for `RatEye`. App references it via `ProjectReference`. Namespaces remain `RatEye`; assembly remains RatEye.
+3. **Bulk catalog via json.tarkov.dev** — use `TarkovDevAPI` (rate limit, dedup, offline cache, backoff). Do not bypass with ad-hoc HTTP for items/tasks/hideout/crafts/barters. Do not reintroduce a GraphQL schema generator for bulk catalog. Slim maps GraphQL is intentional; keep maps off cold-start critical path.
+4. **Product version only in** `src/App/RatScanner.csproj` `<Version>`. Independent 4.x line; do not mirror upstream 3.x tags.
+5. **No secrets in git** — tokens live in user `config.cfg` (DPAPI-protected fields where used).
+6. **Do not perform dependency upgrades** unless the task explicitly asks for them.
+7. **Code is source of truth** — project files, scripts, and behavior beat stale prose.
 
-| Path | Role |
-|------|------|
-| `src/App/` | Main application (WPF / MudBlazor) — `RatScanner.csproj` |
-| `src/ScanEngine/` | Vendored scan engine (historical RatEye) — `RatEye.csproj`, namespaces still `RatEye` |
-| `tests/RatScanner.Tests/` | Unit tests |
-| `RatScanner.sln` | Solution (App + ScanEngine + Tests) |
-| `dev.bat` / `scripts/dev.ps1` | Local watch loop (preferred while coding) |
-| `publish.bat` | Release single-file package (not for day-to-day) |
-| `scripts/setup-data.ps1` | Download icons/OCR into `src/App/Data/` |
-| `scripts/Expand-Zip.ps1` | Robust zip extract helper |
-| `src/ScanEngine/VENDOR.md` | Provenance + license note for vendored engine |
-| `publish/` | Publish output (gitignored) |
-| `media/` | README images |
-| `.github/` | GitHub Actions workflows |
+## Default commands
 
-**Important:** Do **not** re-add a NuGet `PackageReference` for `RatEye`. Edit `src/ScanEngine/` in-tree and reference via `ProjectReference`.
-
-Key app files live under `src/App/`:
-
-- `RatScannerMain.cs` — entry point, startup flow, update check
-- `TarkovDevAPI.cs` — json.tarkov.dev bulk client (items/tasks/hideout/maps) with rate limiting, caching, dedup; locale overlays (`items_en`, …)
-- `RatConfig.cs` — configuration, cache path logic
-- `MapDataLoader.cs` — map data loading
-- `RatScanner.csproj` — project file, target framework, package + project references
-
-## Local Development Loop
-
-**Day-to-day:** use `dev.bat` (or `scripts\dev.ps1`). Do **not** use `publish.bat` while iterating.
-
-```sh
-dev.bat                 # watch: auto rebuild + restart on save
-dev.bat -Once           # build + run once
-dev.bat -ForceSetup     # re-download RatScannerData icons/OCR
+```bat
+dev.bat                          :: preferred local loop (data setup + restore + watch restart)
+dev.bat -Once                    :: build + run once
+dev.bat -ForceSetup              :: re-download icons/OCR into src\App\Data\
+dotnet restore RatScanner.sln
+dotnet build RatScanner.sln
+dotnet build -c Release RatScanner.sln
+dotnet test RatScanner.sln
+dotnet tool restore
+dotnet csharpier check .
+dotnet csharpier format .
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
+publish.bat                      :: release package only (not day-to-day)
 ```
 
-What `dev.bat` does:
+Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (`dotnet watch` **restart-on-save**, not full WPF hot reload). CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package, draft release on `v*` tags).
 
-1. Ensures `src\App\Data\` exists (`scripts\setup-data.ps1`, skipped if already valid)
-2. Restores NuGet packages
-3. Runs `dotnet watch run` (restart-on-save)
+## Fork / remotes / branches / PRs
 
-WPF does not get reliable full hot reload for C#/XAML. Best practice is **restart-on-save** via `dotnet watch`, which is what the script uses. Manual close/rebuild/`publish\` is unnecessary for normal work.
+| Remote | Repo |
+| --- | --- |
+| `origin` | `tarkovtracker-org/RatScanner` (push here) |
+| `upstream` | `RatScanner/RatScanner` (sync only, rare) |
 
-One-time / manual data install:
+- Primary integration branch: **`master`** (not `main`).
+- Day-to-day work: short-lived `feat/…` / `fix/…` branches, open PRs against `master` on the fork.
+- Do not treat classical long-lived git-flow (`develop` as primary) as required for this fork.
+- Bare `#NNN` resolves on the fork (few/no issues). Prefer full upstream URLs when needed.
+- See `docs/agent-context/contribution-workflow.md` and root `CONTRIBUTING.md`.
 
-```sh
-powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1
-```
+## Package management (universal)
 
-The app csproj copies `src/App/Data/**` to the output directory (`CopyToOutputDirectory=PreserveNewest`), so debug runs under `src/App/bin/...` pick up icons/OCR automatically.
+- Prefer `dotnet add package` / project references over hand-editing package versions when adding deps.
+- Prefer package versions published at least ~7 days; avoid floating `*` / unbounded ranges.
+- Confirm a package is already used (or intentionally new) before adding it.
+- Keep shared dependency choices compatible across App and ScanEngine; align RatStash major.
+- `.csproj` / restore graph are authoritative for installed versions.
 
-Shared zip helper: `scripts\Expand-Zip.ps1` (Expand-Archive → .NET ZipFile → python). Used by setup-data and `publish.bat` when PowerShell Archive is broken.
+## Quality and validation (universal)
 
-## Build Commands
+Before calling material work done:
 
-```sh
-dotnet restore RatScanner.sln        # restore NuGet packages
-dotnet build RatScanner.sln          # build (debug)
-dotnet build -c Release RatScanner.sln  # build (release)
-dotnet test RatScanner.sln           # unit tests (RatScanner.Tests)
-dev.bat                              # local watch loop (preferred while coding)
-publish.bat                          # release single-file package only
-```
+| Change class | Minimum checks |
+| --- | --- |
+| Any code | `dotnet build RatScanner.sln` |
+| Behavior covered by tests | `dotnet test RatScanner.sln` |
+| C# style-sensitive edits | `dotnet tool restore` + `dotnet csharpier check .` (or format) |
+| Any `*.md` edit | `scripts\lint-markdown.ps1 -Fix` then check (tables, fence languages, trailing whitespace) |
+| Agent docs / structure | `scripts\check-agent-docs.ps1` |
+| UI / Razor / CSS | manual WebView smoke via `dev.bat` when practical |
+| Scan / OCR | unit tests if present + manual scan smoke when practical |
+| i18n keys / UI strings | update every `src/App/i18n/*.json` (en is baseline) |
+| Publish / release | `publish.bat` or CI-equivalent; verify LICENSE + Data layout |
 
-Verify changes by building (and running tests when behavior is covered). Tarkov.dev catalog data is loaded from **json.tarkov.dev** (not GraphQL). Domain models live under `src/App/TarkovDev/`.
+Nullable reference types are enabled in App. Implicit usings are **disabled** in App — keep explicit `using` directives. Prefer cascade/component APIs over CSS `!important` (see App UI context).
 
-## Fork And Branch Workflow
+## Proactive issue ownership (universal)
 
-This repo is a maintained fork. Upstream (`RatScanner/RatScanner`) is inactive.
+Investigate, fix, and validate meaningful defects discovered during the task, including pre-existing problems. Trace beyond changed lines when needed for the complete fix. Add focused regression coverage and keep materially separate fixes reviewable when practical.
 
-- **`origin`** → `tarkovtracker-org/RatScanner` (this fork — push here)
-- **`upstream`** → `RatScanner/RatScanner` (original — sync only, rarely)
-- **Primary branch:** `master` (not `main`)
-- Work directly on `master` for integration. Use short-lived feature branches (`fix/...`, `feat/...`) for non-trivial changes, merged via PRs on the fork.
-- When referencing upstream issues/PRs, use full URLs. Bare `#NNN` resolves to the fork which has no issues.
-- `git push` and `gh` commands default to `origin` (fork). Always verify the target repo when using GUI tools.
+Do not expand into subjective rewrites or unrelated features. Defer only for a concrete blocker such as an unresolved product decision, unavailable credentials/hardware, destructive action requiring approval, insufficient evidence for a safe fix, or an upstream defect without a safe local workaround. Report the evidence, impact, investigation, blocker, required next action, and release impact for anything left unresolved.
 
-## Orca Configuration
+## Documentation maintenance (universal)
 
-This repo is managed in Orca with the following settings:
+- After changing architecture, commands, packages, CI, paths, or product behavior: update **this file** if a control-plane fact moved, and the **relevant** `docs/agent-context/*.md` and nested `AGENTS.md`.
+- Do not paste version numbers, exhaustive file lists that will rot, or aspirational roadmaps into agent docs.
+- Nested `AGENTS.md` hold path-scoped mandatory rules; context docs hold explanation.
+- Run `scripts\check-agent-docs.ps1` after structural doc or packaging-reference changes.
+- **Markdown style (mandatory after any `*.md` change):** run `scripts\lint-markdown.ps1 -Fix` (or `npm run lint:md:fix`). Config: `.markdownlint.json` + `.markdownlint-cli2.jsonc`. Prefer compact GFM tables (`| a | b |` with delimiter `| --- | --- |` — spaces around pipes). Fenced blocks need a language (` ```bat `, ` ```text `). Line length is **not** enforced. Optional local git hook: `scripts\install-git-hooks.ps1`.
 
-- **Base ref:** `origin/master` (new worktrees branch from the fork, not upstream)
-- **Setup script:** `dotnet restore RatScanner.sln` (runs on every new worktree)
-- **Setup policy:** `run-by-default`
-- **Fork sync mode:** `safe-auto`
-- **Git remote identity:** `origin` (fork) — PR/issue UI defaults to the fork
-- **Git username:** `DysektAI`
+## Context routing (read before material changes)
 
-New worktrees are created under `C:/Users/Dysekt/orca/workspaces/RatScanner/` and branch from `origin/master` with auto-prefixed branch names (`DysektAI/<name>`).
+| Work area | Required context |
+| --- | --- |
+| Startup, WPF host, WebView2, DI, lifecycle | [architecture.md](docs/agent-context/architecture.md), [app-ui.md](docs/agent-context/app-ui.md) |
+| Razor, MudBlazor, CSS, themes, layout | [app-ui.md](docs/agent-context/app-ui.md) + `src/App/AGENTS.md` |
+| Screenshot, OCR, image processing, detection | [scan-engine.md](docs/agent-context/scan-engine.md) + `src/ScanEngine/AGENTS.md` |
+| tarkov.dev, maps, JSON/GraphQL, cache, locale data | [data-integrations.md](docs/agent-context/data-integrations.md) |
+| Config, settings file, cache paths | [configuration-and-cache.md](docs/agent-context/configuration-and-cache.md) |
+| UI string localization | [localization.md](docs/agent-context/localization.md) |
+| Build, tests, fixtures, visual verification | [build-and-validation.md](docs/agent-context/build-and-validation.md) + `tests/AGENTS.md` |
+| Package / framework upgrades | [dependency-management.md](docs/agent-context/dependency-management.md) |
+| Versioning, publishing, releases | [release-and-versioning.md](docs/agent-context/release-and-versioning.md) |
+| Branches, commits, PRs, upstream | [contribution-workflow.md](docs/agent-context/contribution-workflow.md) |
+| Unfamiliar repo areas | [repository-map.md](docs/agent-context/repository-map.md), [architecture.md](docs/agent-context/architecture.md) |
+| Local setup / day-to-day loop | [local-development.md](docs/agent-context/local-development.md) |
+| Product purpose / non-goals | [project-overview.md](docs/agent-context/project-overview.md) |
 
-## Conventions
+Index and maintenance rules for the context set: [docs/agent-context/README.md](docs/agent-context/README.md).
 
-- Follow the existing code style — check surrounding code before editing.
-- The project uses git flow historically (`develop` branch, feature branches from develop) but the maintained fork works directly on `master`.
-- **Versioning (TarkovTracker Edition):** independent semver line starting at **4.0.0** (upstream used 3.x). Bump `<Version>` only in `src/App/RatScanner.csproj`. Git tags: `vMAJOR.MINOR.PATCH` (e.g. `v4.0.0`). Do **not** mirror upstream tag numbers — reports/logs/UIs must make fork vs original obvious at a glance (`v4.x.x · TT`).
-- Nullable reference types are enabled — handle nulls explicitly.
-- Cache freshness is based on file modification time (see `RatConfig.cs`).
-- API calls go through `TarkovDevAPI.cs` (json.tarkov.dev GETs + offline cache) which handles rate limiting, dedup, and exponential backoff — do not bypass it with raw HTTP calls or reintroduce GraphQL for bulk catalog data.
-- Future craft/barter/FIR recommendations should load `/barters` and `/crafts` via the helpers already on `TarkovDevAPI` and combine with TarkovTracker progress — keep them off the startup path until productized.
-- Do **not** re-add a NuGet `PackageReference` for `RatEye`. Edit `src/ScanEngine/` in-tree and reference via `ProjectReference`.
-- C# namespaces for the scan engine remain `RatEye` for now; only the **folder** was renamed to `src/ScanEngine/`.
+## Nested instruction files
+
+| Path | Scope |
+| --- | --- |
+| `src/App/AGENTS.md` | App UI, hosting, data clients owned by App |
+| `src/ScanEngine/AGENTS.md` | Vendored scan engine |
+| `tests/AGENTS.md` | Unit tests |
+
+## Source-of-truth reminder
+
+**Code, `.csproj`, scripts, and CI win over docs.** If you discover drift, fix the docs in the same change set when you touch the related system.

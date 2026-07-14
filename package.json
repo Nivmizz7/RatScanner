@@ -1,0 +1,12 @@
+{
+  "name": "ratscanner",
+  "private": true,
+  "description": "Dev-only Node tooling for markdown lint (not a runtime dependency).",
+  "scripts": {
+    "lint:md": "markdownlint-cli2",
+    "lint:md:fix": "markdownlint-cli2 --fix"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.0"
+  }
+}

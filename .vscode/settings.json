@@ -23,6 +23,13 @@
 	"[csproj]": {
 		"editor.insertSpaces": true,
 		"editor.tabSize": 2
-	}
+	},
+	"[markdown]": {
+		"editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+		"editor.formatOnSave": true,
+		"editor.wordWrap": "on"
+	},
+	"markdownlint.run": "onType",
+	"markdownlint.fixOnSave": true
 }
 

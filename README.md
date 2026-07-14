@@ -77,7 +77,7 @@ Help: [FAQ][faq-page] · [TarkovTracker Discord][discord] · [common start issue
 
 ## Setting up the repository for development
 
-Requirements: **Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
+Requirements: **64-bit Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 1. Clone **this** repo: `https://github.com/tarkovtracker-org/RatScanner`
 2. From the repo root, run **`dev.bat`** (downloads icons/OCR data and restores packages on first run)
@@ -85,7 +85,7 @@ Requirements: **Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 ### Day-to-day coding
 
 | What you want | Command |
-|---|---|
+| --- | --- |
 | **Auto rebuild + restart on save** | `dev.bat` |
 | Run once | `dev.bat -Once` |
 | Re-download icons/OCR data | `dev.bat -ForceSetup` |
@@ -95,7 +95,7 @@ Requirements: **Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ### Repository layout
 
-```
+```text
 src/App/           # Main WPF app
 src/ScanEngine/    # Scan engine (historical RatEye; in-tree)
 tests/             # Unit tests
@@ -105,21 +105,29 @@ scripts/           # dev + data setup
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1
 dotnet restore RatScanner.sln
-dotnet watch --project src/App run --non-interactive
-dotnet run --project src/App
+dotnet watch --project src\App\RatScanner.csproj --non-interactive --no-hot-reload run
+dotnet run --project src\App\RatScanner.csproj
 ```
 
 Or open `RatScanner.sln` and press **F5**.
 
 ### Compiling only
 
-```sh
+```bat
 dotnet build RatScanner.sln
+```
+
+### Tests and formatting
+
+```bat
+dotnet test RatScanner.sln
+dotnet tool restore
+dotnet csharpier check .
 ```
 
 ### Publishing (slow; not for day-to-day)
 
-```sh
+```bat
 publish.bat
 ```
 
@@ -129,12 +137,16 @@ Output: `publish\RatScanner.exe`, `RatScanner.zip` (includes `LICENSE`). Prefer 
 
 See `CONTRIBUTING.md`. PRs and issues: **[tarkovtracker-org/RatScanner][fork-repo]**.
 
+Default integration branch is **`master`**. Day-to-day work uses short-lived `feat/…` / `fix/…` branches and PRs against the fork.
+
+**Agent / contributor architecture docs:** root [`AGENTS.md`](AGENTS.md) (control plane) and [`docs/agent-context/`](docs/agent-context/README.md) (focused context). Nested `AGENTS.md` files under `src/App`, `src/ScanEngine`, and `tests` apply path-scoped rules. Implementation and project files override stale documentation.
+
 ## Community & support (this build)
 
 Maintained by **[TarkovTracker.org][tarkovtracker]** — integration and ongoing development of this fork.
 
 | | |
-|---|---|
+| --- | --- |
 | Site | [https://tarkovtracker.org][tarkovtracker] |
 | Source & releases | [github.com/tarkovtracker-org/RatScanner][fork-repo] |
 | Chat / help | [discord.gg/M8nBgA2sT6][discord] |
