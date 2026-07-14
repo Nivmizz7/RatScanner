@@ -14,6 +14,7 @@
         <div class="search">
             <MudAutocomplete @ref="_search"
                              T="Item"
+                             Class="rs-search-field"
                              Placeholder="Search for an item"
                              SearchFunc="SearchItems"
                              ValueChanged="SelectItem"
@@ -22,6 +23,10 @@
                              Dense="true"
                              Clearable="true"
                              ResetValueOnEmptyText="true"
+                             DisableUnderLine="true"
+                             FullWidth="true"
+                             Margin="Margin.None"
+                             Variant="Variant.Text"
                              AdornmentIcon="@Icons.Material.Filled.Search">
                 <ItemTemplate Context="item">
                     <div class="search-result">
