@@ -19,7 +19,8 @@ if not exist "publish\LICENSE" (
 	if exist "LICENSE" copy /y "LICENSE" "publish\LICENSE" >nul
 )
 if not exist "publish\LICENSE" (
-	echo WARNING: LICENSE file missing from publish output.
+	echo ERROR: LICENSE file missing from publish output.
+	exit /b 1
 )
 
 :: Include runtime data (use shared extractor that falls back if Expand-Archive is broken)

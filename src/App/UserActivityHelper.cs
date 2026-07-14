@@ -171,6 +171,8 @@ internal static class UserActivityHelper
 
     internal static void Start(bool installMouseHook, bool installKeyboardHook)
     {
+        bool mouseHookInstalledHere = false;
+
         // Install Mouse hook only if it is not installed and must be installed
         if (hMouseHook == 0 && installMouseHook)
         {
@@ -193,6 +195,8 @@ internal static class UserActivityHelper
                 // Initializes and throws a new instance of the Win32Exception class with the specified error
                 throw new Win32Exception(errorCode);
             }
+
+            mouseHookInstalledHere = true;
         }
 
         // Install Keyboard hook only if it is not installed and must be installed
@@ -212,8 +216,9 @@ internal static class UserActivityHelper
             {
                 // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
                 int errorCode = Marshal.GetLastWin32Error();
-                // Do cleanup
-                Stop(false, true, false);
+                // Roll back the mouse hook if this call installed it, so a partial failure
+                // leaves the hook state as it was before Start was called.
+                Stop(mouseHookInstalledHere, true, false);
                 // Initializes and throws a new instance of the Win32Exception class with the specified error
                 throw new Win32Exception(errorCode);
             }
@@ -234,8 +239,10 @@ internal static class UserActivityHelper
         {
             // Uninstall hook
             bool retMouse = UnhookWindowsHookEx(hMouseHook);
-            // Reset invalid handle
-            hMouseHook = 0;
+            // Only clear the handle once the OS confirmed removal, so a failed uninstall
+            // can be retried on a later Stop call instead of leaking the hook.
+            if (retMouse)
+                hMouseHook = 0;
             // If failed and exception must be thrown
             if (!retMouse && throwExceptions)
             {
@@ -251,8 +258,10 @@ internal static class UserActivityHelper
         {
             // Uninstall hook
             bool retKeyboard = UnhookWindowsHookEx(hKeyboardHook);
-            // Reset invalid handle
-            hKeyboardHook = 0;
+            // Only clear the handle once the OS confirmed removal, so a failed uninstall
+            // can be retried on a later Stop call instead of leaking the hook.
+            if (retKeyboard)
+                hKeyboardHook = 0;
             // If failed and exception must be thrown
             if (!retKeyboard && throwExceptions)
             {
@@ -281,13 +290,27 @@ internal static class UserActivityHelper
         if (OnKeyboardKeyUp != null && ((WM)wParam == WM.KEYUP || (WM)wParam == WM.SYSKEYUP))
         {
             KeyUpEventArgs eventArgs = new((int)keyboardHookStruct.vkCode, Device.Keyboard);
-            OnKeyboardKeyUp(null, eventArgs);
+            try
+            {
+                OnKeyboardKeyUp(null, eventArgs);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("A keyboard hook subscriber threw during key-up dispatch.", ex);
+            }
             handled |= eventArgs.Handled;
         }
         else if (OnKeyboardKeyDown != null && ((WM)wParam == WM.KEYDOWN || (WM)wParam == WM.SYSKEYDOWN))
         {
             KeyDownEventArgs eventArgs = new((int)keyboardHookStruct.vkCode, Device.Keyboard);
-            OnKeyboardKeyDown(null, eventArgs);
+            try
+            {
+                OnKeyboardKeyDown(null, eventArgs);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("A keyboard hook subscriber threw during key-down dispatch.", ex);
+            }
             handled |= eventArgs.Handled;
         }
 
@@ -347,13 +370,27 @@ internal static class UserActivityHelper
         if (up && OnMouseButtonUp != null)
         {
             KeyUpEventArgs eventArgs = new(virtualKeycode, Device.Mouse);
-            OnMouseButtonUp(null, eventArgs);
+            try
+            {
+                OnMouseButtonUp(null, eventArgs);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("A mouse hook subscriber threw during button-up dispatch.", ex);
+            }
             handled |= eventArgs.Handled;
         }
         else if (!up && OnMouseButtonDown != null)
         {
             KeyDownEventArgs eventArgs = new(virtualKeycode, Device.Mouse);
-            OnMouseButtonDown(null, eventArgs);
+            try
+            {
+                OnMouseButtonDown(null, eventArgs);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("A mouse hook subscriber threw during button-down dispatch.", ex);
+            }
             handled |= eventArgs.Handled;
         }
 

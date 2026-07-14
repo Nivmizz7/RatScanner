@@ -33,7 +33,7 @@ public class TarkovTrackerDB
         get
         {
             lock (_stateLock)
-                return _progress;
+                return _progress.ToList();
         }
     }
 
@@ -236,6 +236,10 @@ public class TarkovTrackerDB
         }
         catch (UnauthorizedTokenException e)
         {
+            // Drop the cached token so the next refresh re-validates instead of reusing a
+            // token the server just rejected (which would otherwise repeat the 401).
+            lock (_stateLock)
+                _token = null;
             Logger.LogWarning("TarkovTracker rejected a progression request; existing data was retained.", e);
         }
         catch (Exception e)

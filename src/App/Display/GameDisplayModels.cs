@@ -305,9 +305,14 @@ internal static class GameDisplayConfigurationBuilder
         if (!GameDisplayValidation.IsValidScale(displayScale))
             displayScale = 1;
 
-        Rectangle captureBounds = gameClientBounds is { Width: > 0, Height: > 0 } clientBounds
-            ? clientBounds
-            : display?.PhysicalBounds ?? Rectangle.Empty;
+        // Only trust the game-client rectangle as the capture region when display selection
+        // actually accepted the game window; otherwise an off-screen game rectangle could
+        // remain the capture bounds. Fall back to the selected display, then to empty.
+        Rectangle captureBounds =
+            selection.Source == GameDisplaySelectionSource.GameWindow
+            && gameClientBounds is { Width: > 0, Height: > 0 } clientBounds
+                ? clientBounds
+                : display?.PhysicalBounds ?? Rectangle.Empty;
 
         bool invalidCustomConfiguration =
             (preferences.UseCustomGameResolution && !validCustomResolution)

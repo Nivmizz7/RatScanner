@@ -83,15 +83,20 @@ static class WindowBlurEffect
         int accentStructSize = Marshal.SizeOf(accent);
 
         nint accentPtr = Marshal.AllocHGlobal(accentStructSize);
-        Marshal.StructureToPtr(accent, accentPtr, false);
+        try
+        {
+            Marshal.StructureToPtr(accent, accentPtr, false);
 
-        WindowCompositionAttributeData data = new();
-        data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
-        data.SizeOfData = accentStructSize;
-        data.Data = accentPtr;
+            WindowCompositionAttributeData data = new();
+            data.Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY;
+            data.SizeOfData = accentStructSize;
+            data.Data = accentPtr;
 
-        SetWindowCompositionAttribute(windowHelper.Handle, ref data);
-
-        Marshal.FreeHGlobal(accentPtr);
+            SetWindowCompositionAttribute(windowHelper.Handle, ref data);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(accentPtr);
+        }
     }
 }

@@ -45,7 +45,7 @@ public partial class PageSwitcher : Window
             AddJumpList();
             AddTrayIcon();
 
-            if (RatConfig.LastWindowPositionX != int.MinValue || RatConfig.LastWindowPositionY != int.MinValue)
+            if (RatConfig.LastWindowPositionX != int.MinValue && RatConfig.LastWindowPositionY != int.MinValue)
             {
                 Left = RatConfig.LastWindowPositionX;
                 Top = RatConfig.LastWindowPositionY;
@@ -215,9 +215,26 @@ public partial class PageSwitcher : Window
 
     private void OnContextMenuShowOverlay(object? sender, EventArgs e) => ShowOverlay();
 
-    private void OnContextMenuShowUI(object? sender, EventArgs e) => ShowUI();
+    private void OnContextMenuShowUI(object? sender, EventArgs e)
+    {
+        RestoreWindow();
+        ShowUI();
+    }
 
-    private void OnContextMenuShowMinimalUI(object? sender, EventArgs e) => ShowMinimalUI();
+    private void OnContextMenuShowMinimalUI(object? sender, EventArgs e)
+    {
+        RestoreWindow();
+        ShowMinimalUI();
+    }
+
+    // Ensure a hidden/minimized window is actually visible and focused before we swap its
+    // content, so the tray "Show UI" / "Show Minimal UI" commands work from any state.
+    private void RestoreWindow()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
 
     private void OnContextMenuExitApplication(object? sender, EventArgs e) => ExitApplication();
 

@@ -6,8 +6,10 @@ param(
 
     [int]$WarmupSeconds = 8,
 
+    [ValidateRange(1, [int]::MaxValue)]
     [int]$SampleCount = 10,
 
+    [ValidateRange(1, [int]::MaxValue)]
     [int]$SampleIntervalMilliseconds = 1000
 )
 
@@ -40,7 +42,15 @@ function Get-ProcessTreeSnapshot {
         Get-Process -Id $id -ErrorAction SilentlyContinue
     }
 
-    $cpuMilliseconds = ($processes | ForEach-Object { $_.TotalProcessorTime.TotalMilliseconds } | Measure-Object -Sum).Sum
+    $cpuMilliseconds = (
+        $processes
+        | ForEach-Object {
+            # A process in the tree can exit between enumeration and property access.
+            try { $_.TotalProcessorTime.TotalMilliseconds }
+            catch { 0 }
+        }
+        | Measure-Object -Sum
+    ).Sum
 
     return [pscustomobject]@{
         ProcessCount = @($processes).Count

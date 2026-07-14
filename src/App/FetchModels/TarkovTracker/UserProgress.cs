@@ -12,15 +12,15 @@ public class UserProgress
     [JsonProperty("displayName")]
     public string DisplayName { get; set; } = "Tarkov Citizen";
 
-    [JsonProperty("tasksProgress")]
+    [JsonProperty("tasksProgress", NullValueHandling = NullValueHandling.Ignore)]
     public List<Progress> Tasks { get; set; } = new();
 
-    [JsonProperty("taskObjectivesProgress")]
+    [JsonProperty("taskObjectivesProgress", NullValueHandling = NullValueHandling.Ignore)]
     public List<Progress> TaskObjectives { get; set; } = new();
 
-    [JsonProperty("hideoutModulesProgress")]
+    [JsonProperty("hideoutModulesProgress", NullValueHandling = NullValueHandling.Ignore)]
     public List<Progress> HideoutModules { get; set; } = new();
 
-    [JsonProperty("hideoutPartsProgress")]
+    [JsonProperty("hideoutPartsProgress", NullValueHandling = NullValueHandling.Ignore)]
     public List<Progress> HideoutParts { get; set; } = new();
 }

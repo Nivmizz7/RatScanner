@@ -19,7 +19,7 @@ namespace RatEye
 
             /// <summary>
             /// DataDir directory, which is used to create some data related paths.
-            /// Defaults to <code>%BaseDir%/DataDir</code>
+            /// Defaults to <code>%BaseDir%/Data</code>
             /// </summary>
             private static string DataDir => Combine(BaseDir, "Data");
 

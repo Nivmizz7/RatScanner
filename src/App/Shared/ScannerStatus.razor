@@ -4,7 +4,7 @@
 @implements IDisposable
 @using Task = System.Threading.Tasks.Task
 
-<div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown">
+<div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown" aria-live="polite">
     <button type="button"
             class="scanner-status-control @_stateClass @(Compact ? "compact" : "expanded")"
             title="@_hoverTitle"

@@ -10,23 +10,32 @@ namespace RatScanner;
 public static class MapDataLoader
 {
     private static Dictionary<string, InteractiveMapData.Map>? _mapsByIdCache;
+    private static DateTime _mapsByIdCacheWriteTimeUtc;
 
     /// <summary>
     /// Loads and caches the maps.json data
     /// </summary>
     public static Dictionary<string, InteractiveMapData.Map>? GetMapsData()
     {
-        if (_mapsByIdCache != null)
+        string mapsJsonPath = Path.Combine(RatConfig.Paths.Data, "maps.json");
+        DateTime currentWriteTimeUtc = File.Exists(mapsJsonPath)
+            ? File.GetLastWriteTimeUtc(mapsJsonPath)
+            : DateTime.MinValue;
+
+        // Reuse the cache only while maps.json is unchanged. maps.json is downloaded in the
+        // background after cold start, so a previously cached (possibly empty) result must be
+        // refreshed once the file appears or is updated.
+        if (_mapsByIdCache != null && currentWriteTimeUtc == _mapsByIdCacheWriteTimeUtc)
             return _mapsByIdCache;
 
         try
         {
-            string mapsJsonPath = Path.Combine(RatConfig.Paths.Data, "maps.json");
             if (!File.Exists(mapsJsonPath))
             {
                 // LogWarning: map overlay data is optional. LogError would call Environment.Exit.
                 Logger.LogWarning($"maps.json not found at {mapsJsonPath}; interactive maps will be unavailable.");
                 _mapsByIdCache = new();
+                _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
                 return _mapsByIdCache;
             }
 
@@ -39,6 +48,7 @@ public static class MapDataLoader
                 return cache;
 
             _mapsByIdCache = cache;
+            _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
             Logger.LogInfo($"Loaded {_mapsByIdCache.Count} maps from maps.json");
             return _mapsByIdCache;
         }
@@ -47,6 +57,7 @@ public static class MapDataLoader
             // LogWarning: corrupt or unreadable map data must not terminate the process.
             Logger.LogWarning("Failed to load maps.json; interactive maps will be unavailable.", e);
             _mapsByIdCache = new();
+            _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
             return _mapsByIdCache;
         }
     }

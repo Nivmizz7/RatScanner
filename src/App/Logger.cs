@@ -190,6 +190,9 @@ internal static class Logger
     {
         lock (SyncObject)
         {
+            // Discard queued entries so a pending ProcessBacklog cannot recreate the log
+            // with pre-clear content right after we delete it.
+            while (Backlog.TryDequeue(out _)) { }
             File.Delete(RatConfig.Paths.LogFile);
         }
     }

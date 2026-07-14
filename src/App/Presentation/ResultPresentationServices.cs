@@ -148,7 +148,8 @@ internal static class FreshnessFormatter
             return $"Updated {(int)age.TotalMinutes} min ago";
         if (age.TotalDays < 1)
             return $"Updated {(int)age.TotalHours} hr ago";
-        return $"Updated {Math.Max(1, (int)age.TotalDays)} days ago";
+        int days = Math.Max(1, (int)age.TotalDays);
+        return $"Updated {days} {(days == 1 ? "day" : "days")} ago";
     }
 }
 

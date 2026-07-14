@@ -67,10 +67,17 @@
 @code {
     private static void OpenURL(string url)
     {
-        Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = url,
-            UseShellExecute = true,
-        });
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            RatScanner.Logger.LogWarning("Unable to open external URL: " + url, ex);
+        }
     }
 }

@@ -56,7 +56,7 @@ internal sealed class WindowsGameDisplayService
                 )
             )
             {
-                stableId = FirstNonEmpty(monitor.DeviceID, monitor.DeviceKey, screen.DeviceName);
+                stableId = FirstNonEmpty(monitor.DeviceID, monitor.DeviceKey, screen.DeviceName) ?? screen.DeviceName;
                 friendlyName = monitor.DeviceString?.Trim() ?? "";
             }
         }
@@ -170,8 +170,8 @@ internal sealed class WindowsGameDisplayService
         return match.Success && int.TryParse(match.Groups["number"].Value, out int number) ? number : fallback;
     }
 
-    private static string FirstNonEmpty(params string?[] values) =>
-        values.First(value => !string.IsNullOrWhiteSpace(value))!;
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     internal enum DpiType
     {

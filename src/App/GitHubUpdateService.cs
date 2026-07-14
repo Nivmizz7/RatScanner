@@ -167,13 +167,14 @@ internal static class GitHubUpdateService
     /// </summary>
     internal static bool TryApplyUpdate(LatestRelease release)
     {
+        string? stagingRoot = null;
         try
         {
             string installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(
                 Path.DirectorySeparatorChar,
                 Path.AltDirectorySeparatorChar
             );
-            string stagingRoot = Path.Combine(Path.GetTempPath(), "RatScanner-update-" + Guid.NewGuid().ToString("N"));
+            stagingRoot = Path.Combine(Path.GetTempPath(), "RatScanner-update-" + Guid.NewGuid().ToString("N"));
             string zipPath = Path.Combine(stagingRoot, AssetZipName);
             string extractDir = Path.Combine(stagingRoot, "extract");
             string applyScript = Path.Combine(stagingRoot, "apply-update.ps1");
@@ -220,6 +221,10 @@ internal static class GitHubUpdateService
         {
             // Do not use LogError here — it treats the app as crashed and exits.
             Logger.LogWarning("Failed to apply update automatically.", e);
+            // The success path hands the staging directory off to the apply script; on any
+            // failure it is orphaned, so remove it here.
+            if (stagingRoot != null)
+                TryDeleteDirectory(stagingRoot);
             return false;
         }
     }

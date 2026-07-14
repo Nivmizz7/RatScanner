@@ -49,7 +49,7 @@ internal class SimpleConfig
             WriteString(key, value);
             return;
         }
-        byte[] bytes = Encoding.ASCII.GetBytes(value);
+        byte[] bytes = Encoding.UTF8.GetBytes(value);
         byte[] encryptedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
         string hexString = Convert.ToHexString(encryptedBytes);
         WriteString(key, hexString);
@@ -132,7 +132,7 @@ internal class SimpleConfig
                 return "";
             byte[] encryptedBytes = Convert.FromHexString(hexString);
             byte[] decryptedBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
-            return Encoding.ASCII.GetString(decryptedBytes);
+            return Encoding.UTF8.GetString(decryptedBytes);
         }
         catch (Exception)
         {

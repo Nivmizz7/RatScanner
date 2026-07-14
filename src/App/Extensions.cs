@@ -7,9 +7,12 @@ public static class Extensions
 {
     public static string ToShortString(this int value)
     {
-        string str = value.ToString();
+        string sign = value < 0 ? "-" : "";
+        // Work from the magnitude (as long, to also cover int.MinValue) so the sign never
+        // affects digit slicing or suffix selection.
+        string str = Math.Abs((long)value).ToString(CultureInfo.InvariantCulture);
         if (str.Length < 4)
-            return str;
+            return $"{sign}{str}";
 
         string[] suffixes = new string[] { "", "K", "M", "B", "T", "Q" };
 
@@ -20,7 +23,7 @@ public static class Extensions
             digits = digits[..dotPos];
 
         string suffix = suffixes[(int)Math.Floor((str.Length - 1) / 3f)];
-        return $"{digits}{suffix}";
+        return $"{sign}{digits}{suffix}";
     }
 
     public static string ToShortString(this int? value) => ToShortString(value ?? 0);

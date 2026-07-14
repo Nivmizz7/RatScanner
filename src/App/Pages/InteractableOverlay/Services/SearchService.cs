@@ -15,7 +15,8 @@ public class SearchService
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrEmpty(value))
+        value = SanitizeSearch(value);
+        if (string.IsNullOrWhiteSpace(value))
             return Tasks.Task.FromResult(Enumerable.Empty<SearchResult>());
 
         return Tasks.Task.Run<IEnumerable<SearchResult>>(
@@ -45,7 +46,8 @@ public class SearchService
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrEmpty(value))
+        value = SanitizeSearch(value);
+        if (string.IsNullOrWhiteSpace(value))
             return Tasks.Task.FromResult(Enumerable.Empty<SearchResult>());
 
         string[] filters = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -80,7 +82,8 @@ public class SearchService
         CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrEmpty(value))
+        value = SanitizeSearch(value);
+        if (string.IsNullOrWhiteSpace(value))
             return Tasks.Task.FromResult(Enumerable.Empty<SearchResult>());
 
         string[] filters = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);

@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -53,7 +54,9 @@ public partial class BlazorInteractableOverlay : Window
             screen.Bounds.Contains(UserActivityHelper.GetMousePosition())
         );
         Screen? screen = hoveredScreen.FirstOrDefault() ?? Screen.PrimaryScreen;
-        System.Drawing.Rectangle b = screen!.Bounds;
+        if (screen is null)
+            return;
+        System.Drawing.Rectangle b = screen.Bounds;
         nint handle = new WindowInteropHelper(this).Handle;
         NativeMethods.SetWindowPos(handle, 0, b.Left, b.Top, b.Right - b.Left, b.Bottom - b.Top, 0);
     }
@@ -68,11 +71,20 @@ public partial class BlazorInteractableOverlay : Window
 
     internal async void ShowOverlay()
     {
-        ApplyBlurBehind();
-        SetPosition();
-        Show();
-        await blazorInteractableOverlayWebView.WebView.EnsureCoreWebView2Async();
-        await blazorInteractableOverlayWebView.WebView.ExecuteScriptAsync("ShowOverlay()");
+        // Guard the async WebView calls: an overlay-show failure must be logged, not surface as
+        // an unobserved async-void exception that tears down the app.
+        try
+        {
+            ApplyBlurBehind();
+            SetPosition();
+            Show();
+            await blazorInteractableOverlayWebView.WebView.EnsureCoreWebView2Async();
+            await blazorInteractableOverlayWebView.WebView.ExecuteScriptAsync("ShowOverlay()");
+        }
+        catch (Exception ex)
+        {
+            RatScanner.Logger.LogWarning("Failed to show the interactable overlay.", ex);
+        }
     }
 
     internal void HideOverlay()

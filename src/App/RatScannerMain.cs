@@ -88,7 +88,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     internal ItemQueue ItemScans = new();
 
-    public RatScannerMain()
+    private RatScannerMain()
     {
         _instance = this;
         _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
@@ -446,8 +446,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             float scale = RatEyeEngine.Config.ProcessingConfig.Scale;
             Bitmap marker = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.Marker;
+            float markerItemScale = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.MarkerItemScale;
             Vector2 toolTipPosition = inspection.MarkerPosition;
-            toolTipPosition += new Vector2(-(int)(marker.Width * scale), (int)(marker.Height * scale));
+            toolTipPosition += new Vector2(
+                -(int)(marker.Width * markerItemScale * scale),
+                (int)(marker.Height * markerItemScale * scale)
+            );
             toolTipPosition += position;
 
             ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration);
@@ -499,7 +503,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 Vector2 toolTipPosition = inspection.MarkerPosition;
                 toolTipPosition += position;
                 Bitmap marker = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.Marker;
-                toolTipPosition += new Vector2(0, (int)(marker.Height * scale));
+                float markerItemScale = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.MarkerItemScale;
+                toolTipPosition += new Vector2(0, (int)(marker.Height * markerItemScale * scale));
 
                 ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration);
 

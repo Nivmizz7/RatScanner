@@ -352,6 +352,16 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                 previousConfiguration.TrackerToken,
                 previousConfiguration.TrackerBackend
             );
+            // Re-seed the item cache for the restored game mode so runtime state matches the
+            // rolled-back configuration. Never let this mask the original save failure.
+            try
+            {
+                await TarkovDevAPI.InitializeCache();
+            }
+            catch (Exception cacheException)
+            {
+                Logger.LogWarning("Failed to reinitialize the item cache during settings rollback.", cacheException);
+            }
             RestoreRuntimeAfterFailedSave();
             LoadSettings();
             throw;

@@ -108,8 +108,8 @@ After you've uninstalled it (or removed the entries), restart your pc and instal
 ### Icon scanning gets a lot of wrong matches
 
 Icon scanning still has some known issues, some which are not possible to fix.
-This currently leads to items like keys and small attachments matching wrong due to their simularity to other items.
-Also, when in the stash, the light bright in the top center of the screen interferes with the top left section of the stash which results in extremly bad results.
+This currently leads to items like keys and small attachments matching wrong due to their similarity to other items.
+Also, when in the stash, the bright light in the top center of the screen interferes with the top left section of the stash which results in extremely bad results.
 
 [download-section]: https://github.com/tarkovtracker-org/RatScanner#download
 [ratscanner-latest]: https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip

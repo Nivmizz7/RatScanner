@@ -241,6 +241,15 @@ namespace RatEye.Processing
                 width = Math.Min(width, tmpWidth);
             }
 
+            // A marker detected near the right edge can push the search box origin past the
+            // image bounds, yielding a non-positive width/height. Crop would throw and abort
+            // the scan, so bail out to an empty title (treated as "no match") instead.
+            if (width <= 0 || height <= 0)
+            {
+                Logger.LogDebug("Title search box has non-positive dimensions; skipping title scan.");
+                return;
+            }
+
             // Crop image to title search box
             using Bitmap searchBox = _image.Crop(position.X, position.Y, width, height);
 

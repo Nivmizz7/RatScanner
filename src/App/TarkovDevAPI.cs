@@ -574,10 +574,15 @@ public static class TarkovDevAPI
     public static bool IsBarterProduct(string? itemId) =>
         !string.IsNullOrEmpty(itemId) && BarterProductIds.Contains(itemId);
 
-    public static int CraftRecipeCount(string? itemId) =>
-        string.IsNullOrEmpty(itemId) ? 0
-        : CraftProductIds.Contains(itemId) ? CraftCounts.GetValueOrDefault(itemId)
-        : 0;
+    public static int CraftRecipeCount(string? itemId)
+    {
+        if (string.IsNullOrEmpty(itemId))
+            return 0;
+        // Read both craft indexes under the same lock RebuildCraftIndex publishes them with,
+        // so a concurrent rebuild cannot expose a mismatched product-id/count snapshot.
+        lock (IndexLock)
+            return CraftProductIds.Contains(itemId) ? CraftCounts.GetValueOrDefault(itemId) : 0;
+    }
 
     public static int BarterOfferCount(string? itemId) =>
         string.IsNullOrEmpty(itemId) ? 0 : BarterCounts.GetValueOrDefault(itemId);
@@ -1094,8 +1099,11 @@ public static class TarkovDevAPI
         string json = await GetJsonString($"{GameModePath(gameMode)}/crafts").ConfigureAwait(false);
         var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<List<JObject>>>(json, JsonSettings);
         List<JObject>? list = envelope?.Data;
+        // A missing data envelope indicates a transient/malformed response; throw so the request
+        // layer retries with backoff instead of caching emptiness. An explicit empty list is a
+        // valid "no crafts" answer and still yields Array.Empty below.
         if (list == null)
-            return Array.Empty<Craft>();
+            throw new InvalidOperationException("Crafts response contained no data envelope.");
 
         return list.Select(o => new Craft
             {
@@ -1122,8 +1130,11 @@ public static class TarkovDevAPI
         string json = await GetJsonString($"{GameModePath(gameMode)}/barters").ConfigureAwait(false);
         var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<List<JObject>>>(json, JsonSettings);
         List<JObject>? list = envelope?.Data;
+        // A missing data envelope indicates a transient/malformed response; throw so the request
+        // layer retries with backoff instead of caching emptiness. An explicit empty list is a
+        // valid "no barters" answer and still yields Array.Empty below.
         if (list == null)
-            return Array.Empty<Barter>();
+            throw new InvalidOperationException("Barters response contained no data envelope.");
 
         return list.Select(o => new Barter
             {

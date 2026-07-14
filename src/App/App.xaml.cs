@@ -63,13 +63,17 @@ public partial class App : Application, ISingleInstance
                 return;
             }
 
-            Application.Current.MainWindow.Activate();
-            Application.Current.MainWindow.WindowState = WindowState.Normal;
+            Window? mainWindow = Application.Current.MainWindow;
+            if (mainWindow is null)
+                return;
+
+            mainWindow.Activate();
+            mainWindow.WindowState = WindowState.Normal;
 
             // Invert the topmost state twice to bring
-            // the window on top but kepe the top most state
-            Application.Current.MainWindow.Topmost = !Application.Current.MainWindow.Topmost;
-            Application.Current.MainWindow.Topmost = !Application.Current.MainWindow.Topmost;
+            // the window on top but keep the top most state
+            mainWindow.Topmost = !mainWindow.Topmost;
+            mainWindow.Topmost = !mainWindow.Topmost;
         });
     }
 
@@ -181,7 +185,9 @@ public partial class App : Application, ISingleInstance
 
     private void LogUnhandledException(Exception exception, string source)
     {
-        exception.Data.Add("Source", source);
+        // Use the indexer instead of Add so a second handler receiving the same exception
+        // instance does not throw ArgumentException for a duplicate "Source" key.
+        exception.Data["Source"] = source;
         Logger.LogError(exception);
     }
 

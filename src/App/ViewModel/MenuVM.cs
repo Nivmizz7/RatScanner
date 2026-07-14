@@ -60,7 +60,14 @@ internal class MenuVM : INotifyPropertyChanged
     {
         get
         {
-            if (!DateTime.TryParse(LastItem.Updated ?? string.Empty, out var updated))
+            if (
+                !DateTime.TryParse(
+                    LastItem.Updated ?? string.Empty,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind,
+                    out var updated
+                )
+            )
                 return null;
             return DateTime.UtcNow - updated.ToUniversalTime();
         }
@@ -123,12 +130,13 @@ internal class MenuVM : INotifyPropertyChanged
 
                 KeyValuePair<int, int> need = new(task, hideout);
 
-                string name = memberProgress.DisplayName ?? "Unknown";
+                string baseName = memberProgress.DisplayName ?? "Unknown";
+                string name = baseName;
                 for (int i = 2; i < 99; i++)
                 {
                     if (needs.All(n => n.Key != name))
                         break;
-                    name = $"{memberProgress.DisplayName} #{i}";
+                    name = $"{baseName} #{i}";
                 }
                 needs.Add(new KeyValuePair<string, KeyValuePair<int, int>>(name, need));
             }

@@ -132,8 +132,9 @@ public sealed class Map
 }
 
 /// <summary>
-/// Future-facing craft blueprint (json.tarkov.dev/regular/crafts).
-/// Not loaded on startup yet — product idea: show "craftable (FIR)" + hideout unlock state via TarkovTracker.
+/// Craft blueprint (json.tarkov.dev/regular/crafts). Fetched and indexed during
+/// TarkovDevAPI.InitializeCache to drive the "craftable" scan hint; future product idea:
+/// also surface FIR + hideout unlock state via TarkovTracker.
 /// </summary>
 public sealed class Craft
 {
@@ -153,8 +154,9 @@ public sealed class CraftIngredient
 }
 
 /// <summary>
-/// Future-facing barter (json.tarkov.dev/regular/barters).
-/// Not loaded on startup yet — product idea: "can barter for this" vs find-in-raid needs.
+/// Barter (json.tarkov.dev/regular/barters). Fetched and indexed during
+/// TarkovDevAPI.InitializeCache to drive the "barterable" scan hint; future product idea:
+/// contrast "can barter for this" with find-in-raid needs.
 /// </summary>
 public sealed class Barter
 {
