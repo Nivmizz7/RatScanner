@@ -57,54 +57,94 @@ nav a:hover {
 
 .sidebar-spacer { flex: 1; }
 
+/* Single-line chip: state is color + one word; detail lives on hover. */
 .scanner-status {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: var(--rs-radius-sm);
-    color: var(--rs-text-2);
-    font-size: 12px;
-}
-
-.scanner-status div {
-    display: grid;
-    gap: 1px;
+    gap: 6px;
+    margin: 0 4px;
     min-width: 0;
 }
 
-.scanner-status strong {
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 5px 10px 5px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    background: var(--rs-success-surface);
+    border-color: rgba(88, 209, 123, 0.28);
     color: var(--rs-success);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
+    letter-spacing: 0.01em;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: default;
 }
 
-.scanner-status span {
-    color: var(--rs-muted);
+.status-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .status-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     flex: none;
     border-radius: 50%;
     background: var(--rs-success);
+    box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.18);
 }
 
-.scanner-status.paused strong,
-.scanner-status.alert strong {
+.scanner-status.active .status-dot {
+    animation: status-pulse 2.4s ease-in-out infinite;
+}
+
+.scanner-status.paused .status-chip {
     color: var(--rs-warning);
+    background: rgba(231, 173, 85, 0.10);
+    border-color: rgba(231, 173, 85, 0.35);
 }
 
-.scanner-status.paused .status-dot,
-.scanner-status.alert .status-dot {
+.scanner-status.paused .status-dot {
     background: var(--rs-warning);
+    box-shadow: 0 0 0 3px rgba(231, 173, 85, 0.16);
+    animation: none;
 }
 
-.scanner-status.alert {
-    padding: 12px 10px;
-    border: 1px solid rgba(231, 173, 85, 0.35);
-    background: rgba(231, 173, 85, 0.08);
+.status-help {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--rs-muted);
+    cursor: help;
+}
+
+.status-help:hover,
+.status-help:focus-visible {
+    color: var(--rs-text-2);
+    background: var(--rs-surface-2);
+}
+
+@keyframes status-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.14); opacity: 1; }
+    50% { box-shadow: 0 0 0 5px rgba(88, 209, 123, 0.08); opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scanner-status.active .status-dot { animation: none; }
 }
 
 footer {

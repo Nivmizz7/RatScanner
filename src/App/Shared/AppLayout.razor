@@ -21,14 +21,19 @@
             <NavLink href="/app/credits"><MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span></NavLink>
         </nav>
         <div class="sidebar-spacer"></div>
-        <section class="scanner-status @(!IsScannerActive ? "paused" : null) @(_needsAttention ? "alert" : null)"
-                 aria-label="Scanner status"
+        <section class="scanner-status @(IsScannerActive ? "active" : "paused")"
+                 aria-label="@StatusAriaLabel"
                  aria-live="polite">
-            <span class="status-dot" aria-hidden="true"></span>
-            <div>
-                <strong>@(IsScannerActive ? "Scanner active" : "Scanner paused")</strong>
-                <span>@(IsScannerActive ? "Waiting for an item" : "Enable scanning in Settings")</span>
-            </div>
+            <span class="status-chip" title="@StatusDetail">
+                <span class="status-dot" aria-hidden="true"></span>
+                <span class="status-label">@(IsScannerActive ? "Active" : "Paused")</span>
+            </span>
+            <button type="button"
+                    class="status-help"
+                    title="@StatusDetail"
+                    aria-label="@StatusDetail">
+                <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Small" />
+            </button>
         </section>
         <footer aria-label="Application version">
             <span>@MenuVM.VersionDisplay</span>
@@ -41,8 +46,15 @@
 @code {
     private bool _drawerOpen;
     private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
-    // Expand styling only when intervention is needed; idle active stays compact.
-    private bool _needsAttention => !IsScannerActive;
+
+    private string StatusDetail =>
+        IsScannerActive
+            ? "Scanner is listening. Inspect or click an item in Escape from Tarkov."
+            : "Scanner is off. Enable name or icon scanning in Settings.";
+
+    private string StatusAriaLabel =>
+        IsScannerActive ? "Scanner active. Waiting for an item." : "Scanner paused.";
+
     private void OpenDrawer() => _drawerOpen = true;
     private void CloseDrawer() => _drawerOpen = false;
     private void HandleKey(KeyboardEventArgs e) { if (e.Key == "Escape") CloseDrawer(); }
