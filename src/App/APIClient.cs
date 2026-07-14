@@ -28,8 +28,9 @@ internal static class APIClient
         {
             request.Headers.UserAgent.ParseAdd($"RatScanner-TT/{RatConfig.Version}");
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner-TT user-agent.", e);
             request.Headers.UserAgent.ParseAdd("RatScanner-TT");
         }
         if (!string.IsNullOrEmpty(bearerToken))

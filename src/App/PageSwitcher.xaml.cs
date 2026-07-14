@@ -32,9 +32,10 @@ public partial class PageSwitcher : Window
 
     public PageSwitcher()
     {
+        // Do not publish the singleton until construction succeeds; a half-built
+        // window must not be reachable via PageSwitcher.Instance after a startup throw.
         try
         {
-            _instance = this;
             RatConfig.LoadConfig();
 
             InitializeComponent();
@@ -53,9 +54,12 @@ public partial class PageSwitcher : Window
             Topmost = RatConfig.AlwaysOnTop;
             if (RatConfig.LastWindowMode == RatConfig.WindowMode.Minimal)
                 ShowMinimalUI();
+
+            _instance = this;
         }
         catch (Exception e)
         {
+            // LogError terminates the process; do not leave a half-built singleton published.
             Logger.LogError(e.Message, e);
         }
     }

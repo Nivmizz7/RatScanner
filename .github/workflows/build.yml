@@ -14,12 +14,18 @@ on:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -58,7 +64,15 @@ jobs:
       - name: Test
         run: dotnet test RatScanner.sln -c Release --no-build
       - name: Dependency vulnerability audit
-        run: dotnet list RatScanner.sln package --vulnerable --include-transitive
+        run: |
+          $output = dotnet list RatScanner.sln package --vulnerable --include-transitive 2>&1 | Out-String
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # `dotnet list --vulnerable` succeeds even when vulnerable packages are present.
+          # Fail hard when the report includes a vulnerability severity row.
+          if ($output -match '(?im)^\s*(Critical|High|Moderate|Low)\s') {
+            throw 'Vulnerable package(s) detected in dependency graph. See audit output above.'
+          }
       - name: Publish
         run: dotnet publish src/App/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained true
       - name: Include LICENSE
@@ -106,6 +120,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
       - name: Verify tag matches product version
         env:
           RELEASE_TAG: ${{ github.ref_name }}

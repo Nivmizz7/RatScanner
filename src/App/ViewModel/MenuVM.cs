@@ -143,9 +143,22 @@ internal class MenuVM : INotifyPropertyChanged
             return needs;
         }
     }
-    public (int task, int hideout) ItemTeamNeedsSummed =>
-        (ItemTeamNeeds?.Sum(i => i.Value.Key) ?? 0, ItemTeamNeeds?.Sum(i => i.Value.Value) ?? 0);
-    public bool ItemTeamNeeded => ItemTeamNeeds != null && ItemTeamNeeds.Count != 0;
+    public (int task, int hideout) ItemTeamNeedsSummed
+    {
+        get
+        {
+            List<KeyValuePair<string, KeyValuePair<int, int>>>? needs = ItemTeamNeeds;
+            return (needs?.Sum(i => i.Value.Key) ?? 0, needs?.Sum(i => i.Value.Value) ?? 0);
+        }
+    }
+    public bool ItemTeamNeeded
+    {
+        get
+        {
+            List<KeyValuePair<string, KeyValuePair<int, int>>>? needs = ItemTeamNeeds;
+            return needs != null && needs.Count != 0;
+        }
+    }
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public MenuVM(RatScannerMain ratScanner)

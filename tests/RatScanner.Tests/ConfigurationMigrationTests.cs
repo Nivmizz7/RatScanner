@@ -77,6 +77,35 @@ public sealed class ConfigurationMigrationTests
         }
     }
 
+    [Fact]
+    public void Migrating_the_same_unsupported_version_twice_creates_a_suffixed_backup()
+    {
+        string root = CreateTemporaryDirectory();
+        try
+        {
+            string configPath = Path.Combine(root, "config.cfg");
+            File.WriteAllText(configPath, "[Other]\r\nconfigversion=1\r\n");
+
+            RatConfig.ConfigLoadPlan first = RatConfig.PrepareConfigForLoad(configPath);
+
+            // Recreate the unsupported file so the same version is backed up again and the
+            // collision suffix path (config.cfg.v1.bak.1) is exercised.
+            File.WriteAllText(configPath, "[Other]\r\nconfigversion=1\r\n");
+            RatConfig.ConfigLoadPlan second = RatConfig.PrepareConfigForLoad(configPath);
+
+            Assert.NotNull(first.BackupPath);
+            Assert.NotNull(second.BackupPath);
+            Assert.NotEqual(first.BackupPath, second.BackupPath);
+            Assert.True(File.Exists(first.BackupPath));
+            Assert.True(File.Exists(second.BackupPath));
+            Assert.EndsWith(".bak.1", second.BackupPath, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateTemporaryDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "RatScanner.Tests", Guid.NewGuid().ToString("N"));

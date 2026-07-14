@@ -184,6 +184,11 @@ internal static class RatConfig
     internal static GameDisplayConfiguration GameDisplayConfiguration { get; private set; } =
         GameDisplayConfiguration.Empty;
     internal static event Action<GameDisplayConfiguration>? GameDisplayConfigurationChanged;
+
+    /// <summary>
+    /// Raised after settings that affect scanner enablement / UI chrome are persisted.
+    /// </summary>
+    internal static event Action? SettingsChanged;
     internal static int LastWindowPositionX = int.MinValue;
     internal static int LastWindowPositionY = int.MinValue;
     internal static WindowMode LastWindowMode = WindowMode.Normal;
@@ -428,6 +433,7 @@ internal static class RatConfig
 
             GameDisplayPreferencesStore.Write(config, GetGameDisplayPreferences());
             File.Move(temporaryPath, Paths.ConfigFile, overwrite: true);
+            SettingsChanged?.Invoke();
         }
         finally
         {
@@ -491,7 +497,15 @@ internal static class RatConfig
         }
         finally
         {
-            File.Delete(temporaryPath);
+            try
+            {
+                File.Delete(temporaryPath);
+            }
+            catch (Exception exception)
+            {
+                // Do not mask the original write/move failure with cleanup noise.
+                Logger.LogWarning("Unable to delete a temporary cache file.", exception);
+            }
         }
     }
 

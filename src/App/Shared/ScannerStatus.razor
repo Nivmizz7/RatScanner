@@ -103,10 +103,15 @@
     {
         RefreshState();
         RatConfig.GameDisplayConfigurationChanged += OnDisplayChanged;
+        RatConfig.SettingsChanged += OnSettingsChanged;
         _subscribed = true;
     }
 
-    private void OnDisplayChanged(GameDisplayConfiguration configuration)
+    private void OnDisplayChanged(GameDisplayConfiguration configuration) => QueueRefresh();
+
+    private void OnSettingsChanged() => QueueRefresh();
+
+    private void QueueRefresh()
     {
         _ = InvokeAsync(() =>
         {
@@ -175,8 +180,10 @@
 
     public void Dispose()
     {
-        if (_subscribed)
-            RatConfig.GameDisplayConfigurationChanged -= OnDisplayChanged;
+        if (!_subscribed)
+            return;
+        RatConfig.GameDisplayConfigurationChanged -= OnDisplayChanged;
+        RatConfig.SettingsChanged -= OnSettingsChanged;
     }
 
     private enum ScannerState

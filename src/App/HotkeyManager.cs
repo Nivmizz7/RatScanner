@@ -92,8 +92,13 @@ internal sealed class HotkeyManager : IDisposable
         if (_disposed)
             return;
 
-        UnregisterHotkeys();
-        UserActivityHelper.Stop(true, true, false);
+        // Hotkey disposal and global input-hook teardown are managed and may have
+        // thread affinity — only run them from an explicit Dispose(), never the finalizer.
+        if (disposing)
+        {
+            UnregisterHotkeys();
+            UserActivityHelper.Stop(true, true, false);
+        }
         _disposed = true;
     }
 
@@ -126,11 +131,14 @@ internal sealed class HotkeyManager : IDisposable
         Wrap(() =>
         {
             _owner.NameScan(UserActivityHelper.GetMousePosition());
-            if (_last_mouse_click + 500 < DateTimeOffset.Now.ToUnixTimeMilliseconds() && NameScan.EnableAuto)
+            // Claim the auto-scan window atomically so concurrent Task.Run handlers from a
+            // real double-click cannot both pass the debounce and both call NameScanScreen.
+            long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+            long previous = Interlocked.Exchange(ref _last_mouse_click, now);
+            if (previous + 500 < now && NameScan.EnableAuto)
             {
                 Thread.Sleep(200); // wait for double click and ui
                 _owner.NameScanScreen();
-                _last_mouse_click = DateTimeOffset.Now.ToUnixTimeMilliseconds();
             }
         });
     }

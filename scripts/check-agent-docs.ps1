@@ -324,6 +324,7 @@ $requiredFiles = @(
     'AGENTS.md',
     'CONTRIBUTING.md',
     'README.md',
+    'LICENSE',
     'RatScanner.sln',
     'dev.bat',
     'publish.bat',

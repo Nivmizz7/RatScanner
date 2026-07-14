@@ -199,6 +199,9 @@ internal static class Logger
 
     internal static void ClearMats(string pattern = "*.png")
     {
+        if (!Directory.Exists(RatConfig.Paths.Data))
+            return;
+
         string[] files = Directory.GetFiles(RatConfig.Paths.Data, pattern);
         foreach (string file in files)
             File.Delete(file);
@@ -247,7 +250,8 @@ internal static class Logger
         body += LimitLength(ReadAll(), 3000);
         body += "\n```\n</details>";
 
-        string title = $"[{Constants.Branding.EditionToken} {RatConfig.VersionDisplay}] {message}";
+        // Cap the title so the URL-encoded issue link stays within browser/GitHub limits.
+        string title = LimitLength($"[{Constants.Branding.EditionToken} {RatConfig.VersionDisplay}] {message}", 120);
 
         string labels = "bug";
 
@@ -256,6 +260,22 @@ internal static class Logger
         url += "?body=" + WebUtility.UrlEncode(body);
         url += "&title=" + WebUtility.UrlEncode(title);
         url += "&labels=" + WebUtility.UrlEncode(labels);
+
+        // Common practical ceiling for opening URLs in Windows shell / browsers.
+        if (url.Length > 2000)
+        {
+            AppendToLog("[Warning] GitHub issue URL exceeds safe length; truncated body retry.");
+            body = LimitLength(body, 1500);
+            url =
+                Constants.Links.GitHub
+                + "/issues/new"
+                + "?body="
+                + WebUtility.UrlEncode(body)
+                + "&title="
+                + WebUtility.UrlEncode(title)
+                + "&labels="
+                + WebUtility.UrlEncode(labels);
+        }
 
         OpenURL(url);
     }

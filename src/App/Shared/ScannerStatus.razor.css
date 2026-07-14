@@ -47,7 +47,7 @@
     height: 7px;
     flex: none;
     border-radius: 50%;
-    background: currentColor;
+    background: currentcolor;
     box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.16);
 }
 

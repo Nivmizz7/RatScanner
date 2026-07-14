@@ -417,6 +417,16 @@ public class ItemExtensionTests
     }
 
     [Fact]
+    public void GetWikiLink_prefers_api_link_and_falls_back_to_fandom()
+    {
+        Item withLink = new() { WikiLink = "https://tarkov.dev/item/foo", Name = "Foo" };
+        Assert.Equal("https://tarkov.dev/item/foo", withLink.GetWikiLink());
+
+        Item fallback = new() { Name = "Bolt-action rifle" };
+        Assert.Equal("https://escapefromtarkov.fandom.com/wiki/Bolt-action_rifle", fallback.GetWikiLink());
+    }
+
+    [Fact]
     public void RatStash_mapping_preserves_template_matching_metadata()
     {
         Item source = new()

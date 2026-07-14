@@ -95,7 +95,8 @@ public partial class BlazorOverlay : Window
     {
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
-        blazorOverlayWebView.WebView.Dispose();
+        // WebView may not be created if the window closes before initialization completes.
+        blazorOverlayWebView?.WebView?.Dispose();
         Resources.Remove("services");
         base.OnClosed(e);
     }

@@ -12,12 +12,16 @@
             </MudPaper>
 
             <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.End" Style="width: 4vw;">
+                @{
+                    var taskRemaining = Item.GetTaskRemaining().Item1;
+                    var hideoutRemaining = Item.GetHideoutRemaining();
+                }
                 <MudChip T="string" Icon="@Icons.Material.Filled.Checklist" Size="Size.Small"
-                         Variant="Variant.Outlined" Color="@(Item.GetTaskRemaining().Item1 > 0 ? Color.Success : Color.Default)"
-                         Text="@Item.GetTaskRemaining().Item1.ToShortString()" />
+                         Variant="Variant.Outlined" Color="@(taskRemaining > 0 ? Color.Success : Color.Default)"
+                         Text="@taskRemaining.ToShortString()" />
                 <MudChip T="string" Icon="@Icons.Material.Filled.House" Size="Size.Small"
-                         Variant="Variant.Outlined" Color="@(Item.GetHideoutRemaining() > 0 ? Color.Success : Color.Default)"
-                         Text="@Item.GetHideoutRemaining().ToShortString()" />
+                         Variant="Variant.Outlined" Color="@(hideoutRemaining > 0 ? Color.Success : Color.Default)"
+                         Text="@hideoutRemaining.ToShortString()" />
             </MudStack>
 
             <MudDivider Vertical="true" FlexItem="true" />

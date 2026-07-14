@@ -8,6 +8,17 @@ namespace RatScanner;
 
 public static class ItemExtensions
 {
+    // Collector / special tasks that should not drive item need counts (shared by
+    // total remaining and kappa-only breakdown so the lists cannot drift apart).
+    private static readonly HashSet<string> ExcludedTasks = new(StringComparer.Ordinal)
+    {
+        "61e6e5e0f5b9633f6719ed95",
+        "61e6e60223374d168a4576a6",
+        "61e6e621bfeab00251576265",
+        "61e6e615eea2935bc018a2c5",
+        "61e6e60c5ca3b3783662be27",
+    };
+
     private static UserProgress GetUserProgress()
     {
         UserProgress? progress = null;
@@ -32,15 +43,6 @@ public static class ItemExtensions
     /// </summary>
     public static RequirementBreakdown GetTaskRequirementBreakdown(this Item item, UserProgress? progress = null)
     {
-        string[] excludedTasks =
-        [
-            "61e6e5e0f5b9633f6719ed95",
-            "61e6e60223374d168a4576a6",
-            "61e6e621bfeab00251576265",
-            "61e6e615eea2935bc018a2c5",
-            "61e6e60c5ca3b3783662be27",
-        ];
-
         progress ??= GetUserProgress();
 
         int fir = 0;
@@ -54,7 +56,7 @@ public static class ItemExtensions
             if (progress.Tasks.Any(p => p.Id == task.Id && p.Complete))
                 continue;
 
-            if (excludedTasks.Contains(task.Id))
+            if (ExcludedTasks.Contains(task.Id))
                 continue;
 
             if (task.Objectives == null)
@@ -77,15 +79,6 @@ public static class ItemExtensions
 
     private static int GetTaskRemainingKappa(this Item item, UserProgress? progress)
     {
-        string[] excludedTasks =
-        [
-            "61e6e5e0f5b9633f6719ed95",
-            "61e6e60223374d168a4576a6",
-            "61e6e621bfeab00251576265",
-            "61e6e615eea2935bc018a2c5",
-            "61e6e60c5ca3b3783662be27",
-        ];
-
         progress ??= GetUserProgress();
         int kappaCount = 0;
         bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
@@ -96,7 +89,7 @@ public static class ItemExtensions
                 continue;
             if (progress.Tasks.Any(p => p.Id == task.Id && p.Complete))
                 continue;
-            if (excludedTasks.Contains(task.Id) || task.Objectives == null)
+            if (ExcludedTasks.Contains(task.Id) || task.Objectives == null)
                 continue;
 
             foreach (TaskObjective objective in task.Objectives)
@@ -239,7 +232,8 @@ public static class ItemExtensions
             return item.WikiLink;
 
         string pageName = (item.Name ?? string.Empty).Replace(" ", "_", StringComparison.Ordinal);
-        return $"https://escapefromtarkov.gamepedia.com/{Uri.EscapeDataString(pageName)}";
+        // gamepedia.com no longer redirects reliably; fandom hosts the live wiki.
+        return $"https://escapefromtarkov.fandom.com/wiki/{Uri.EscapeDataString(pageName)}";
     }
 
     public static IEnumerable<Item> GetAmmoOfSameCaliber(this Item item)

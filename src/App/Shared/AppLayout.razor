@@ -2,14 +2,17 @@
 @layout MainLayout
 @inject MenuVM MenuVM
 @inject LocalizationService Localizer
+@inject NavigationManager Navigation
+@implements IDisposable
 
 <div class="app-shell">
     <header class="compact-bar">
         <button class="icon-button"
+                @ref="_toggleButton"
                 aria-label="@Localizer["OpenNavigation"]"
                 aria-controls="primary-sidebar"
                 aria-expanded="@_drawerOpen"
-                @onclick="OpenDrawer">
+                @onclick="OpenDrawerAsync">
             <MudIcon Icon="@Icons.Material.Filled.Menu" />
         </button>
         <span class="compact-title">@Constants.Branding.Name</span>
@@ -17,23 +20,27 @@
             <ScannerStatus Compact="true" />
         </div>
     </header>
-    <aside id="primary-sidebar" class="sidebar @(_drawerOpen ? "open" : null)" @onkeydown="HandleKey">
+    <aside id="primary-sidebar"
+           @ref="_sidebar"
+           class="sidebar @(_drawerOpen ? "open" : null)"
+           @onkeydown="HandleKey"
+           tabindex="-1">
         <div class="product-identity">
             <img src="RatLogoMedium.png" alt="" />
             <strong>@Constants.Branding.Name</strong>
             <span>@Localizer["TarkovTrackerEdition"]</span>
         </div>
         <nav aria-label="@Localizer["PrimaryNavigation"]">
-            <NavLink href="/app" Match="NavLinkMatch.All">
+            <NavLink href="/app" Match="NavLinkMatch.All" @onclick="CloseDrawerAfterNavAsync">
                 <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>@Localizer["ScanNav"]</span>
             </NavLink>
-            <NavLink href="/app/history">
+            <NavLink href="/app/history" @onclick="CloseDrawerAfterNavAsync">
                 <MudIcon Icon="@Icons.Material.Filled.History" /> <span>@Localizer["HistoryNav"]</span>
             </NavLink>
-            <NavLink href="/app/settings/general">
+            <NavLink href="/app/settings/general" @onclick="CloseDrawerAfterNavAsync">
                 <MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>@Localizer["SettingsNavGroup"]</span>
             </NavLink>
-            <NavLink href="/app/credits">
+            <NavLink href="/app/credits" @onclick="CloseDrawerAfterNavAsync">
                 <MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span>
             </NavLink>
         </nav>
@@ -44,19 +51,72 @@
     </aside>
     @if (_drawerOpen)
     {
-        <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawer"></button>
+        <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawerAsync"></button>
     }
     <main class="main-content">@Body</main>
 </div>
 
 @code {
     private bool _drawerOpen;
+    private ElementReference _sidebar;
+    private ElementReference _toggleButton;
+    private bool _subscribed;
 
-    private void OpenDrawer() => _drawerOpen = true;
-    private void CloseDrawer() => _drawerOpen = false;
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _subscribed = true;
+    }
+
+    private async Task OpenDrawerAsync()
+    {
+        _drawerOpen = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+        try
+        {
+            await _sidebar.FocusAsync();
+        }
+        catch
+        {
+            // Focus is best-effort; keep drawer open even if the element is not focusable yet.
+        }
+    }
+
+    private async Task CloseDrawerAsync()
+    {
+        if (!_drawerOpen)
+            return;
+        _drawerOpen = false;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await _toggleButton.FocusAsync();
+        }
+        catch
+        {
+            // Same best-effort policy as open.
+        }
+    }
+
+    private Task CloseDrawerAfterNavAsync() => CloseDrawerAsync();
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (!_drawerOpen)
+            return;
+        _ = InvokeAsync(CloseDrawerAsync);
+    }
+
     private void HandleKey(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
-            CloseDrawer();
+            _ = CloseDrawerAsync();
+    }
+
+    public void Dispose()
+    {
+        if (_subscribed)
+            Navigation.LocationChanged -= OnLocationChanged;
     }
 }
