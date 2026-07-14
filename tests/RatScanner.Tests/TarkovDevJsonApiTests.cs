@@ -1,9 +1,15 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using RatScanner.TarkovDev;
 using Xunit;
+using Task = System.Threading.Tasks.Task;
 
 namespace RatScanner.Tests;
 
@@ -49,6 +55,56 @@ public class TarkovDevJsonApiTests
         Assert.Null(TarkovDevAPI.ExtractMapsDictionary(json));
     }
 
+    [Fact]
+    public void ProjectMapsFromGraphql_reads_localized_name_and_normalizedName()
+    {
+        const string json = """
+            {
+              "data": {
+                "maps": [
+                  {
+                    "id": "55f2d3fd4bdc2d5f408b4567",
+                    "name": "Factory",
+                    "normalizedName": "factory"
+                  },
+                  {
+                    "id": "56f40101d2720b2a4d8b45d6",
+                    "name": "Customs",
+                    "normalizedName": "customs"
+                  }
+                ]
+              }
+            }
+            """;
+
+        Map[] maps = TarkovDevAPI.ProjectMapsFromGraphql(json);
+        Assert.Equal(2, maps.Length);
+        Assert.Equal("Factory", maps[0].Name);
+        Assert.Equal("factory", maps[0].NormalizedName);
+        Assert.Equal("Customs", maps[1].Name);
+    }
+
+    [Fact]
+    public void ProjectMapsFromGraphql_throws_on_graphql_errors()
+    {
+        const string json = """
+            {
+              "errors": [ { "message": "boom" } ],
+              "data": null
+            }
+            """;
+
+        Exception ex = Assert.Throws<Exception>(() => TarkovDevAPI.ProjectMapsFromGraphql(json));
+        Assert.Contains("boom", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectMapsFromGraphql_returns_empty_when_no_maps()
+    {
+        const string json = """{ "data": { "maps": [] } }""";
+        Assert.Empty(TarkovDevAPI.ProjectMapsFromGraphql(json));
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -57,7 +113,7 @@ public class TarkovDevJsonApiTests
     {
         // MenuVM.Updated must not throw for seed/placeholder items with empty Updated.
         Assert.False(
-            System.DateTime.TryParse(
+            DateTime.TryParse(
                 updated,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind,
@@ -71,13 +127,44 @@ public class TarkovDevJsonApiTests
     {
         const string raw = "2026-07-13T21:58:01.000Z";
         Assert.True(
-            System.DateTime.TryParse(
+            DateTime.TryParse(
                 raw,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind,
-                out System.DateTime parsed
+                out DateTime parsed
             )
         );
         Assert.Equal(2026, parsed.ToUniversalTime().Year);
+    }
+}
+
+public class ApiClientUserAgentTests
+{
+    [Fact]
+    public void Get_sends_tarkovtracker_edition_user_agent()
+    {
+        string? userAgent = null;
+        using HttpClient client = new(
+            new DelegateHandler(request =>
+            {
+                userAgent = request.Headers.UserAgent.ToString();
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("ok"),
+                };
+            })
+        );
+
+        Assert.Equal("ok", APIClient.Get(client, "https://example.test/resource", "token"));
+        Assert.NotNull(userAgent);
+        Assert.StartsWith("RatScanner-TT/", userAgent, StringComparison.Ordinal);
+    }
+
+    private sealed class DelegateHandler(Func<HttpRequestMessage, HttpResponseMessage> send) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(send(request));
     }
 }

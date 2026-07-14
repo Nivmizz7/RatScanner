@@ -23,7 +23,15 @@ internal static class APIClient
     private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? bearerToken = null)
     {
         HttpRequestMessage request = new(method, url);
-        request.Headers.UserAgent.ParseAdd("RatScanner-Client/3");
+        // Identify the TarkovTracker Edition fork (matches TarkovDevAPI / GitHubUpdateService UA).
+        try
+        {
+            request.Headers.UserAgent.ParseAdd($"RatScanner-TT/{RatConfig.Version}");
+        }
+        catch (Exception)
+        {
+            request.Headers.UserAgent.ParseAdd("RatScanner-TT");
+        }
         if (!string.IsNullOrEmpty(bearerToken))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
 

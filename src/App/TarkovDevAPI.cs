@@ -17,14 +17,13 @@ using TTask = RatScanner.TarkovDev.Task;
 namespace RatScanner;
 
 /// <summary>
-/// Fetches and caches bulk game data from <c>json.tarkov.dev</c> (static JSON API).
-/// GraphQL is intentionally not used for catalog/tasks/hideout — field selection
-/// was less valuable than dropping the generator surface and heavy POST query composition.
+/// Fetches and caches bulk game data from tarkov.dev backends.
+/// Catalog/tasks/hideout/crafts/barters use <c>json.tarkov.dev</c> GET documents
+/// (no GraphQL schema generator). Prices ship with the items document (MediumTTL).
 ///
-/// Prices (avg24h / trader sells) ship with the items document and share MediumTTL.
-/// Crafts/barters load with LongTTL into product indexes for acquisition hints.
-/// Maps are optional (not on the cold-start critical path) because
-/// <c>/maps</c> is a multi-megabyte blob mostly of mob/loot placement data.
+/// Maps use a slim GraphQL selection on <c>api.tarkov.dev</c> so we never download the
+/// ~9MB json.tarkov.dev maps placement blob for id/name/normalizedName only.
+/// Maps stay off the cold-start critical path (background + offline projected cache).
 /// </summary>
 public static class TarkovDevAPI
 {
@@ -40,6 +39,19 @@ public static class TarkovDevAPI
     }
 
     private const string JsonApiBase = "https://json.tarkov.dev";
+    private const string GraphqlApiUrl = "https://api.tarkov.dev/graphql";
+
+    // Keep field selection locked to the three app-facing Map properties.
+    private const string SlimMapsQuery =
+        """
+        query RatScannerMaps($lang: LanguageCode, $gameMode: GameMode) {
+          maps(lang: $lang, gameMode: $gameMode) {
+            id
+            name
+            normalizedName
+          }
+        }
+        """;
 
     private static readonly ConcurrentDictionary<string, (long expire, object response)> Cache = new();
     private static readonly ConcurrentDictionary<string, Lazy<Task>> InFlightRequests = new();
@@ -92,6 +104,24 @@ public static class TarkovDevAPI
     {
         string url = $"{JsonApiBase}/{path.TrimStart('/')}";
         using HttpResponseMessage response = await HttpClient.GetAsync(url).ConfigureAwait(false);
+        return await ReadSuccessBodyAsync(response, url).ConfigureAwait(false);
+    }
+
+    private static async Task<string> PostGraphqlAsync(string query, object variables)
+    {
+        string payload = JsonConvert.SerializeObject(
+            new { query, variables },
+            JsonSettings
+        );
+        using StringContent content = new(payload, System.Text.Encoding.UTF8, "application/json");
+        using HttpResponseMessage response = await HttpClient
+            .PostAsync(GraphqlApiUrl, content)
+            .ConfigureAwait(false);
+        return await ReadSuccessBodyAsync(response, GraphqlApiUrl).ConfigureAwait(false);
+    }
+
+    private static async Task<string> ReadSuccessBodyAsync(HttpResponseMessage response, string url)
+    {
         string responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -99,7 +129,7 @@ public static class TarkovDevAPI
             string trimmed = TrimBody(responseBody);
             throw new RateLimitedException(
                 GetRetryAfter(response),
-                $"json.tarkov.dev rate limited (429). Body: {trimmed}"
+                $"tarkov.dev rate limited (429) for {url}. Body: {trimmed}"
             );
         }
 
@@ -107,7 +137,7 @@ public static class TarkovDevAPI
         {
             string trimmed = TrimBody(responseBody);
             throw new Exception(
-                $"json.tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}"
+                $"tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}"
             );
         }
 
@@ -407,8 +437,8 @@ public static class TarkovDevAPI
             RatConfig.LongTTL,
             json => JsonConvert.DeserializeObject<HideoutStation[]>(json, JsonSettings)
         );
-        // Maps are optional: projected offline files are tiny, but first network fetch
-        // of json.tarkov.dev/.../maps is ~9MB of mostly unused placement data.
+        // Maps are optional and off the cold-start path. Offline projected Map[] is tiny;
+        // network refresh uses slim GraphQL with json blob fallback.
         bool mapsLoaded = TryLoadFromOfflineCache(
             MapsQueryKey(),
             RatConfig.LongTTL,
@@ -454,7 +484,7 @@ public static class TarkovDevAPI
     internal static bool AnyCacheExpired()
     {
         long time = DateTimeOffset.Now.ToUnixTimeSeconds();
-        // Maps excluded: they are lazy/background and must not force a 9MB fetch on every stale-cache cycle.
+        // Maps excluded: lazy/background only; must not force a network fetch for map overlay data.
         return IsCacheExpired(ItemsQueryKey(), time)
             || IsCacheExpired(TasksQueryKey(), time)
             || IsCacheExpired(HideoutStationsQueryKey(), time)
@@ -649,13 +679,18 @@ public static class TarkovDevAPI
         Task<string> tradersLocaleTask = GetJsonString($"{mode}/traders_{locale}");
         await Task.WhenAll(itemsTask, localeTask, tradersTask, tradersLocaleTask).ConfigureAwait(false);
 
+        string itemsJson = await itemsTask.ConfigureAwait(false);
+        string itemLocaleJson = await localeTask.ConfigureAwait(false);
+        string tradersJson = await tradersTask.ConfigureAwait(false);
+        string tradersLocaleJson = await tradersLocaleTask.ConfigureAwait(false);
+
         var itemsEnvelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<JsonApiModels.ItemsPayload>>(
-            itemsTask.Result,
+            itemsJson,
             JsonSettings
         );
-        Dictionary<string, string>? itemLocale = ParseLocaleMap(localeTask.Result);
-        Dictionary<string, JsonApiModels.RawTrader> traders = ParseTraderMap(tradersTask.Result);
-        Dictionary<string, string>? traderLocale = ParseLocaleMap(tradersLocaleTask.Result);
+        Dictionary<string, string>? itemLocale = ParseLocaleMap(itemLocaleJson);
+        Dictionary<string, JsonApiModels.RawTrader> traders = ParseTraderMap(tradersJson);
+        Dictionary<string, string>? traderLocale = ParseLocaleMap(tradersLocaleJson);
 
         Dictionary<string, JsonApiModels.RawItem>? rawItems = itemsEnvelope?.Data?.Items;
         if (rawItems == null || rawItems.Count == 0)
@@ -750,12 +785,16 @@ public static class TarkovDevAPI
         Task<string> tradersTask = GetJsonString($"{mode}/traders");
         await Task.WhenAll(tasksTask, localeTask, tradersTask).ConfigureAwait(false);
 
+        string tasksJson = await tasksTask.ConfigureAwait(false);
+        string taskLocaleJson = await localeTask.ConfigureAwait(false);
+        string tradersJson = await tradersTask.ConfigureAwait(false);
+
         var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<JsonApiModels.TasksPayload>>(
-            tasksTask.Result,
+            tasksJson,
             JsonSettings
         );
-        Dictionary<string, string>? taskLocale = ParseLocaleMap(localeTask.Result);
-        Dictionary<string, JsonApiModels.RawTrader> traders = ParseTraderMap(tradersTask.Result);
+        Dictionary<string, string>? taskLocale = ParseLocaleMap(taskLocaleJson);
+        Dictionary<string, JsonApiModels.RawTrader> traders = ParseTraderMap(tradersJson);
 
         Dictionary<string, JsonApiModels.RawTask>? rawTasks = envelope?.Data?.Tasks;
         if (rawTasks == null || rawTasks.Count == 0)
@@ -837,11 +876,14 @@ public static class TarkovDevAPI
         Task<string> localeTask = GetJsonString($"{mode}/hideout_{locale}");
         await Task.WhenAll(dataTask, localeTask).ConfigureAwait(false);
 
+        string hideoutJson = await dataTask.ConfigureAwait(false);
+        string hideoutLocaleJson = await localeTask.ConfigureAwait(false);
+
         var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<Dictionary<string, JsonApiModels.RawHideoutStation>>>(
-            dataTask.Result,
+            hideoutJson,
             JsonSettings
         );
-        Dictionary<string, string>? localeMap = ParseLocaleMap(localeTask.Result);
+        Dictionary<string, string>? localeMap = ParseLocaleMap(hideoutLocaleJson);
         Dictionary<string, JsonApiModels.RawHideoutStation>? rawStations = envelope?.Data;
         if (rawStations == null || rawStations.Count == 0)
             throw new Exception("Hideout JSON contained no data");
@@ -895,14 +937,45 @@ public static class TarkovDevAPI
 
     private static async Task<object> FetchMapsAsync(string locale, GameMode gameMode)
     {
+        // Prefer slim GraphQL (~1.5KB for 16 maps) over the multi-MB json.tarkov.dev maps blob.
+        try
+        {
+            string body = await PostGraphqlAsync(
+                    SlimMapsQuery,
+                    new
+                    {
+                        lang = locale,
+                        gameMode = gameMode == GameMode.Pve ? "pve" : "regular",
+                    }
+                )
+                .ConfigureAwait(false);
+
+            Map[] projected = ProjectMapsFromGraphql(body);
+            if (projected.Length > 0)
+                return projected;
+
+            Logger.LogWarning("Slim maps GraphQL returned no maps; falling back to json.tarkov.dev stream extract.");
+        }
+        catch (Exception e)
+        {
+            Logger.LogWarning("Slim maps GraphQL failed; falling back to json.tarkov.dev stream extract.", e);
+        }
+
+        return await FetchMapsFromJsonBlobAsync(locale, gameMode).ConfigureAwait(false);
+    }
+
+    private static async Task<object> FetchMapsFromJsonBlobAsync(string locale, GameMode gameMode)
+    {
         string mode = GameModePath(gameMode);
-        // The /maps document is ~9MB raw (mostly mobs/loot). Stream-project only the maps map.
         Task<string> dataTask = GetJsonString($"{mode}/maps");
         Task<string> localeTask = GetJsonString($"{mode}/maps_{locale}");
         await Task.WhenAll(dataTask, localeTask).ConfigureAwait(false);
 
-        Dictionary<string, string>? localeMap = ParseLocaleMap(localeTask.Result);
-        Dictionary<string, JsonApiModels.RawMap>? rawMaps = ExtractMapsDictionary(dataTask.Result);
+        string mapsJson = await dataTask.ConfigureAwait(false);
+        string mapsLocaleJson = await localeTask.ConfigureAwait(false);
+
+        Dictionary<string, string>? localeMap = ParseLocaleMap(mapsLocaleJson);
+        Dictionary<string, JsonApiModels.RawMap>? rawMaps = ExtractMapsDictionary(mapsJson);
         if (rawMaps == null || rawMaps.Count == 0)
             throw new Exception("Maps JSON contained no data");
 
@@ -925,8 +998,40 @@ public static class TarkovDevAPI
     }
 
     /// <summary>
+    /// Projects the slim maps GraphQL payload into app <see cref="Map"/> models.
+    /// </summary>
+    internal static Map[] ProjectMapsFromGraphql(string json)
+    {
+        JObject root = JObject.Parse(json);
+        if (root["errors"] is JArray { Count: > 0 } errors)
+            throw new Exception($"maps GraphQL errors: {errors.First}");
+
+        JArray? maps = root["data"]?["maps"] as JArray;
+        if (maps == null || maps.Count == 0)
+            return Array.Empty<Map>();
+
+        List<Map> projected = new(maps.Count);
+        foreach (JToken token in maps)
+        {
+            string? id = token.Value<string>("id");
+            if (string.IsNullOrEmpty(id))
+                continue;
+            projected.Add(
+                new Map
+                {
+                    Id = id,
+                    Name = token.Value<string>("name"),
+                    NormalizedName = token.Value<string>("normalizedName"),
+                }
+            );
+        }
+        return projected.ToArray();
+    }
+
+    /// <summary>
     /// Walks the JSON token stream until <c>data.maps</c> and deserializes only that object graph,
     /// so sibling keys (mobs, loot containers, …) are skipped without materializing into dictionaries.
+    /// Used as fallback when GraphQL is unavailable.
     /// </summary>
     internal static Dictionary<string, JsonApiModels.RawMap>? ExtractMapsDictionary(string json)
     {
@@ -936,7 +1041,10 @@ public static class TarkovDevAPI
 
         while (reader.Read())
         {
-            if (reader.TokenType != JsonToken.PropertyName || !string.Equals(reader.Value as string, "maps", StringComparison.Ordinal))
+            if (
+                reader.TokenType != JsonToken.PropertyName
+                || !string.Equals(reader.Value as string, "maps", StringComparison.Ordinal)
+            )
                 continue;
 
             // Require depth 2: { "data": { "maps": { … } } }
