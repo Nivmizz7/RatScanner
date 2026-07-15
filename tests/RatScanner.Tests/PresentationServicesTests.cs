@@ -398,6 +398,22 @@ public class GitHubUpdateServiceTests
     [InlineData("3.9.3", "v4.0.0", true)]
     public void IsNewerVersion_handles_release_tag_formats(string current, string available, bool expected) =>
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));
+
+    [Theory]
+    [InlineData("https://github.com/tarkovtracker-org/RatScanner/releases/download/v4.0.0/RatScanner.zip", true)]
+    [InlineData(
+        "https://objects.githubusercontent.com/github-production-release-asset-2e65be/123/abc?X-Amz-Algorithm=AWS4-HMAC-SHA256",
+        true
+    )]
+    [InlineData("https://release-assets.githubusercontent.com/github-production-release-asset/123/abc", true)]
+    [InlineData("http://github.com/tarkovtracker-org/RatScanner/releases/download/v4.0.0/RatScanner.zip", false)]
+    [InlineData("https://evil.example/RatScanner.zip", false)]
+    [InlineData("https://github.evil.com/tarkovtracker-org/RatScanner/RatScanner.zip", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    [InlineData("not-a-url", false)]
+    public void IsAllowedReleaseAssetUrl_accepts_only_https_github_asset_hosts(string url, bool expected) =>
+        Assert.Equal(expected, GitHubUpdateService.IsAllowedReleaseAssetUrl(url));
 }
 
 public class ItemExtensionTests

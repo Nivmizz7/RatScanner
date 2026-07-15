@@ -201,7 +201,9 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             "name scanner",
             value,
             () => RatConfig.NameScan.Enable,
-            v => RatConfig.NameScan.Enable = v
+            v => RatConfig.NameScan.Enable = v,
+            // ActiveHotkey copies Enable by value at construction; rebuild so the live flag is honored.
+            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
         );
 
     internal Task<SettingSaveResult> SetEnableAutoNameScanAsync(bool value) =>
@@ -229,7 +231,9 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             "icon scanner",
             value,
             () => RatConfig.IconScan.Enable,
-            v => RatConfig.IconScan.Enable = v
+            v => RatConfig.IconScan.Enable = v,
+            // ActiveHotkey copies Enable by value at construction; rebuild so the live flag is honored.
+            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
         );
 
     internal Task<SettingSaveResult> SetScanRotatedIconsAsync(bool value) =>

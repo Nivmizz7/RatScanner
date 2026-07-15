@@ -83,13 +83,13 @@ internal static class GitHubUpdateService
                 })
                 .FirstOrDefault(a =>
                     string.Equals(a.Name, AssetZipName, StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrEmpty(a.Url)
+                    && IsAllowedReleaseAssetUrl(a.Url)
                 )
                 ?.Url;
 
             if (string.IsNullOrEmpty(zipUrl))
             {
-                Logger.LogWarning($"Latest GitHub release does not contain {AssetZipName}.");
+                Logger.LogWarning($"Latest GitHub release does not contain a trusted {AssetZipName} asset URL.");
                 return null;
             }
 
@@ -162,6 +162,24 @@ internal static class GitHubUpdateService
     }
 
     /// <summary>
+    /// True when <paramref name="url"/> is an HTTPS GitHub release asset download host we trust.
+    /// </summary>
+    internal static bool IsAllowedReleaseAssetUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            return false;
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string host = uri.Host;
+        return host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("objects.githubusercontent.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("release-assets.githubusercontent.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Seamless update: download zip, stage files, spawn apply script, exit current process.
     /// Returns false if the update could not be started (caller may continue startup).
     /// </summary>
@@ -170,6 +188,12 @@ internal static class GitHubUpdateService
         string? stagingRoot = null;
         try
         {
+            if (!IsAllowedReleaseAssetUrl(release.ZipDownloadUrl))
+            {
+                Logger.LogWarning($"Rejected update download from untrusted URL: {release.ZipDownloadUrl}");
+                return false;
+            }
+
             string installDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(
                 Path.DirectorySeparatorChar,
                 Path.AltDirectorySeparatorChar
@@ -243,6 +267,9 @@ internal static class GitHubUpdateService
 
     private static void DownloadToFile(string url, string destination)
     {
+        if (!IsAllowedReleaseAssetUrl(url))
+            throw new InvalidOperationException($"Refusing to download update from untrusted URL: {url}");
+
         using HttpResponseMessage response = Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead)
             .GetAwaiter()
             .GetResult();
