@@ -23,7 +23,7 @@ Logical groups (nested static classes):
 | `ToolTip` | duration, digit grouping |
 | `UserInterface` | UI language |
 | `MinimalUi` | field visibility, opacity |
-| `Tracking` / `TarkovTracker` | token, backend, team, refresh |
+| `Tracking` / `TarkovTracker` | DPAPI-protected PvP/PvE `.org` keys, legacy PvP-only `.io` key, team, refresh |
 | `Overlay.Search` | enable, blur, hotkey |
 | Other top-level | game mode, always on top, tray, TTLs, window position/mode |
 
@@ -72,14 +72,16 @@ TTL policy lives in `TarkovDevAPI` using `RatConfig` TTL fields and file mtime â
 
 ## UI settings flow
 
-1. User edits settings Razor pages.
-2. `SettingsVM` holds draft state.
-3. Save applies to `RatConfig` and persists; may re-init tracker / RatEye as needed.
-4. Cancel reloads from current config.
+- Complete choices (switches, selects, presets) apply immediately through `SettingsVM` / `SettingsPersistenceService`, then write the complete config atomically. A failure restores only the affected setting's last persisted value.
+- Editable capture fields keep local draft text and save on blur or Enter only after display-aware validation. Escape reloads the persisted display preferences.
+- TarkovTracker API keys are never saved while typing. The user explicitly tests a key; only successful mode and permission validation commits it.
+- There is no global Settings Save/Cancel bar.
+
+Game mode is exposed in the app sidebar as an immediate PVP/PVE selector. A switch refreshes the selected mode's catalog caches, rebuilds RatEye item data, updates current scan items, selects the matching tracker credential/progress cache, and persists `RatConfig.GameMode`; failure restores the previous mode.
 
 ## Advanced overrides
 
-Hotkeys, tray minimize, always-on-top, game mode (regular/PVE), and tracker backend enum are all first-class settings. Prefer extending existing sections over inventing side channel files.
+Hotkeys, tray minimize, always-on-top, game mode (regular/PVE), and mode-specific tracker credentials are first-class settings. Prefer extending existing sections over inventing side channel files.
 
 ## Agent rules
 

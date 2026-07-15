@@ -12,6 +12,7 @@ using System.Windows.Forms;
 using RatEye;
 using RatScanner.Scan;
 using RatStash;
+using GameMode = RatScanner.TarkovDev.GameMode;
 using MessageBox = System.Windows.MessageBox;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
 using Size = System.Drawing.Size;
@@ -61,6 +62,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     private readonly object _ratEyeSetupLock = new();
     private readonly object _trackerConfigurationLock = new();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private int _trackerRefreshInProgress;
     private bool _ratEyeReady;
     private bool _disposed;
 
@@ -169,27 +171,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         {
             await Task.Delay(1000, cancellationToken);
             Logger.LogInfo("Loading TarkovTracker data...");
-            if (
-                RatConfig.Tracking.TarkovTracker.Enable
-                && !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.Token)
-            )
-            {
-                TrackerConfigurationHandle configuration = ApplyTarkovTrackerConfiguration(
-                    RatConfig.Tracking.TarkovTracker.Token,
-                    RatConfig.Tracking.TarkovTracker.Backend
-                );
-                Logger.LogInfo("Loading TarkovTracker...");
-                bool initialized = await Task.Run(TarkovTrackerDB.Init, cancellationToken);
-                if (
-                    !initialized
-                    && !cancellationToken.IsCancellationRequested
-                    && TryClearTarkovTrackerConfiguration(configuration)
-                )
-                {
-                    Logger.ShowWarning("TarkovTracker API Token invalid!\n\nPlease provide a new token.");
-                    RatConfig.SaveConfig();
-                }
-            }
+            await ActivateTrackerModeAsync(RatConfig.GameMode, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
             Logger.LogInfo("Setting up timer routines...");
@@ -249,31 +231,60 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             );
     }
 
-    internal TrackerConfigurationHandle ApplyTarkovTrackerConfiguration(
-        string token,
-        RatConfig.TarkovTrackerBackend backend
-    )
+    internal TrackerConfigurationHandle ConfigureActiveTracker(GameMode mode)
     {
         lock (_trackerConfigurationLock)
         {
-            RatConfig.Tracking.TarkovTracker.Token = token;
-            RatConfig.Tracking.TarkovTracker.Backend = backend;
-            long generation = TarkovTrackerDB.Configure(token, RatConfig.Tracking.TarkovTracker.Endpoint);
+            (string token, string endpoint) = GetActiveTrackerConfiguration(mode);
+            long generation = TarkovTrackerDB.Configure(token, endpoint, mode);
             return new TrackerConfigurationHandle(generation);
         }
     }
 
-    internal bool TryClearTarkovTrackerConfiguration(TrackerConfigurationHandle configuration)
+    internal async Task ActivateTrackerModeAsync(GameMode mode, CancellationToken cancellationToken = default)
     {
-        lock (_trackerConfigurationLock)
+        ConfigureActiveTracker(mode);
+        if (string.IsNullOrWhiteSpace(TarkovTrackerDB.Token))
         {
-            if (!TarkovTrackerDB.IsCurrentConfiguration(configuration.Generation))
-                return false;
-
-            RatConfig.Tracking.TarkovTracker.Token = "";
-            TarkovTrackerDB.Configure("", RatConfig.Tracking.TarkovTracker.Endpoint);
-            return true;
+            OnPropertyChanged(nameof(TarkovTrackerDB));
+            return;
         }
+
+        await TarkovTrackerDB.InitAsync(cancellationToken).ConfigureAwait(false);
+        OnPropertyChanged(nameof(TarkovTrackerDB));
+    }
+
+    internal Task<TrackerValidationResult> ValidateTarkovTrackerOrgKeyAsync(
+        GameMode mode,
+        string token,
+        CancellationToken cancellationToken = default
+    ) =>
+        TarkovTrackerDB.ValidateCandidateAsync(
+            token,
+            RatConfig.Tracking.TarkovTracker.OrgEndpoint,
+            mode,
+            cancellationToken
+        );
+
+    internal Task<TrackerValidationResult> ValidateTarkovTrackerIoKeyAsync(
+        string token,
+        CancellationToken cancellationToken = default
+    ) =>
+        TarkovTrackerDB.ValidateCandidateAsync(
+            token,
+            RatConfig.Tracking.TarkovTracker.IoEndpoint,
+            GameMode.Regular,
+            cancellationToken
+        );
+
+    private static (string Token, string Endpoint) GetActiveTrackerConfiguration(GameMode mode)
+    {
+        string orgToken = RatConfig.Tracking.TarkovTracker.TokenForMode(mode);
+        if (!string.IsNullOrWhiteSpace(orgToken))
+            return (orgToken, RatConfig.Tracking.TarkovTracker.OrgEndpoint);
+        if (mode == GameMode.Regular && !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken))
+            return (RatConfig.Tracking.TarkovTracker.IoToken, RatConfig.Tracking.TarkovTracker.IoEndpoint);
+        return ("", RatConfig.Tracking.TarkovTracker.OrgEndpoint);
     }
 
     [MemberNotNull(nameof(RatEyeEngine))]
@@ -393,6 +404,20 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         {
             Logger.LogWarning("Unable to apply the updated item cache to RatEye.", exception);
         }
+    }
+
+    internal void RefreshItemsForGameMode()
+    {
+        if (!TarkovDevAPI.TryGetCachedItems(out TarkovItem[] items) || items.Length == 0)
+            return;
+
+        Dictionary<string, TarkovItem> byId = items.ToDictionary(item => item.Id, StringComparer.Ordinal);
+        foreach (ItemScan scan in ItemScans)
+        {
+            if (byId.TryGetValue(scan.Item.Id, out TarkovItem? currentItem))
+                scan.Item = currentItem;
+        }
+        OnPropertyChanged(nameof(ItemScans));
     }
 
     private static TarkovItem CreatePlaceholderItem()
@@ -575,26 +600,30 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             SetupRatEye();
     }
 
-    private void RefreshTarkovTrackerDB(object? o = null)
+    private void RefreshTarkovTrackerDB(object? o = null) => _ = RefreshTarkovTrackerDBAsync();
+
+    private async Task RefreshTarkovTrackerDBAsync()
     {
-        if (_disposed)
+        if (_disposed || Interlocked.Exchange(ref _trackerRefreshInProgress, 1) != 0)
             return;
 
         try
         {
-            if (!RatConfig.Tracking.TarkovTracker.Enable || string.IsNullOrWhiteSpace(TarkovTrackerDB.Token))
+            if (string.IsNullOrWhiteSpace(TarkovTrackerDB.Token))
                 return;
 
             Logger.LogInfo("Refreshing TarkovTracker DB...");
-            TarkovTrackerDB.Init();
+            await TarkovTrackerDB.InitAsync(_lifetimeCancellation.Token).ConfigureAwait(false);
             OnPropertyChanged(nameof(TarkovTrackerDB));
         }
-        catch (Exception e)
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
         {
-            Logger.LogWarning("Unable to refresh TarkovTracker data.", e);
+            Logger.LogWarning("Unable to refresh TarkovTracker data.", exception);
         }
         finally
         {
+            Interlocked.Exchange(ref _trackerRefreshInProgress, 0);
             lock (_tarkovTrackerTimerLock)
             {
                 if (!_disposed)
@@ -661,6 +690,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             ItemScans.Changed -= OnItemScansChanged;
             HotkeyManager.Dispose();
+            TarkovTrackerDB.Dispose();
             lock (NameScanLock)
             {
                 lock (IconScanLock)

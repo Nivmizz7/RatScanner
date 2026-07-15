@@ -2,7 +2,7 @@
 @inject LocalizationService Localizer;
 @implements IDisposable;
 
-<MudButton @ref="Button" @onclick="() => StartListening()"
+<MudButton @ref="Button" @onclick="StartListening"
            Color="Color.Primary" Size="Size.Small"
            Variant="Variant.Filled" DropShadow="false"
            Class="px-1 py-1" @attributes="InputAttributes"
@@ -39,27 +39,35 @@
     [Parameter]
     public Hotkey Hotkey { get; set; } = new Hotkey();
 
+    [Parameter]
+    public EventCallback<Hotkey> HotkeyChanged { get; set; }
+
     private MudButton Button = null!;
 
     private Hotkey _tmpHotkey = new Hotkey();
 
     private bool _listening = false;
 
-    private async void StartListening() {
+    private void StartListening() {
         if (_listening) return;
         _listening = true;
         _tmpHotkey = new Hotkey();
-        await InvokeAsync(() => StateHasChanged());
+        _ = InvokeAsync(StateHasChanged);
     }
 
-    private async void StopListening(bool discard = false) {
+    private async Task StopListeningAsync(bool discard = false) {
         if (!_listening) return;
 
-        if (discard) _tmpHotkey = Hotkey;
-        else Hotkey.Set(_tmpHotkey);
+        if (discard) {
+            _tmpHotkey = new Hotkey(Hotkey);
+        }
+        else {
+            Hotkey.Set(_tmpHotkey);
+            await HotkeyChanged.InvokeAsync(new Hotkey(Hotkey));
+        }
 
         _listening = false;
-        await InvokeAsync(() => StateHasChanged());
+        await InvokeAsync(StateHasChanged);
     }
 
     protected override void OnInitialized() {
@@ -71,20 +79,20 @@
     }
 
     private void OnKeyUp(object? sender, KeyUpEventArgs e) {
-        StopListening();
+        _ = StopListeningAsync();
     }
 
-    private async void OnKeyDown(object? sender, KeyDownEventArgs e) {
+    private void OnKeyDown(object? sender, KeyDownEventArgs e) {
         if (!_listening) return;
 
         if (e.Device == Device.Keyboard && e.Key == Key.Escape) {
-            StopListening(true);
+            _ = StopListeningAsync(true);
             return;
         }
 
         if (e.Device == Device.Keyboard) _tmpHotkey.KeyboardKeys.Add(e.Key);
         else if (e.Device == Device.Mouse) _tmpHotkey.MouseButtons.Add(e.MouseButton);
-        await InvokeAsync(() => StateHasChanged());
+        _ = InvokeAsync(StateHasChanged);
     }
 
     public void Dispose() {

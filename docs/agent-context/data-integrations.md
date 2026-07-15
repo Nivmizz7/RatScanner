@@ -60,12 +60,14 @@ Intentional dual path (documented on `TarkovDevAPI`):
 
 ## TarkovTracker
 
-- Config: `RatConfig.Tracking.TarkovTracker` (token DPAPI field, backend enum; default **ORG** / `api.tarkovtracker.org`, IO / `tarkovtracker.io` is legacy).
-- `TarkovTrackerDB` holds progress; refresh timer after init.
-- `APIClient` performs bearer GETs with shared UA and maps unauthorized/rate-limit exceptions.
+- Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP and PvE keys plus a legacy TarkovTracker.io key. The `.io` key is PvP-only and is inactive in PvE mode.
+- `TarkovTrackerDB` holds only the active mode's progress while retaining separate in-memory last-good snapshots by mode. Configuration generation and cancellation prevent stale PvP/PvE responses from crossing modes.
+- API keys are validated explicitly against `/token`: RatScanner requires `GP` (progress read), uses `TP` only when team display is enabled and available, and does not require `WP` because the app does not write progress.
+- `.org` token metadata (`gameMode`, with token-prefix fallback for legacy responses) must match the intended PvP/PvE slot before the key is saved.
+- `APIClient` performs bearer GETs with the shared UA, cancellation, and distinct unauthorized / forbidden permission / rate-limit / service failure mapping.
 - Models: `FetchModels/TarkovTracker/*`.
 
-Invalid token paths clear config and warn the user; do not log tokens.
+Never log API keys. A failed replacement leaves the previously stored key untouched.
 
 ## Locale data (API items, not UI i18n)
 

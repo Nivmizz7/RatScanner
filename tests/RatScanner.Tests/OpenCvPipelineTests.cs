@@ -204,7 +204,8 @@ public class OpenCvPipelineTests
                 graphics.Clear(System.Drawing.Color.Transparent);
                 using SolidBrush body = new(System.Drawing.Color.FromArgb(255, 35, 140, 210));
                 graphics.FillRectangle(body, 8, 12, 41, 29);
-                iconSource.Save(iconPath, System.Drawing.Imaging.ImageFormat.Png);
+                using Mat iconMat = BitmapConverter.ToMat(iconSource);
+                Assert.True(Cv2.ImWrite(iconPath, iconMat));
             }
             File.WriteAllText(Path.Combine(root, "broken.png"), "not an image");
 

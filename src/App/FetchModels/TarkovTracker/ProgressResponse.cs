@@ -14,5 +14,8 @@ public class ProgressResponse
     {
         [JsonProperty("self")]
         public string Self { get; set; } = "";
+
+        [JsonProperty("gameMode")]
+        public string? GameMode { get; set; }
     }
 }

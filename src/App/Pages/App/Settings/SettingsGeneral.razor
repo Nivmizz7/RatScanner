@@ -1,59 +1,52 @@
 @page "/app/settings/general"
 @layout SettingsLayout
+@using RatScanner.Display
+@using System.Globalization
+@using System.Linq
 @inject SettingsVM SettingsVM
 @inject LocalizationService Localizer
-@using RatScanner.Display
-@using RatScanner.TarkovDev
-@using System.Linq
+@inject ISnackbar Snackbar
 @implements IDisposable
 
-<div class="settings-general">
-    <MudGrid Class="pa-0 ma-0" Spacing="0">
-        <MudItem xs="12">
-            <div class="d-flex align-center justify-center mx-2 mb-1">
-                <MudText Typo="Typo.subtitle1" Color="Color.Inherit">@Localizer["GeneralSettingsTitle"]</MudText>
-            </div>
-        </MudItem>
-
-        <MudItem xs="12">
-            <MudPaper Class="game-display-card pa-3 mx-2 mb-2" Elevation="2">
-                <div class="section-heading">
-                    <div>
-                        <MudText Typo="Typo.subtitle1">@Localizer["GameDisplay"]</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">@Localizer["GameDisplayDescription"]</MudText>
-                    </div>
-                    <MudButton Variant="Variant.Text"
-                               Size="Size.Small"
-                               StartIcon="@Icons.Material.Filled.Refresh"
-                               Disabled="_refreshing"
-                               OnClick="RefreshDisplayDetection">
-                        @Localizer["RefreshDetection"]
-                    </MudButton>
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["GameDisplay"]</h2>
+                    <p>@Localizer["GameDisplayDescription"]</p>
                 </div>
+                <MudButton Variant="Variant.Text"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           Disabled="_refreshing"
+                           OnClick="RefreshDisplayDetectionAsync">
+                    @Localizer["RefreshDetection"]
+                </MudButton>
+            </header>
 
-                <MudSelect @bind-Value="SettingsVM.SelectedGameDisplayId"
-                           T="string"
-                           Label="@Localizer["GameDisplay"]"
-                           Variant="Variant.Outlined"
-                           Margin="Margin.Dense"
-                           AnchorOrigin="Origin.BottomCenter"
-                           Disabled="@(SettingsVM.GameDisplayOptions.Count == 0)"
-                           Error="@(SettingsVM.DisplaySelectionError is not null)"
-                           ErrorText="@SettingsVM.DisplaySelectionError"
-                           Class="mt-2">
-                    @foreach (SettingsVM.GameDisplayOption option in SettingsVM.GameDisplayOptions)
-                    {
-                        <MudSelectItem T="string" Value="@option.Id">@option.Label</MudSelectItem>
-                    }
-                </MudSelect>
+            <MudSelect T="string"
+                       Value="@SettingsVM.SelectedGameDisplayId"
+                       ValueChanged="SetDisplayAsync"
+                       Label="@Localizer["GameDisplay"]"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       FullWidth="true"
+                       Disabled="@(SettingsVM.GameDisplayOptions.Count == 0 || _savingDisplay)"
+                       Error="@(SettingsVM.DisplaySelectionError is not null)"
+                       ErrorText="@SettingsVM.DisplaySelectionError">
+                @foreach (SettingsVM.GameDisplayOption option in SettingsVM.GameDisplayOptions)
+                {
+                    <MudSelectItem T="string" Value="@option.Id">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
 
-                <MudAlert Severity="@GetDisplaySeverity()" Variant="Variant.Outlined" Dense="true" Class="display-status mt-2">
-                    @SettingsVM.GameDisplayStatus
-                </MudAlert>
+            <MudAlert Severity="@GetDisplaySeverity()" Variant="Variant.Outlined" Dense="true" Class="mt-3">
+                @SettingsVM.GameDisplayStatus
+            </MudAlert>
 
-                <MudText Typo="Typo.overline" Class="configuration-heading mt-3">
-                    @Localizer["DetectedConfiguration"]
-                </MudText>
+            <details class="detected-details mt-3">
+                <summary>@Localizer["DetectedConfiguration"]</summary>
                 <dl class="configuration-grid">
                     <div><dt>@Localizer["PhysicalDisplayResolution"]</dt><dd>@SettingsVM.PhysicalDisplayResolution</dd></div>
                     <div><dt>@Localizer["LogicalDisplayResolution"]</dt><dd>@SettingsVM.LogicalDisplayResolution</dd></div>
@@ -62,159 +55,260 @@
                     <div><dt>@Localizer["CaptureRegion"]</dt><dd>@SettingsVM.CaptureRegion</dd></div>
                     <div><dt>@Localizer["ModeLabel"]</dt><dd>@SettingsVM.DisplayDetectionMode</dd></div>
                 </dl>
+            </details>
 
-                <MudDivider Class="my-3" />
-                <MudCheckBox @bind-Value="SettingsVM.UseCustomGameResolution"
-                             Label="@Localizer["UseCustomGameResolution"]"
-                             Dense="true"
-                             Size="Size.Small"
-                             Class="pa-0 ma-0" />
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="advanced-description">
-                    @Localizer["UseCustomGameResolutionDescription"]
-                </MudText>
+            <details class="advanced-capture mt-3">
+                <summary>@Localizer["AdvancedCapture"]</summary>
+                <p class="section-description">@Localizer["UseCustomGameResolutionDescription"]</p>
+
+                <div class="mt-3">
+                    <ImmediateSettingSwitch Value="@SettingsVM.UseCustomGameResolution"
+                                            ValueChanged="@(value => SettingsVM.UseCustomGameResolution = value)"
+                                            Label="@Localizer["UseCustomGameResolution"]"
+                                            Persist="PersistCustomResolutionToggleAsync" />
+                </div>
 
                 @if (SettingsVM.UseCustomGameResolution)
                 {
-                    <div class="advanced-override mt-3">
-                        <MudText Typo="Typo.caption" Color="Color.Info">@Localizer["CustomViewportHelp"]</MudText>
-                        <MudGrid Spacing="1" Class="mt-1">
-                            <MudItem xs="12" sm="6">
-                                <MudNumericField @bind-Value="SettingsVM.CustomGameWidth"
-                                                 Label="@Localizer["GameViewportWidth"]"
-                                                 Variant="Variant.Outlined"
-                                                 Margin="Margin.Dense"
-                                                 HideSpinButtons="true"
-                                                 Immediate="true"
-                                                 Min="GameDisplayValidation.MinimumWidth"
-                                                 Max="GameDisplayValidation.MaximumWidth"
-                                                 Error="@(SettingsVM.CustomResolutionError is not null)"
-                                                 ErrorText="@SettingsVM.CustomResolutionError" />
-                            </MudItem>
-                            <MudItem xs="12" sm="6">
-                                <MudNumericField @bind-Value="SettingsVM.CustomGameHeight"
-                                                 Label="@Localizer["GameViewportHeight"]"
-                                                 Variant="Variant.Outlined"
-                                                 Margin="Margin.Dense"
-                                                 HideSpinButtons="true"
-                                                 Immediate="true"
-                                                 Min="GameDisplayValidation.MinimumHeight"
-                                                 Max="GameDisplayValidation.MaximumHeight"
-                                                 Error="@(SettingsVM.CustomResolutionError is not null)"
-                                                 ErrorText="@SettingsVM.CustomResolutionError" />
-                            </MudItem>
-                        </MudGrid>
-
-                        <div class="resolution-presets" aria-label="@Localizer["CommonResolutions"]">
-                            <MudText Typo="Typo.caption">@Localizer["CommonResolutions"]</MudText>
-                            <div>
-                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolution(1920, 1080))">1920 × 1080</MudButton>
-                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolution(2560, 1440))">2560 × 1440</MudButton>
-                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolution(3840, 2160))">3840 × 2160</MudButton>
-                            </div>
-                        </div>
-
-                        <MudCheckBox @bind-Value="SettingsVM.UseCustomDisplayScale"
-                                     Label="@Localizer["OverrideDisplayScaling"]"
-                                     Dense="true"
-                                     Size="Size.Small"
-                                     Class="pa-0 mt-3 mb-0" />
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="advanced-description">
-                            @Localizer["OverrideDisplayScalingDescription"]
-                        </MudText>
-                        @if (SettingsVM.UseCustomDisplayScale)
-                        {
-                            <MudTextField @bind-Value="SettingsVM.CustomDisplayScaleText"
-                                          Label="@Localizer["DisplayScaling"]"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Immediate="true"
-                                          InputMode="@DecimalInputMode"
-                                          Adornment="Adornment.End"
-                                          AdornmentText="%"
-                                          Error="@(SettingsVM.CustomDisplayScaleError is not null)"
-                                          ErrorText="@SettingsVM.CustomDisplayScaleError"
-                                          Class="mt-2" />
-                        }
+                    <div class="capture-fields mt-3">
+                        <MudTextField T="string"
+                                      @bind-Value="SettingsVM.CustomGameWidthText"
+                                      Label="@Localizer["GameViewportWidth"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputMode="InputMode.numeric"
+                                      Immediate="true"
+                                      OnBlur="PersistDisplayAsync"
+                                      OnKeyDown="HandleDisplayKeyAsync"
+                                      Error="@(SettingsVM.CustomResolutionError is not null)"
+                                      ErrorText="@SettingsVM.CustomResolutionError" />
+                        <MudTextField T="string"
+                                      @bind-Value="SettingsVM.CustomGameHeightText"
+                                      Label="@Localizer["GameViewportHeight"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      InputMode="InputMode.numeric"
+                                      Immediate="true"
+                                      OnBlur="PersistDisplayAsync"
+                                      OnKeyDown="HandleDisplayKeyAsync"
+                                      Error="@(SettingsVM.CustomResolutionError is not null)"
+                                      ErrorText="@SettingsVM.CustomResolutionError" />
                     </div>
-                }
-            </MudPaper>
-        </MudItem>
 
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudSelect @bind-Value="SettingsVM.UiLanguage" T="UiLanguage" Label="@Localizer["InterfaceLanguage"]" AnchorOrigin="Origin.BottomCenter" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
-                    @foreach (UiLanguage language in GetUiLanguages())
+                    <div class="resolution-presets mt-2" aria-label="@Localizer["CommonResolutions"]">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolutionAsync(1920, 1080))">1920 × 1080</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolutionAsync(2560, 1440))">2560 × 1440</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => SetCustomResolutionAsync(3840, 2160))">3840 × 2160</MudButton>
+                    </div>
+
+                    <div class="mt-3">
+                        <ImmediateSettingSwitch Value="@SettingsVM.UseCustomDisplayScale"
+                                                ValueChanged="@(value => SettingsVM.UseCustomDisplayScale = value)"
+                                                Label="@Localizer["OverrideDisplayScaling"]"
+                                                Persist="PersistCustomScaleToggleAsync" />
+                    </div>
+                    @if (SettingsVM.UseCustomDisplayScale)
                     {
-                        <MudSelectItem Value="@language">@language.ToCultureName()</MudSelectItem>
+                        <MudTextField T="string"
+                                      @bind-Value="SettingsVM.CustomDisplayScaleText"
+                                      Label="@Localizer["DisplayScaling"]"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense"
+                                      Immediate="true"
+                                      InputMode="@DecimalInputMode"
+                                      Adornment="Adornment.End"
+                                      AdornmentText="%"
+                                      OnBlur="PersistDisplayAsync"
+                                      OnKeyDown="HandleDisplayKeyAsync"
+                                      Error="@(SettingsVM.CustomDisplayScaleError is not null)"
+                                      ErrorText="@SettingsVM.CustomDisplayScaleError"
+                                      Class="mt-2" />
                     }
-                </MudSelect>
-            </MudPaper>
-        </MudItem>
+                }
 
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudSlider @bind-Value="SettingsVM.ToolTipMilli" Min="0" Max="10000" Step="100" Color="Color.Info">
-                    <MudText Typo="Typo.subtitle2">@Localizer.Format("TooltipDuration", SettingsVM.ToolTipMilli)</MudText>
-                </MudSlider>
-            </MudPaper>
-        </MudItem>
+                <MudButton Variant="Variant.Text"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Restore"
+                           OnClick="ResetDisplayAsync"
+                           Class="mt-3">
+                    @Localizer["ResetDetectedValues"]
+                </MudButton>
+                @if (SettingsVM.DisplayPersistenceError is not null)
+                {
+                    <p class="inline-error" role="alert">@SettingsVM.DisplayPersistenceError</p>
+                }
+            </details>
+        </section>
+    </div>
 
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudGrid Spacing="0" Class="pa-0 ma-0">
-                    <MudCheckBox @bind-Value="SettingsVM.GameMode" Label="@Localizer["UsePveData"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" Converter="@gameModeConverter" />
-                    <MudCheckBox @bind-Value="SettingsVM.AlwaysOnTop" Label="@Localizer["AlwaysOnTop"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
-                    <MudCheckBox @bind-Value="SettingsVM.LogDebug" Label="@Localizer["LogDebugInfo"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0" />
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading"><div><h2>@Localizer["ApplicationSection"]</h2></div></header>
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["InterfaceLanguage"]</div>
+                    <p class="setting-description">@Localizer["InterfaceLanguageDescription"]</p>
+                </div>
+                <div class="setting-control">
+                    <MudSelect T="UiLanguage"
+                               Value="@RatConfig.UserInterface.Language"
+                               ValueChanged="SetUiLanguageAsync"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true">
+                        @foreach (UiLanguage language in GetUiLanguages())
+                        {
+                            <MudSelectItem T="UiLanguage" Value="@language">@language.ToCultureName()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["TooltipDelay"]</div>
+                    <p class="setting-description">@Localizer["TooltipDelayDescription"]</p>
+                </div>
+                <div class="setting-control">
+                    <MudSelect T="int"
+                               Value="@RatConfig.ToolTip.Duration"
+                               ValueChanged="SetTooltipDelayAsync"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true">
+                        <MudSelectItem T="int" Value="0">@Localizer["TooltipInstant"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="500">@Localizer["TooltipShort"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="1500">@Localizer["TooltipNormal"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="3000">@Localizer["TooltipLong"]</MudSelectItem>
+                    </MudSelect>
+                </div>
+            </div>
+            <ImmediateSettingSwitch Value="@RatConfig.AlwaysOnTop"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["AlwaysOnTop"]"
+                                    Persist="SettingsVM.SetAlwaysOnTopAsync" />
+        </section>
+
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["DiagnosticsSection"]</h2>
+                    <p>@Localizer["DiagnosticsDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.LogDebug"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["LogDebugInfo"]"
+                                    Persist="SettingsVM.SetLogDebugAsync" />
+        </section>
+    </aside>
 </div>
 
 @code {
     private static InputMode DecimalInputMode => InputMode.@decimal;
 
     private bool _refreshing;
+    private bool _savingDisplay;
+    private int _displaySaveOperations;
 
-    // GameMode is stored as enum; checkbox Value is bool — map via explicit convert funcs.
-    private readonly IConverter<GameMode, bool?> gameModeConverter = Conversions.From<GameMode, bool?>(
-        value => value == GameMode.Pve,
-        value => value ?? false ? GameMode.Pve : GameMode.Regular
-    );
-
-    private IEnumerable<UiLanguage> GetUiLanguages() => Enum.GetValues<UiLanguage>().OrderBy(language => language.ToCultureName());
-
-    protected override void OnInitialized() {
+    protected override void OnInitialized()
+    {
         SettingsVM.PropertyChanged += PropertyChangeHandler;
         SettingsVM.RefreshGameDisplays();
     }
 
-    private Severity GetDisplaySeverity() => SettingsVM.GameDisplayStatusKind switch {
+    private IEnumerable<UiLanguage> GetUiLanguages() =>
+        Enum.GetValues<UiLanguage>().OrderBy(language => language.ToCultureName());
+
+    private Severity GetDisplaySeverity() => SettingsVM.GameDisplayStatusKind switch
+    {
         GameDisplayStatusKind.Success => Severity.Success,
         GameDisplayStatusKind.Warning => Severity.Warning,
         GameDisplayStatusKind.Error => Severity.Error,
         _ => Severity.Info,
     };
 
-    private async System.Threading.Tasks.Task RefreshDisplayDetection() {
+    private async Task RefreshDisplayDetectionAsync()
+    {
         _refreshing = true;
-        await InvokeAsync(StateHasChanged);
-        try {
-            SettingsVM.RefreshGameDisplays();
+        try
+        {
+            await Task.Run(SettingsVM.RefreshGameDisplays);
         }
-        finally {
+        finally
+        {
             _refreshing = false;
         }
     }
 
-    private void SetCustomResolution(int width, int height) {
-        SettingsVM.CustomGameWidth = width;
-        SettingsVM.CustomGameHeight = height;
+    private async Task SetDisplayAsync(string value)
+    {
+        string previous = SettingsVM.SelectedGameDisplayId;
+        SettingsVM.SelectedGameDisplayId = value;
+        SettingSaveResult result = await PersistDisplayAsync();
+        if (!result.Succeeded)
+            SettingsVM.SelectedGameDisplayId = previous;
+    }
+
+    private async Task<SettingSaveResult> PersistCustomResolutionToggleAsync(bool value) => await PersistDisplayAsync();
+    private async Task<SettingSaveResult> PersistCustomScaleToggleAsync(bool value) => await PersistDisplayAsync();
+
+    private async Task<SettingSaveResult> PersistDisplayAsync()
+    {
+        _displaySaveOperations++;
+        _savingDisplay = true;
+        try
+        {
+            SettingSaveResult result = await SettingsVM.PersistDisplaySettingsAsync();
+            if (!result.Succeeded && result.ErrorMessage is null)
+                Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
+            return result;
+        }
+        finally
+        {
+            _displaySaveOperations--;
+            _savingDisplay = _displaySaveOperations > 0;
+        }
+    }
+
+    private async Task HandleDisplayKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await PersistDisplayAsync();
+        else if (args.Key == "Escape")
+            SettingsVM.RefreshGameDisplays();
+    }
+
+    private async Task SetCustomResolutionAsync(int width, int height)
+    {
+        SettingsVM.CustomGameWidthText = width.ToString(CultureInfo.CurrentCulture);
+        SettingsVM.CustomGameHeightText = height.ToString(CultureInfo.CurrentCulture);
+        await PersistDisplayAsync();
+    }
+
+    private async Task ResetDisplayAsync()
+    {
+        SettingsVM.ResetDisplayDraftToDetected();
+        await PersistDisplayAsync();
+    }
+
+    private async Task SetUiLanguageAsync(UiLanguage value)
+    {
+        SettingSaveResult result = await SettingsVM.SetUiLanguageAsync(value);
+        if (!result.Succeeded)
+            Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
+    }
+
+    private async Task SetTooltipDelayAsync(int value)
+    {
+        SettingSaveResult result = await SettingsVM.SetTooltipDurationAsync(value);
+        if (!result.Succeeded)
+            Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
     }
 
     private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
 
-    public void Dispose() {
+    public void Dispose()
+    {
         SettingsVM.PropertyChanged -= PropertyChangeHandler;
     }
 }

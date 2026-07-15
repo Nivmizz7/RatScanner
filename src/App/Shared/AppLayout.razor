@@ -1,9 +1,11 @@
 @using System.Collections.Generic
+@using GameMode = RatScanner.TarkovDev.GameMode
 @inherits LayoutComponentBase
 @layout MainLayout
 @inject MenuVM MenuVM
 @inject LocalizationService Localizer
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 @implements IDisposable
 
 <div class="app-shell">
@@ -46,6 +48,26 @@
             </NavLink>
         </nav>
         <div class="sidebar-spacer"></div>
+        <section class="game-mode" aria-label="@Localizer["GameMode"]">
+            <span>@Localizer["GameMode"]</span>
+            <MudToggleGroup T="GameMode"
+                            Value="@RatConfig.GameMode"
+                            ValueChanged="SetGameModeAsync"
+                            Disabled="_changingGameMode"
+                            Size="Size.Small"
+                            Color="Color.Primary"
+                            CheckMark="true"
+                            FixedContent="true">
+                <MudToggleItem T="GameMode" Value="GameMode.Regular" Text="@Localizer["PvpMode"]" />
+                <MudToggleItem T="GameMode" Value="GameMode.Pve" Text="@Localizer["PveMode"]" />
+            </MudToggleGroup>
+            @if (TrackerNeedsAttention)
+            {
+                <NavLink href="/app/settings/tracking" class="tracker-attention">
+                    @TrackerAttentionMessage
+                </NavLink>
+            }
+        </section>
         <footer aria-label="@Localizer["ApplicationVersion"]">
             <span>@MenuVM.VersionDisplay</span>
         </footer>
@@ -62,9 +84,22 @@
 
 @code {
     private bool _drawerOpen;
+    private bool _changingGameMode;
     private ElementReference _sidebar;
     private ElementReference _toggleButton;
     private bool _subscribed;
+
+    private bool TrackerNeedsAttention =>
+        RatScannerMain.Instance.TarkovTrackerDB.ConnectionState
+            is TrackerConnectionState.NotConfigured
+                or TrackerConnectionState.InvalidKey
+                or TrackerConnectionState.MissingPermissions
+                or TrackerConnectionState.ConnectionError;
+
+    private string TrackerAttentionMessage =>
+        RatConfig.GameMode == GameMode.Pve
+            ? Localizer["TrackerNotConnectedPve"]
+            : Localizer["TrackerNotConnectedPvp"];
 
     private Dictionary<string, object> _mainAttributes =>
         _drawerOpen
@@ -109,6 +144,28 @@
     }
 
     private Task CloseDrawerAfterNavAsync() => CloseDrawerAsync();
+
+    private async Task SetGameModeAsync(GameMode gameMode)
+    {
+        if (_changingGameMode || gameMode == RatConfig.GameMode)
+            return;
+
+        _changingGameMode = true;
+        try
+        {
+            await RatConfig.SetGameModeAsync(gameMode);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("Unable to switch game mode.", exception);
+            Snackbar.Add(Localizer["GameModeSwitchFailed"], Severity.Error);
+        }
+        finally
+        {
+            _changingGameMode = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {

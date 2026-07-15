@@ -57,6 +57,33 @@ nav a:hover {
 
 .sidebar-spacer { flex: 1; }
 
+.game-mode {
+    display: grid;
+    gap: 6px;
+    padding: 0 6px 10px;
+    color: var(--rs-muted);
+    font-size: 12px;
+}
+
+.game-mode ::deep .mud-toggle-group {
+    width: 100%;
+}
+
+.game-mode ::deep .mud-toggle-item {
+    flex: 1;
+}
+
+.game-mode ::deep .tracker-attention {
+    color: var(--rs-warning);
+    font-size: 11px;
+    line-height: 1.35;
+    text-decoration: none;
+}
+
+.game-mode ::deep .tracker-attention:hover {
+    text-decoration: underline;
+}
+
 footer {
     display: grid;
     gap: 4px;

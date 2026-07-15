@@ -19,8 +19,8 @@ public partial class PageSwitcher : Window
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
-    public const int MinimumWidth = 560;
-    public const int MinimumHeight = 420;
+    public const int MinimumWidth = 680;
+    public const int MinimumHeight = 520;
 
     private NotifyIcon _notifyIcon = null!;
     private ContextMenuStrip _contextMenuStrip = new();

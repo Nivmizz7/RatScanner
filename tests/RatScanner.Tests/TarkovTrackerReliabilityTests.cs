@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using RatScanner.FetchModels.TarkovTracker;
 using Xunit;
+using GameMode = RatScanner.TarkovDev.GameMode;
 
 namespace RatScanner.Tests;
 
@@ -32,29 +33,41 @@ public class ApiClientReliabilityTests
     }
 
     [Fact]
-    public void Get_maps_unauthorized_and_rate_limit_statuses()
+    public void Get_maps_auth_permission_and_rate_limit_statuses()
     {
         using HttpClient unauthorizedClient = CreateStatusClient(HttpStatusCode.Unauthorized);
+        using HttpClient forbiddenClient = new(
+            new DelegateHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent("{\"error\":\"Missing required permission: GP\"}"),
+            })
+        );
         using HttpClient rateLimitedClient = CreateStatusClient(HttpStatusCode.TooManyRequests);
 
         Assert.Throws<UnauthorizedTokenException>(() =>
             APIClient.Get(unauthorizedClient, "https://example.test/resource", "token")
         );
+        MissingPermissionException permission = Assert.Throws<MissingPermissionException>(() =>
+            APIClient.Get(forbiddenClient, "https://example.test/resource", "token")
+        );
+        Assert.Contains("GP", permission.Message, StringComparison.Ordinal);
         Assert.Throws<RateLimitExceededException>(() =>
             APIClient.Get(rateLimitedClient, "https://example.test/resource", "token")
         );
     }
 
     [Fact]
-    public void Get_rejects_other_non_success_statuses()
+    public void Get_rejects_other_non_success_statuses_without_including_the_token()
     {
         using HttpClient client = CreateStatusClient(HttpStatusCode.ServiceUnavailable);
+        const string secret = "PVP_super-secret";
 
         HttpRequestException exception = Assert.Throws<HttpRequestException>(() =>
-            APIClient.Get(client, "https://example.test/resource", "token")
+            APIClient.Get(client, "https://example.test/resource", secret)
         );
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, exception.StatusCode);
+        Assert.DoesNotContain(secret, exception.ToString(), StringComparison.Ordinal);
     }
 
     private static HttpClient CreateStatusClient(HttpStatusCode statusCode) =>
@@ -93,201 +106,194 @@ public class ApiClientReliabilityTests
 
 public class TarkovTrackerDatabaseReliabilityTests
 {
-    private const string TokenResponse = """
-        {"token":"abc","permissions":["GP"]}
+    private const string PvpTokenResponse = """
+        {"token":"PVP_abc","permissions":["GP"],"gameMode":"pvp"}
         """;
 
-    private const string ProgressResponse = """
+    private const string PvpProgressResponse = """
         {
           "data": {
-            "userId": "self",
-            "displayName": "Me",
+            "userId": "pvp-self",
+            "displayName": "PvP",
             "tasksProgress": [],
             "taskObjectivesProgress": [],
             "hideoutModulesProgress": [],
             "hideoutPartsProgress": []
           },
-          "meta": {"self":"self"}
+          "meta": {"self":"pvp-self","gameMode":"pvp"}
+        }
+        """;
+
+    private const string PveProgressResponse = """
+        {
+          "data": {
+            "userId": "pve-self",
+            "displayName": "PvE",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          },
+          "meta": {"self":"pve-self","gameMode":"pve"}
         }
         """;
 
     [Fact]
-    public void Clearing_configured_token_clears_runtime_state_immediately()
+    public async Task Clearing_configured_token_clears_runtime_state_immediately()
     {
         TarkovTrackerDB database = new(
-            (url, _) => url.EndsWith("/token", StringComparison.Ordinal) ? TokenResponse : ProgressResponse
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse : PvpProgressResponse
+                )
         );
-        database.Token = "abc";
-        Assert.True(database.Init());
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
         Assert.Single(database.Progress);
-        Assert.Equal("self", database.Self);
 
-        database.Token = "";
+        database.Configure("", "https://api.example", GameMode.Regular);
 
         Assert.Empty(database.Progress);
         Assert.Equal("", database.Self);
-        Assert.Null(database.SoloProgressAvailable);
-        Assert.Null(database.TeamProgressAvailable);
-        Assert.False(database.Init());
+        Assert.Equal(TrackerConnectionState.NotConfigured, database.ConnectionState);
+        Assert.False(await database.InitAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public void Init_contains_transient_token_failures_for_later_retry()
+    public async Task Validation_requires_only_progress_read_and_treats_team_as_optional()
     {
-        TarkovTrackerDB database = new((_, _) => throw new HttpRequestException("Unavailable")) { Token = "abc" };
-        bool initialized = false;
-
-        Exception? exception = Record.Exception(() => initialized = database.Init());
-
-        Assert.Null(exception);
-        Assert.True(initialized);
-        Assert.Empty(database.Progress);
-        Assert.Equal(TokenValidationResult.Unavailable, database.ValidateToken("abc"));
-    }
-
-    [Fact]
-    public void Init_contains_malformed_token_responses_for_later_retry()
-    {
-        TarkovTrackerDB database = new((_, _) => "not-json") { Token = "abc" };
-        bool initialized = false;
-
-        Exception? exception = Record.Exception(() => initialized = database.Init());
-
-        Assert.Null(exception);
-        Assert.True(initialized);
-        Assert.False(database.TestToken("abc"));
-    }
-
-    [Fact]
-    public void Init_retains_last_good_progress_when_refresh_is_malformed()
-    {
-        bool malformed = false;
         TarkovTrackerDB database = new(
-            (url, _) =>
-            {
-                if (url.EndsWith("/token", StringComparison.Ordinal))
-                    return TokenResponse;
-                return malformed ? "not-json" : ProgressResponse;
-            }
-        )
-        {
-            Token = "abc",
-        };
-        Assert.True(database.Init());
-        Assert.Single(database.Progress);
-
-        malformed = true;
-        Exception? exception = Record.Exception(() => database.Init());
-
-        Assert.Null(exception);
-        Assert.Single(database.Progress);
-        Assert.Equal("self", database.Self);
-    }
-
-    [Fact]
-    public void Init_marks_only_explicit_unauthorized_responses_as_invalid()
-    {
-        TarkovTrackerDB database = new((_, _) => throw new UnauthorizedTokenException()) { Token = "abc" };
-
-        Assert.False(database.Init());
-        Assert.Empty(database.Progress);
-        Assert.Equal(TokenValidationResult.Invalid, database.ValidateToken("abc"));
-    }
-
-    [Fact]
-    public void Backend_change_invalidates_old_state_and_retries_an_unavailable_validation()
-    {
-        int newBackendTokenRequests = 0;
-        TarkovTrackerDB database = new(
-            (url, _) =>
-            {
-                if (url.StartsWith("https://old.example", StringComparison.Ordinal))
-                    throw new UnauthorizedTokenException();
-                if (url.EndsWith("/token", StringComparison.Ordinal) && ++newBackendTokenRequests == 1)
-                    throw new HttpRequestException("Temporarily unavailable");
-                return url.EndsWith("/token", StringComparison.Ordinal) ? TokenResponse : ProgressResponse;
-            }
+            (_, token, _) => Task.FromResult($$"""{"token":"{{token}}","permissions":["GP"],"gameMode":"pvp"}""")
         );
-        database.Configure("abc", "https://old.example");
-        Assert.False(database.Init());
 
-        database.Configure("abc", "https://new.example");
+        TrackerValidationResult valid = await database.ValidateCandidateAsync(
+            "PVP_abc",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult missing = await new TarkovTrackerDB(
+            (_, token, _) => Task.FromResult($$"""{"token":"{{token}}","permissions":["TP","WP"],"gameMode":"pvp"}""")
+        ).ValidateCandidateAsync(
+            "PVP_abc",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
 
-        Assert.True(database.Init());
-        Assert.Null(database.SoloProgressAvailable);
-        Assert.True(database.Init());
-        Assert.True(database.SoloProgressAvailable);
-        Assert.Single(database.Progress);
-        Assert.Equal(2, newBackendTokenRequests);
+        Assert.True(valid.Succeeded);
+        Assert.False(missing.Succeeded);
+        Assert.Equal(TrackerValidationFailure.MissingPermissions, missing.Failure);
+        Assert.Equal([TarkovTrackerPermissions.ReadProgress], missing.MissingPermissions);
+    }
+
+    [Theory]
+    [InlineData("PVP_abc", "pve", GameMode.Regular)]
+    [InlineData("PVE_abc", "pvp", GameMode.Pve)]
+    public async Task Wrong_mode_key_is_rejected(string token, string apiMode, GameMode expectedMode)
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) =>
+                Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"],"gameMode":"{{apiMode}}"}""")
+        );
+
+        TrackerValidationResult result = await database.ValidateCandidateAsync(
+            token,
+            "https://api.example",
+            expectedMode,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, result.Failure);
     }
 
     [Fact]
-    public async Task Stale_token_validation_cannot_overwrite_a_newer_configuration()
+    public async Task Failed_reconfiguration_does_not_allow_old_mode_progress_to_overwrite_the_new_mode()
     {
-        using ManualResetEventSlim oldRequestStarted = new(false);
-        using ManualResetEventSlim releaseOldRequest = new(false);
+        using ManualResetEventSlim pvpStarted = new(false);
+        using ManualResetEventSlim releasePvp = new(false);
         TarkovTrackerDB database = new(
-            (url, token) =>
+            async (url, token, cancellationToken) =>
             {
-                if (url.StartsWith("https://old.example", StringComparison.Ordinal))
+                if (token == "PVP_abc" && url.EndsWith("/progress", StringComparison.Ordinal))
                 {
-                    oldRequestStarted.Set();
-                    releaseOldRequest.Wait(TimeSpan.FromSeconds(5));
-                    throw new UnauthorizedTokenException();
+                    pvpStarted.Set();
+                    await Task.Run(
+                        () => releasePvp.Wait(TimeSpan.FromSeconds(5), cancellationToken),
+                        cancellationToken
+                    );
+                    return PvpProgressResponse;
                 }
-
                 if (url.EndsWith("/token", StringComparison.Ordinal))
-                    return $$"""{"token":"{{token}}","permissions":["GP"]}""";
-                return ProgressResponse;
+                {
+                    string mode = token!.StartsWith("PVE_", StringComparison.Ordinal) ? "pve" : "pvp";
+                    return $$"""{"token":"{{token}}","permissions":["GP"],"gameMode":"{{mode}}"}""";
+                }
+                return PveProgressResponse;
             }
         );
-        database.Configure("old", "https://old.example");
-        Task<TokenValidationResult> oldValidation = Task.Run(database.UpdateToken);
-        Assert.True(oldRequestStarted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
-        database.Configure("new", "https://new.example");
-        Assert.Equal(TokenValidationResult.Valid, database.UpdateToken());
-        releaseOldRequest.Set();
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Task<bool> pvpInit = database.InitAsync(TestContext.Current.CancellationToken);
+        Assert.True(pvpStarted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
-        Assert.Equal(TokenValidationResult.Unavailable, await oldValidation);
-        Assert.Equal("new", database.Token);
-        Assert.True(database.SoloProgressAvailable);
-        Assert.True(database.Init());
-        Assert.Single(database.Progress);
+        database.Configure("PVE_abc", "https://api.example", GameMode.Pve);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        releasePvp.Set();
+        await pvpInit;
+
+        Assert.Equal("PVE_abc", database.Token);
+        Assert.Equal("pve-self", database.Self);
+        Assert.Equal("PvE", Assert.Single(database.Progress).DisplayName);
     }
 
     [Fact]
-    public async Task Superseded_init_is_not_reported_as_an_invalid_current_token()
+    public async Task Switching_back_to_a_mode_loads_its_cached_progress_before_refresh()
     {
-        using ManualResetEventSlim oldRequestStarted = new(false);
-        using ManualResetEventSlim releaseOldRequest = new(false);
+        bool failRefresh = false;
         TarkovTrackerDB database = new(
-            (url, token) =>
+            (url, token, _) =>
             {
-                if (url.StartsWith("https://old.example", StringComparison.Ordinal))
-                {
-                    oldRequestStarted.Set();
-                    releaseOldRequest.Wait(TimeSpan.FromSeconds(5));
-                    throw new UnauthorizedTokenException();
-                }
-
                 if (url.EndsWith("/token", StringComparison.Ordinal))
-                    return $$"""{"token":"{{token}}","permissions":["GP"]}""";
-                return ProgressResponse;
+                {
+                    string mode = token!.StartsWith("PVE_", StringComparison.Ordinal) ? "pve" : "pvp";
+                    return Task.FromResult($$"""{"token":"{{token}}","permissions":["GP"],"gameMode":"{{mode}}"}""");
+                }
+                if (failRefresh)
+                    throw new HttpRequestException("offline");
+                return Task.FromResult(token == "PVE_abc" ? PveProgressResponse : PvpProgressResponse);
             }
         );
-        long oldGeneration = database.Configure("old", "https://old.example");
-        Task<bool> oldInitialization = Task.Run(database.Init);
-        Assert.True(oldRequestStarted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
-        long newGeneration = database.Configure("new", "https://new.example");
-        Assert.Equal(TokenValidationResult.Valid, database.UpdateToken());
-        releaseOldRequest.Set();
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        database.Configure("PVE_abc", "https://api.example", GameMode.Pve);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
 
-        Assert.True(await oldInitialization);
-        Assert.False(database.IsCurrentConfiguration(oldGeneration));
-        Assert.True(database.IsCurrentConfiguration(newGeneration));
-        Assert.Equal("new", database.Token);
-        Assert.True(database.SoloProgressAvailable);
+        failRefresh = true;
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("pvp-self", database.Self);
+    }
+
+    [Fact]
+    public async Task Invalid_replacement_validation_does_not_mutate_the_configured_key()
+    {
+        TarkovTrackerDB database = new((_, _, _) => throw new UnauthorizedTokenException());
+        database.Configure("PVP_existing", "https://api.example", GameMode.Regular);
+
+        TrackerValidationResult result = await database.ValidateCandidateAsync(
+            "PVP_replacement",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("PVP_existing", database.Token);
     }
 }

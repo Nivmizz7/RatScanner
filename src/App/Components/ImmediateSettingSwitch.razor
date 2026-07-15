@@ -1,0 +1,58 @@
+@inject LocalizationService Localizer
+@inject ISnackbar Snackbar
+
+<div class="immediate-switch">
+    <MudSwitch T="bool"
+               Value="Value"
+               ValueChanged="ChangeAsync"
+               Label="@Label"
+               Color="Color.Primary"
+               Disabled="Disabled" />
+    @if (_saving)
+    {
+        <MudProgressCircular Size="Size.Small" Color="Color.Primary" Indeterminate="true" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public bool Value { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> ValueChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public Func<bool, Task<SettingSaveResult>> Persist { get; set; } = null!;
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    private bool _saving;
+    private long _generation;
+
+    private async Task ChangeAsync(bool value)
+    {
+        long generation = ++_generation;
+        await ValueChanged.InvokeAsync(value);
+        _saving = true;
+        try
+        {
+            SettingSaveResult result = await Persist(value);
+            if (generation != _generation)
+                return;
+            if (!result.Succeeded)
+            {
+                await ValueChanged.InvokeAsync(!value);
+                Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
+            }
+        }
+        finally
+        {
+            if (generation == _generation)
+                _saving = false;
+        }
+    }
+}

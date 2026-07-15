@@ -1,106 +1,467 @@
 @page "/app/settings/tracking"
 @using System.Diagnostics
-@using static RatScanner.RatConfig
+@using System.Threading
+@using GameMode = RatScanner.TarkovDev.GameMode
 @inject SettingsVM SettingsVM
 @inject LocalizationService Localizer
+@inject ISnackbar Snackbar
 @implements IDisposable
-<div>
-    <MudGrid Class="pa-0 ma-0" Spacing="0" Style="height: 100%;">
-        <MudItem xs="12">
-            <div class="d-flex align-center justify-center mx-2 mb-1">
-                <MudText Typo="Typo.subtitle1" Color="Color.Inherit">@Localizer["TrackingSettingsTitle"]</MudText>
-            </div>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudCheckBox @bind-Value="SettingsVM.ShowNonFIRNeeds" Label="@Localizer["ShowNonFirNeeds"]" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudCheckBox @bind-Value="SettingsVM.ShowKappaNeeds" Label="@Localizer["ShowKappaNeeds"]" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudGrid Spacing="1">
-                    <MudItem xs="12">
-                        <div class="d-flex justify-center">
-                            @Localizer["TarkovTrackerTitle"]
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["TrackingDisplaySection"]</h2>
+                    <p>@Localizer["TrackingDisplayDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowNonFIRNeeds"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["ShowNonFirNeeds"]"
+                                    Persist="SettingsVM.SetShowNonFirNeedsAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowKappaNeeds"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["ShowKappaNeeds"]"
+                                    Persist="SettingsVM.SetShowKappaNeedsAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.Tracking.TarkovTracker.ShowTeam"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["ShowTeammates"]"
+                                    Persist="SettingsVM.SetShowTarkovTrackerTeamAsync" />
+            <p class="section-description">@Localizer["TeamPermissionDescription"]</p>
+        </section>
+
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>TarkovTracker.org</h2>
+                    <p>@Localizer["TarkovTrackerOrgDescription"]</p>
+                </div>
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew" OnClick="OpenTarkovTrackerOrg">
+                    @Localizer["ManageApiKeys"]
+                </MudButton>
+            </header>
+            <div class="credential-grid">
+                @foreach (GameMode mode in Modes)
+                {
+                    <article class="credential-card">
+                        <div class="credential-heading">
+                            <div>
+                                <h3>@ModeLabel(mode)</h3>
+                                <p>@ModeDescription(mode)</p>
+                            </div>
+                            <span class="@StatusClass(GetOrgState(mode))">@StatusLabel(GetOrgState(mode))</span>
                         </div>
-                    </MudItem>
-                    <MudItem xs="12">
-                        <MudSelect @bind-Value="SettingsVM.TarkovTrackerBackend" T="TarkovTrackerBackend" Label="@Localizer["BackendLabel"]" Variant="Variant.Outlined" Margin="Margin.Dense">
-                            <MudSelectItem T="TarkovTrackerBackend" Value="@TarkovTrackerBackend.TarkovTrackerORG">@Localizer["BackendOrgOption"]</MudSelectItem>
-                            <MudSelectItem T="TarkovTrackerBackend" Value="@TarkovTrackerBackend.TarkovTrackerIO">@Localizer["BackendIoOption"]</MudSelectItem>
-                        </MudSelect>
-                    </MudItem>
-                    @if (SettingsVM.TarkovTrackerBackend == TarkovTrackerBackend.TarkovTrackerIO)
+
+                        @if (HasOrgKey(mode) && !_orgReplacement[mode])
+                        {
+                            <div class="configured-secret" aria-label="@Localizer["ConfiguredApiKey"]">••••••••••••••••</div>
+                            <div class="credential-actions">
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => BeginOrgReplacement(mode))">
+                                    @Localizer["ReplaceKey"]
+                                </MudButton>
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="@(() => RemoveOrgKeyAsync(mode))">
+                                    @Localizer["RemoveKey"]
+                                </MudButton>
+                            </div>
+                        }
+                        else
+                        {
+                            <MudTextField T="string"
+                                          Value="@_orgDraft[mode]"
+                                          ValueChanged="@(value => _orgDraft[mode] = value ?? "")"
+                                          Label="@Localizer["ApiToken"]"
+                                          InputType="@(_orgVisible[mode] ? InputType.Text : InputType.Password)"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          FullWidth="true"
+                                          Disabled="@_orgTesting[mode]"
+                                          Adornment="Adornment.End"
+                                          AdornmentIcon="@(_orgVisible[mode] ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                          AdornmentAriaLabel="@(_orgVisible[mode] ? Localizer["HideApiKey"] : Localizer["ShowApiKey"])"
+                                          OnAdornmentClick="@(() => _orgVisible[mode] = !_orgVisible[mode])"
+                                          OnKeyDown="@(args => HandleOrgKeyDownAsync(mode, args))" />
+                            <div class="credential-actions">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           Disabled="@(_orgTesting[mode] || string.IsNullOrWhiteSpace(_orgDraft[mode]))"
+                                           OnClick="@(() => TestOrgKeyAsync(mode))">
+                                    @if (_orgTesting[mode])
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    }
+                                    @Localizer["TestKey"]
+                                </MudButton>
+                                @if (HasOrgKey(mode))
+                                {
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => CancelOrgReplacement(mode))">
+                                        @Localizer["CancelButton"]
+                                    </MudButton>
+                                }
+                            </div>
+                        }
+
+                        @if (_orgError[mode] is not null)
+                        {
+                            <p class="inline-error" role="alert">@_orgError[mode]</p>
+                        }
+                    </article>
+                }
+            </div>
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>TarkovTracker.io</h2>
+                    <p>@Localizer["TarkovTrackerIoDescription"]</p>
+                </div>
+            </header>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                @Localizer["TarkovTrackerIoPvpOnly"]
+            </MudAlert>
+            @if (RatConfig.GameMode == GameMode.Pve)
+            {
+                <p class="inline-info">@Localizer["TarkovTrackerIoInactivePve"]</p>
+            }
+
+            @if (HasIoKey && !_ioReplacement)
+            {
+                <div class="configured-secret mt-3">••••••••••••••••</div>
+                <div class="credential-actions">
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="BeginIoReplacement">@Localizer["ReplaceKey"]</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="RemoveIoKeyAsync">@Localizer["RemoveKey"]</MudButton>
+                </div>
+            }
+            else
+            {
+                <MudTextField T="string"
+                              @bind-Value="_ioDraft"
+                              Label="@Localizer["ApiToken"]"
+                              InputType="@(_ioVisible ? InputType.Text : InputType.Password)"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              FullWidth="true"
+                              Disabled="_ioTesting"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_ioVisible ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              AdornmentAriaLabel="@(_ioVisible ? Localizer["HideApiKey"] : Localizer["ShowApiKey"])"
+                              OnAdornmentClick="@(() => _ioVisible = !_ioVisible)"
+                              OnKeyDown="HandleIoKeyDownAsync"
+                              Class="mt-3" />
+                <div class="credential-actions">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="@(_ioTesting || string.IsNullOrWhiteSpace(_ioDraft))" OnClick="TestIoKeyAsync">
+                        @if (_ioTesting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        @Localizer["TestKey"]
+                    </MudButton>
+                    @if (HasIoKey)
                     {
-                        <MudItem xs="12">
-                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-1">
-                                <MudText Typo="Typo.caption">@Localizer["BackendIoWarning"]</MudText>
-                                <MudLink Typo="Typo.caption" Class="mt-1 d-inline-block" OnClick="OpenTarkovTrackerOrg">
-                                    @Localizer["BackendIoWarningLink"]
-                                </MudLink>
-                            </MudAlert>
-                        </MudItem>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="CancelIoReplacement">@Localizer["CancelButton"]</MudButton>
                     }
-                    <MudItem xs="12">
-                        <MudTextField @bind-Value="SettingsVM.TarkovTrackerToken" Label="@Localizer["ApiToken"]" InputType="@PasswordInput" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon" OnAdornmentClick="TokenShowClick"></MudTextField>
-                    </MudItem>
-                    <MudItem xs="12">
-                        <MudCheckBox @bind-Value="SettingsVM.ShowTarkovTrackerTeam" Label="@Localizer["ShowTeammates"]" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    </MudItem>
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+                </div>
+            }
+            @if (_ioError is not null)
+            {
+                <p class="inline-error" role="alert">@_ioError</p>
+            }
+        </section>
+
+        <section class="settings-section">
+            <header class="section-heading"><div><h2>@Localizer["ActiveTrackingContext"]</h2></div></header>
+            <MudAlert Severity="@ActiveContextSeverity" Variant="Variant.Outlined" Dense="true">
+                @ActiveContextMessage
+            </MudAlert>
+        </section>
+    </aside>
 </div>
 
 @code {
+    private static readonly GameMode[] Modes = [GameMode.Regular, GameMode.Pve];
+    private readonly Dictionary<GameMode, string> _orgDraft = new() { [GameMode.Regular] = "", [GameMode.Pve] = "" };
+    private readonly Dictionary<GameMode, string?> _orgError = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
+    private readonly Dictionary<GameMode, bool> _orgTesting = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
+    private readonly Dictionary<GameMode, bool> _orgVisible = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
+    private readonly Dictionary<GameMode, bool> _orgReplacement = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
+    private readonly Dictionary<GameMode, TrackerConnectionState> _orgState = new()
+    {
+        [GameMode.Regular] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
+        [GameMode.Pve] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PveToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
+    };
+    private readonly Dictionary<GameMode, CancellationTokenSource?> _orgValidation = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
+    private bool _ioReplacement;
+    private bool _ioVisible;
+    private bool _ioTesting;
+    private string _ioDraft = "";
+    private string? _ioError;
+    private CancellationTokenSource? _ioValidation;
+
+    private bool HasIoKey => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken);
 
     protected override void OnInitialized()
     {
-        SettingsVM.PropertyChanged += PropertyChangeHandler;
+        GameMode mode = RatConfig.GameMode;
+        TarkovTrackerDB database = RatScannerMain.Instance.TarkovTrackerDB;
+        if (
+            HasOrgKey(mode)
+            && string.Equals(
+                database.Token,
+                RatConfig.Tracking.TarkovTracker.TokenForMode(mode),
+                StringComparison.Ordinal
+            )
+        )
+        {
+            _orgState[mode] = database.ConnectionState;
+        }
     }
 
-    private async void PropertyChangeHandler(object? sender, EventArgs e)
+    private Severity ActiveContextSeverity => RatScannerMain.Instance.TarkovTrackerDB.ConnectionState switch
     {
-        await InvokeAsync(StateHasChanged);
+        TrackerConnectionState.Connected => Severity.Success,
+        TrackerConnectionState.InvalidKey => Severity.Error,
+        TrackerConnectionState.MissingPermissions => Severity.Warning,
+        TrackerConnectionState.ConnectionError => Severity.Warning,
+        _ => Severity.Info,
+    };
+
+    private string ActiveContextMessage
+    {
+        get
+        {
+            if (RatConfig.GameMode == GameMode.Pve && !HasOrgKey(GameMode.Pve))
+                return Localizer["TrackerNotConnectedPve"];
+            if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular) && !HasIoKey)
+                return Localizer["TrackerNotConnectedPvp"];
+            return Localizer.Format("TrackerActiveMode", ModeLabel(RatConfig.GameMode));
+        }
+    }
+
+    private bool HasOrgKey(GameMode mode) => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.TokenForMode(mode));
+    private TrackerConnectionState GetOrgState(GameMode mode) => _orgState[mode];
+    private string ModeLabel(GameMode mode) => mode == GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"];
+    private string ModeDescription(GameMode mode) => mode == GameMode.Pve ? Localizer["PveKeyDescription"] : Localizer["PvpKeyDescription"];
+
+    private string StatusLabel(TrackerConnectionState state) => state switch
+    {
+        TrackerConnectionState.NotConfigured => Localizer["IntegrationNotConfigured"],
+        TrackerConnectionState.Untested => Localizer["IntegrationUntested"],
+        TrackerConnectionState.Testing => Localizer["IntegrationTesting"],
+        TrackerConnectionState.Connected => Localizer["IntegrationConnected"],
+        TrackerConnectionState.MissingPermissions => Localizer["IntegrationMissingPermissions"],
+        TrackerConnectionState.InvalidKey => Localizer["IntegrationInvalidKey"],
+        _ => Localizer["IntegrationConnectionError"],
+    };
+
+    private static string StatusClass(TrackerConnectionState state) => state switch
+    {
+        TrackerConnectionState.Connected => "credential-status status-success",
+        TrackerConnectionState.MissingPermissions => "credential-status status-warning",
+        TrackerConnectionState.InvalidKey => "credential-status status-error",
+        TrackerConnectionState.ConnectionError => "credential-status status-warning",
+        _ => "credential-status status-info",
+    };
+
+    private void BeginOrgReplacement(GameMode mode)
+    {
+        _orgReplacement[mode] = true;
+        _orgDraft[mode] = "";
+        _orgError[mode] = null;
+    }
+
+    private void CancelOrgReplacement(GameMode mode)
+    {
+        _orgReplacement[mode] = false;
+        _orgDraft[mode] = "";
+        _orgVisible[mode] = false;
+        _orgError[mode] = null;
+    }
+
+    private async Task HandleOrgKeyDownAsync(GameMode mode, KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await TestOrgKeyAsync(mode);
+        else if (args.Key == "Escape" && HasOrgKey(mode))
+            CancelOrgReplacement(mode);
+    }
+
+    private async Task TestOrgKeyAsync(GameMode mode)
+    {
+        string candidate = _orgDraft[mode].Trim();
+        if (string.IsNullOrWhiteSpace(candidate) || _orgTesting[mode])
+            return;
+
+        _orgValidation[mode]?.Cancel();
+        _orgValidation[mode]?.Dispose();
+        CancellationTokenSource cancellation = new();
+        _orgValidation[mode] = cancellation;
+        _orgTesting[mode] = true;
+        _orgState[mode] = TrackerConnectionState.Testing;
+        _orgError[mode] = null;
+        try
+        {
+            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(mode, candidate, cancellation.Token);
+            if (!result.Succeeded)
+            {
+                _orgState[mode] = StateFor(result);
+                _orgError[mode] = ValidationMessage(result, mode);
+                return;
+            }
+
+            SettingSaveResult saved = await SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, candidate);
+            if (!saved.Succeeded)
+            {
+                _orgError[mode] = Localizer["CredentialSaveFailed"];
+                _orgState[mode] = HasOrgKey(mode) ? TrackerConnectionState.Connected : TrackerConnectionState.NotConfigured;
+                return;
+            }
+
+            _orgState[mode] = TrackerConnectionState.Connected;
+            CancelOrgReplacement(mode);
+            if (RatConfig.GameMode == mode)
+                await RatScannerMain.Instance.ActivateTrackerModeAsync(mode, cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        finally
+        {
+            if (_orgValidation[mode] == cancellation)
+            {
+                if (_orgState[mode] == TrackerConnectionState.Testing)
+                    _orgState[mode] = HasOrgKey(mode) ? TrackerConnectionState.Untested : TrackerConnectionState.NotConfigured;
+                _orgTesting[mode] = false;
+                _orgValidation[mode] = null;
+                cancellation.Dispose();
+            }
+        }
+    }
+
+    private async Task RemoveOrgKeyAsync(GameMode mode)
+    {
+        SettingSaveResult result = await SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, "");
+        if (!result.Succeeded)
+        {
+            Snackbar.Add(Localizer["CredentialRemoveFailed"], Severity.Error);
+            return;
+        }
+
+        _orgState[mode] = TrackerConnectionState.NotConfigured;
+        CancelOrgReplacement(mode);
+        if (RatConfig.GameMode == mode)
+            await RatScannerMain.Instance.ActivateTrackerModeAsync(mode);
+    }
+
+    private void BeginIoReplacement()
+    {
+        _ioReplacement = true;
+        _ioDraft = "";
+        _ioError = null;
+    }
+
+    private void CancelIoReplacement()
+    {
+        _ioReplacement = false;
+        _ioDraft = "";
+        _ioVisible = false;
+        _ioError = null;
+    }
+
+    private async Task HandleIoKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await TestIoKeyAsync();
+        else if (args.Key == "Escape" && HasIoKey)
+            CancelIoReplacement();
+    }
+
+    private async Task TestIoKeyAsync()
+    {
+        string candidate = _ioDraft.Trim();
+        if (string.IsNullOrWhiteSpace(candidate) || _ioTesting)
+            return;
+
+        _ioValidation?.Cancel();
+        _ioValidation?.Dispose();
+        _ioValidation = new CancellationTokenSource();
+        _ioTesting = true;
+        _ioError = null;
+        try
+        {
+            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, _ioValidation.Token);
+            if (!result.Succeeded)
+            {
+                _ioError = ValidationMessage(result, GameMode.Regular);
+                return;
+            }
+
+            SettingSaveResult saved = await SettingsVM.SetTarkovTrackerIoTokenAsync(candidate);
+            if (!saved.Succeeded)
+            {
+                _ioError = Localizer["CredentialSaveFailed"];
+                return;
+            }
+
+            CancelIoReplacement();
+            if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
+                await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, _ioValidation.Token);
+        }
+        catch (OperationCanceledException) when (_ioValidation?.IsCancellationRequested == true) { }
+        finally
+        {
+            _ioTesting = false;
+        }
+    }
+
+    private async Task RemoveIoKeyAsync()
+    {
+        SettingSaveResult result = await SettingsVM.SetTarkovTrackerIoTokenAsync("");
+        if (!result.Succeeded)
+        {
+            Snackbar.Add(Localizer["CredentialRemoveFailed"], Severity.Error);
+            return;
+        }
+
+        CancelIoReplacement();
+        if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
+            await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular);
+    }
+
+    private TrackerConnectionState StateFor(TrackerValidationResult result) => result.Failure switch
+    {
+        TrackerValidationFailure.InvalidKey or TrackerValidationFailure.WrongGameMode => TrackerConnectionState.InvalidKey,
+        TrackerValidationFailure.MissingPermissions => TrackerConnectionState.MissingPermissions,
+        _ => TrackerConnectionState.ConnectionError,
+    };
+
+    private string ValidationMessage(TrackerValidationResult result, GameMode mode) => result.Failure switch
+    {
+        TrackerValidationFailure.InvalidKey => Localizer["CredentialInvalid"],
+        TrackerValidationFailure.WrongGameMode => Localizer.Format("CredentialWrongMode", ModeLabel(mode)),
+        TrackerValidationFailure.MissingPermissions => result.MissingPermissions.Count > 0
+            ? Localizer.Format("CredentialMissingPermissions", string.Join(", ", result.MissingPermissions))
+            : Localizer["CredentialMissingPermissionGeneric"],
+        TrackerValidationFailure.RateLimited => Localizer["CredentialRateLimited"],
+        TrackerValidationFailure.ServiceUnavailable => Localizer["CredentialServiceUnavailable"],
+        TrackerValidationFailure.Network => Localizer["CredentialNetworkError"],
+        _ => Localizer["CredentialUnexpectedResponse"],
+    };
+
+    private static void OpenTarkovTrackerOrg()
+    {
+        Process.Start(new ProcessStartInfo { FileName = Constants.Links.TarkovTracker, UseShellExecute = true });
     }
 
     public void Dispose()
     {
-        SettingsVM.PropertyChanged -= PropertyChangeHandler;
-    }
-
-    bool isShow;
-    InputType PasswordInput = InputType.Password;
-    string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-
-    void TokenShowClick()
-    {
-        @if (isShow)
+        foreach (CancellationTokenSource? validation in _orgValidation.Values)
         {
-            isShow = false;
-            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-            PasswordInput = InputType.Password;
+            validation?.Cancel();
+            validation?.Dispose();
         }
-        else
-        {
-            isShow = true;
-            PasswordInputIcon = Icons.Material.Filled.Visibility;
-            PasswordInput = InputType.Text;
-        }
-    }
-
-    private static void OpenTarkovTrackerOrg()
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = Constants.Links.TarkovTracker,
-            UseShellExecute = true,
-        });
+        _ioValidation?.Cancel();
+        _ioValidation?.Dispose();
     }
 }

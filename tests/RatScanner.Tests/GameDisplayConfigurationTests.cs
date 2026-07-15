@@ -288,6 +288,25 @@ public sealed class GameDisplayConfigurationTests
     }
 
     [Fact]
+    public void Extreme_or_overflowing_custom_values_never_become_capture_or_viewport_dimensions()
+    {
+        GameDisplayInfo display = Display("primary", -1920, 0, 1920, 1080, primary: true);
+        GameDisplayPreferences preferences = Preferences(display) with
+        {
+            UseCustomGameResolution = true,
+            CustomGameWidth = int.MaxValue,
+            CustomGameHeight = int.MaxValue,
+        };
+
+        GameDisplayConfiguration configuration = Build([display], preferences: preferences);
+
+        Assert.False(configuration.UsesCustomGameResolution);
+        Assert.Equal(display.PhysicalResolution, configuration.GameViewport);
+        Assert.Equal(display.PhysicalBounds, configuration.CaptureBounds);
+        Assert.Equal(GameDisplayStatusCode.InvalidCustomConfiguration, configuration.StatusCode);
+    }
+
+    [Fact]
     public void No_displays_is_actionable_without_inventing_capture_coordinates()
     {
         GameDisplayConfiguration configuration = Build([]);

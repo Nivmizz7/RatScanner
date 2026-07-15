@@ -118,23 +118,30 @@ internal static class RatConfig
 
         internal static class TarkovTracker
         {
-            internal static TarkovTrackerBackend Backend = TarkovTrackerBackend.TarkovTrackerORG;
-            internal static string Endpoint =>
-                Backend == TarkovTrackerBackend.TarkovTrackerIO
-                    ? "https://tarkovtracker.io/api/v2"
-                    : "https://api.tarkovtracker.org";
-            internal static bool Enable => Token.Length > 0;
+            internal const string OrgEndpoint = "https://api.tarkovtracker.org";
+            internal const string IoEndpoint = "https://tarkovtracker.io/api/v2";
 
-            internal static string Token = "";
+            internal static string PvpToken = "";
+            internal static string PveToken = "";
+            internal static string IoToken = "";
             internal static bool ShowTeam = true;
             internal static int RefreshTime = 5 * 60 * 1000; // 5 minutes
-        }
-    }
 
-    public enum TarkovTrackerBackend
-    {
-        TarkovTrackerIO,
-        TarkovTrackerORG,
+            internal static string ActiveOrgToken => TokenForMode(GameMode);
+            internal static bool OrgEnabledForActiveMode => !string.IsNullOrWhiteSpace(ActiveOrgToken);
+            internal static bool IoEnabledForActiveMode =>
+                GameMode == GameMode.Regular && !string.IsNullOrWhiteSpace(IoToken);
+
+            internal static string TokenForMode(GameMode mode) => mode == GameMode.Pve ? PveToken : PvpToken;
+
+            internal static void SetTokenForMode(GameMode mode, string token)
+            {
+                if (mode == GameMode.Pve)
+                    PveToken = token;
+                else
+                    PvpToken = token;
+            }
+        }
     }
 
     // Overlay options
@@ -165,7 +172,7 @@ internal static class RatConfig
     internal static int ShortTTL = 60 * 5; // 5 minutes
     internal static int MediumTTL = 60 * 60 * 1; // 1 hour
     internal static int LongTTL = 60 * 60 * 12; // 12 hours
-    private static int ConfigVersion => 2;
+    private static int ConfigVersion => 3;
 
     internal static int ScreenWidth = 1920;
     internal static int ScreenHeight = 1080;
@@ -228,12 +235,16 @@ internal static class RatConfig
         return backupPath;
     }
 
-    internal static void LoadConfig()
+    internal static void LoadConfig() => LoadConfig(Paths.ConfigFile, showMigrationMessage: true);
+
+    internal static void LoadConfig(string configPath) => LoadConfig(configPath, showMigrationMessage: false);
+
+    private static void LoadConfig(string configPath, bool showMigrationMessage)
     {
         ConfigLoadPlan loadPlan;
         try
         {
-            loadPlan = PrepareConfigForLoad(Paths.ConfigFile);
+            loadPlan = PrepareConfigForLoad(configPath);
         }
         catch (Exception exception)
         {
@@ -242,7 +253,7 @@ internal static class RatConfig
                 "Unable to back up the existing configuration; automatic migration was skipped.",
                 exception
             );
-            loadPlan = new ConfigLoadPlan(File.Exists(Paths.ConfigFile), false, false, -1, null);
+            loadPlan = new ConfigLoadPlan(File.Exists(configPath), false, false, -1, null);
         }
 
         bool configFileExists = loadPlan.FileExists;
@@ -262,10 +273,13 @@ internal static class RatConfig
                     "RatScanner could not create a backup, so it will use readable settings for this session "
                     + "without rewriting the file. Back up config.cfg manually before saving new settings.";
             }
-            Logger.ShowMessage(message);
+            if (showMigrationMessage)
+                Logger.ShowMessage(message);
+            else
+                Logger.LogInfo(message);
         }
 
-        SimpleConfig config = new(Paths.ConfigFile) { Section = nameof(NameScan) };
+        SimpleConfig config = new(configPath) { Section = nameof(NameScan) };
 
         NameScan.Enable = config.ReadBool(nameof(NameScan.Enable), NameScan.Enable);
         NameScan.EnableAuto = config.ReadBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
@@ -310,12 +324,15 @@ internal static class RatConfig
         Tracking.ShowKappaNeeds = config.ReadBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
 
         config.Section = nameof(Tracking.TarkovTracker);
-        Tracking.TarkovTracker.Backend = (TarkovTrackerBackend)
-            config.ReadInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
-        Tracking.TarkovTracker.Token = config.ReadSecureString(
-            nameof(Tracking.TarkovTracker.Token),
-            Tracking.TarkovTracker.Token
-        );
+        string legacyToken = config.ReadSecureString("Token", "");
+        Tracking.TarkovTracker.PvpToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PvpToken), legacyToken);
+        Tracking.TarkovTracker.PveToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PveToken), "");
+        Tracking.TarkovTracker.IoToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.IoToken), "");
+        if (string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken) && config.ReadInt("Backend", 1) == 0)
+        {
+            Tracking.TarkovTracker.IoToken = legacyToken;
+            Tracking.TarkovTracker.PvpToken = "";
+        }
         Tracking.TarkovTracker.ShowTeam = config.ReadBool(
             nameof(Tracking.TarkovTracker.ShowTeam),
             Tracking.TarkovTracker.ShowTeam
@@ -360,17 +377,54 @@ internal static class RatConfig
 
         RefreshGameDisplayConfiguration(force: true);
         if (shouldSaveConfig)
-            SaveConfig();
+            SaveConfig(configPath);
     }
 
-    internal static void SaveConfig()
+    internal static async System.Threading.Tasks.Task SetGameModeAsync(GameMode gameMode)
     {
-        string temporaryPath = Paths.ConfigFile + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        if (GameMode == gameMode)
+            return;
+
+        GameMode previousMode = GameMode;
+        GameMode = gameMode;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(Paths.ConfigFile) ?? Paths.Base);
-            if (File.Exists(Paths.ConfigFile))
-                File.Copy(Paths.ConfigFile, temporaryPath);
+            await TarkovDevAPI.InitializeCache();
+            if (!TarkovDevAPI.TryGetCachedItems(out TarkovDev.Item[] items) || items.Length == 0)
+                throw new InvalidOperationException("No item data is available for the selected game mode.");
+            RatScannerMain.Instance.SetupRatEye();
+            RatScannerMain.Instance.RefreshItemsForGameMode();
+            SaveConfig();
+            await RatScannerMain.Instance.ActivateTrackerModeAsync(gameMode);
+        }
+        catch
+        {
+            GameMode = previousMode;
+            try
+            {
+                await TarkovDevAPI.InitializeCache();
+                RatScannerMain.Instance.SetupRatEye();
+                RatScannerMain.Instance.RefreshItemsForGameMode();
+                await RatScannerMain.Instance.ActivateTrackerModeAsync(previousMode);
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning("Unable to restore the previous game mode after a failed switch.", exception);
+            }
+            throw;
+        }
+    }
+
+    internal static void SaveConfig() => SaveConfig(Paths.ConfigFile);
+
+    internal static void SaveConfig(string configPath)
+    {
+        string temporaryPath = configPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(configPath) ?? Paths.Base);
+            if (File.Exists(configPath))
+                File.Copy(configPath, temporaryPath);
 
             SimpleConfig config = new(temporaryPath) { Section = nameof(NameScan) };
 
@@ -407,8 +461,9 @@ internal static class RatConfig
             config.WriteBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
 
             config.Section = nameof(Tracking.TarkovTracker);
-            config.WriteInt(nameof(Tracking.TarkovTracker.Backend), (int)Tracking.TarkovTracker.Backend);
-            config.WriteSecureString(nameof(Tracking.TarkovTracker.Token), Tracking.TarkovTracker.Token);
+            config.WriteSecureString(nameof(Tracking.TarkovTracker.PvpToken), Tracking.TarkovTracker.PvpToken);
+            config.WriteSecureString(nameof(Tracking.TarkovTracker.PveToken), Tracking.TarkovTracker.PveToken);
+            config.WriteSecureString(nameof(Tracking.TarkovTracker.IoToken), Tracking.TarkovTracker.IoToken);
             config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
             config.Section = nameof(Overlay);
@@ -432,7 +487,7 @@ internal static class RatConfig
             config.WriteInt(nameof(LastWindowMode), (int)LastWindowMode);
 
             GameDisplayPreferencesStore.Write(config, GetGameDisplayPreferences());
-            File.Move(temporaryPath, Paths.ConfigFile, overwrite: true);
+            File.Move(temporaryPath, configPath, overwrite: true);
             SettingsChanged?.Invoke();
         }
         finally

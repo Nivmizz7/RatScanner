@@ -28,4 +28,25 @@ public sealed class SettingsInputTests
     {
         Assert.False(SettingsVM.TryParseDisplayScalePercentage(text, out _));
     }
+
+    [Theory]
+    [InlineData("1", 1)]
+    [InlineData("1920", 1920)]
+    [InlineData(" 2560 ", 2560)]
+    public void Positive_integer_input_accepts_complete_valid_values(string text, int expected)
+    {
+        Assert.True(SettingsVM.TryParsePositiveInt(text, out int actual));
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("999999999999")]
+    [InlineData("12.5")]
+    public void Positive_integer_input_rejects_invalid_or_overflowing_values(string text)
+    {
+        Assert.False(SettingsVM.TryParsePositiveInt(text, out _));
+    }
 }

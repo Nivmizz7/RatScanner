@@ -1,6 +1,4 @@
-﻿@inject NavigationManager NavigationManager
-
-<Error>
+﻿<Error>
 	<Router AppAssembly="@typeof(Overlay).Assembly">
 		<Found Context="routeData">
 			<RouteView RouteData="@routeData" DefaultLayout="@typeof(OverlayLayout)"/>
@@ -14,12 +12,3 @@
 		</NotFound>
 	</Router>
 </Error>
-
-@code {
-
-	protected override void OnInitialized()
-	{
-		NavigationManager.NavigateTo("/interactableOverlay");
-	}
-
-}

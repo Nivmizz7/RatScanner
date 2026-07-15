@@ -13,4 +13,7 @@ public class TokenResponse
     // An array of string representations of this token's permissions
     [JsonProperty("permissions")]
     public List<string>? Permissions { get; set; }
+
+    [JsonProperty("gameMode")]
+    public string? GameMode { get; set; }
 }

@@ -1,50 +1,68 @@
 @page "/app/settings/minimal"
 @inject SettingsVM SettingsVM
-@inject IJSRuntime JSRuntime;
-@inject LocalizationService Localizer;
-@implements IDisposable
-<div>
-    <MudGrid Class="pa-0 ma-0" Spacing="0" Style="height: 100%;">
-        <MudItem xs="12">
-            <div class="d-flex align-center justify-center mx-2 mb-1">
-                <MudText Typo="Typo.subtitle1" Color="Color.Inherit">@Localizer["MinimalUiSettingsTitle"]</MudText>
-            </div>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudStack Spacing="0">
-                    <MudCheckBox @bind-Value="SettingsVM.ShowName" Label="@Localizer["NameLabel"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowAvgDayPrice" Label="@Localizer["AvgDailyPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowPricePerSlot" Label="@Localizer["PricePerSlot"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowTraderPrice" Label="@Localizer["TraderPrice"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowKappa" Label="@Localizer["KappaNeeded"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowQuestHideoutTracker" Label="@Localizer["NeededQuestHideout"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowQuestHideoutTeamTracker" Label="@Localizer["NeededQuestHideoutTeam"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="SettingsVM.ShowUpdated" Label="@Localizer["UpdatedTimestamp"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudSlider Step="10" @bind-Value="SettingsVM.Opacity" Min="0" Max="100" Color="Color.Primary">
-                        <MudText Typo="Typo.subtitle2" Class="mt-0">@Localizer.Format("OpacityLabel", SettingsVM.Opacity)</MudText>
-                    </MudSlider>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+@inject LocalizationService Localizer
+@inject ISnackbar Snackbar
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["MinimalUiContentSection"]</h2>
+                    <p>@Localizer["MinimalUiContentDescription"]</p>
+                </div>
+            </header>
+            @foreach (MinimalOption option in Options)
+            {
+                <ImmediateSettingSwitch Value="@option.Value"
+                                        ValueChanged="@(_ => StateHasChanged())"
+                                        Label="@option.Label"
+                                        Persist="@(value => SettingsVM.SetMinimalUiAsync(option.Key, value))" />
+            }
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["MinimalUiAppearanceSection"]</h2>
+                    <p>@Localizer["MinimalUiAppearanceDescription"]</p>
+                </div>
+            </header>
+            <MudSlider T="int"
+                       Value="@RatConfig.MinimalUi.Opacity"
+                       ValueChanged="SetOpacityAsync"
+                       Min="0"
+                       Max="100"
+                       Step="10"
+                       Color="Color.Primary">
+                <MudText Typo="Typo.subtitle2">@Localizer.Format("OpacityLabel", RatConfig.MinimalUi.Opacity)</MudText>
+            </MudSlider>
+        </section>
+    </aside>
 </div>
 
 @code {
+    private sealed record MinimalOption(string Key, string Label, bool Value);
 
-    protected override void OnInitialized()
+    private IReadOnlyList<MinimalOption> Options =>
+    [
+        new(nameof(RatConfig.MinimalUi.ShowName), Localizer["NameLabel"], RatConfig.MinimalUi.ShowName),
+        new(nameof(RatConfig.MinimalUi.ShowAvgDayPrice), Localizer["AvgDailyPrice"], RatConfig.MinimalUi.ShowAvgDayPrice),
+        new(nameof(RatConfig.MinimalUi.ShowPricePerSlot), Localizer["PricePerSlot"], RatConfig.MinimalUi.ShowPricePerSlot),
+        new(nameof(RatConfig.MinimalUi.ShowTraderPrice), Localizer["TraderPrice"], RatConfig.MinimalUi.ShowTraderPrice),
+        new(nameof(RatConfig.MinimalUi.ShowKappa), Localizer["KappaNeeded"], RatConfig.MinimalUi.ShowKappa),
+        new(nameof(RatConfig.MinimalUi.ShowQuestHideoutTracker), Localizer["NeededQuestHideout"], RatConfig.MinimalUi.ShowQuestHideoutTracker),
+        new(nameof(RatConfig.MinimalUi.ShowQuestHideoutTeamTracker), Localizer["NeededQuestHideoutTeam"], RatConfig.MinimalUi.ShowQuestHideoutTeamTracker),
+        new(nameof(RatConfig.MinimalUi.ShowUpdated), Localizer["UpdatedTimestamp"], RatConfig.MinimalUi.ShowUpdated),
+    ];
+
+    private async Task SetOpacityAsync(int value)
     {
-        SettingsVM.PropertyChanged += PropertyChangeHandler;
+        SettingSaveResult result = await SettingsVM.SetOpacityAsync(value);
+        if (!result.Succeeded)
+            Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
+        StateHasChanged();
     }
-
-    private async void PropertyChangeHandler(object? sender, EventArgs e)
-    {
-        await InvokeAsync(() => StateHasChanged());
-    }
-
-    public void Dispose()
-    {
-        SettingsVM.PropertyChanged -= PropertyChangeHandler;
-    }
-
 }

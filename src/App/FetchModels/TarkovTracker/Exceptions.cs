@@ -27,3 +27,9 @@ public class UnauthorizedTokenException : Exception
     public UnauthorizedTokenException(string message, Exception inner)
         : base(message, inner) { }
 }
+
+public class MissingPermissionException : Exception
+{
+    public MissingPermissionException(string message)
+        : base(message) { }
+}

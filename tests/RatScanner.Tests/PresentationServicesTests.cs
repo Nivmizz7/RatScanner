@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using RatEye;
+using RatScanner.FetchModels.TarkovTracker;
 using RatScanner.Presentation;
 using RatScanner.Scan;
 using RatScanner.TarkovDev;
@@ -403,6 +405,112 @@ public class GitHubUpdateServiceTests
 
 public class ItemExtensionTests
 {
+    [Fact]
+    public void Task_requirements_count_find_and_hand_over_as_one_item_need()
+    {
+        Item item = new() { Id = "ofz" };
+        UserProgress progress = new();
+        IReadOnlyList<TaskObjective> objectives =
+        [
+            new TaskObjective
+            {
+                Id = "find",
+                Type = "findItem",
+                Count = 5,
+                FoundInRaid = true,
+                ItemIds = [item.Id],
+            },
+            new TaskObjective
+            {
+                Id = "give",
+                Type = "giveItem",
+                Count = 5,
+                FoundInRaid = true,
+                ItemIds = [item.Id],
+            },
+        ];
+
+        RequirementBreakdown result = ItemExtensions.GetTaskRequirementBreakdown(
+            item,
+            objectives,
+            progress,
+            showNonFir: true
+        );
+
+        Assert.Equal(new RequirementBreakdown(Total: 5, FoundInRaid: 5, NonFoundInRaid: 0), result);
+    }
+
+    [Fact]
+    public void Task_requirements_use_the_further_progress_of_a_find_and_hand_over_pair()
+    {
+        Item item = new() { Id = "ofz" };
+        UserProgress progress = new()
+        {
+            TaskObjectives = [new Progress { Id = "find", Count = 4 }, new Progress { Id = "give", Count = 2 }],
+        };
+        IReadOnlyList<TaskObjective> objectives =
+        [
+            new TaskObjective
+            {
+                Id = "find",
+                Type = "findItem",
+                Count = 5,
+                FoundInRaid = true,
+                ItemIds = [item.Id],
+            },
+            new TaskObjective
+            {
+                Id = "give",
+                Type = "giveItem",
+                Count = 5,
+                FoundInRaid = true,
+                ItemIds = [item.Id],
+            },
+        ];
+
+        RequirementBreakdown result = ItemExtensions.GetTaskRequirementBreakdown(
+            item,
+            objectives,
+            progress,
+            showNonFir: true
+        );
+
+        Assert.Equal(new RequirementBreakdown(Total: 1, FoundInRaid: 1, NonFoundInRaid: 0), result);
+    }
+
+    [Fact]
+    public void Task_requirements_keep_distinct_hand_over_objectives_for_the_same_item()
+    {
+        Item item = new() { Id = "armor" };
+        UserProgress progress = new();
+        IReadOnlyList<TaskObjective> objectives =
+        [
+            new TaskObjective
+            {
+                Id = "low-durability",
+                Type = "giveItem",
+                Count = 1,
+                ItemIds = [item.Id],
+            },
+            new TaskObjective
+            {
+                Id = "high-durability",
+                Type = "giveItem",
+                Count = 1,
+                ItemIds = [item.Id],
+            },
+        ];
+
+        RequirementBreakdown result = ItemExtensions.GetTaskRequirementBreakdown(
+            item,
+            objectives,
+            progress,
+            showNonFir: true
+        );
+
+        Assert.Equal(new RequirementBreakdown(Total: 2, FoundInRaid: 0, NonFoundInRaid: 2), result);
+    }
+
     [Fact]
     public void PricePerSlot_handles_missing_dimensions()
     {

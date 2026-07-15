@@ -1,0 +1,74 @@
+.credential-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.credential-card {
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    background: var(--rs-surface-2);
+}
+
+.credential-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.credential-heading h3 {
+    margin: 0;
+    color: var(--rs-text);
+    font-size: 0.95rem;
+}
+
+.credential-heading p {
+    margin: 4px 0 0;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.credential-status {
+    flex: 0 0 auto;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.configured-secret {
+    padding: 10px 12px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    color: var(--rs-text-2);
+    background: var(--rs-bg);
+    font-family: Consolas, monospace;
+    letter-spacing: 0.08em;
+}
+
+.credential-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+@container (max-width: 799px) {
+    .credential-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@container (max-width: 679px) {
+    .credential-heading,
+    .credential-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .credential-actions ::deep .mud-button-root {
+        width: 100%;
+    }
+}

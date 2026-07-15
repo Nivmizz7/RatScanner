@@ -1,11 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using RatScanner.Display;
+using RatScanner.TarkovDev;
 using RatStash;
 
 namespace RatScanner.ViewModel;
@@ -14,28 +16,10 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
 {
     public sealed record GameDisplayOption(string Id, string Label);
 
-    public bool EnableNameScan { get; set; }
-    public bool EnableAutoNameScan { get; set; }
-    public int NameScanLanguage { get; set; }
-
-    public bool EnableIconScan { get; set; }
-    public bool ScanRotatedIcons { get; set; }
-    public bool UseCachedIcons { get; set; }
-    public Hotkey IconScanHotkey { get; set; } = new Hotkey();
-
-    public string ToolTipDuration { get; set; } = "";
-    public int ToolTipMilli { get; set; }
-    public UiLanguage UiLanguage { get; set; }
-
-    public bool ShowName { get; set; }
-    public bool ShowAvgDayPrice { get; set; }
-    public bool ShowPricePerSlot { get; set; }
-    public bool ShowTraderPrice { get; set; }
-    public bool ShowUpdated { get; set; }
-    public bool ShowKappa { get; set; }
-    public bool ShowQuestHideoutTracker { get; set; }
-    public bool ShowQuestHideoutTeamTracker { get; set; }
-    public int Opacity { get; set; }
+    private readonly LocalizationService _localizationService;
+    private readonly SettingsPersistenceService _persistence;
+    private readonly SemaphoreSlim _displaySaveLock = new(1, 1);
+    private bool _disposed;
 
     public int ScreenWidth { get; private set; }
     public int ScreenHeight { get; private set; }
@@ -45,20 +29,29 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private GameDisplayConfiguration _displayPreview = GameDisplayConfiguration.Empty;
     private string _selectedGameDisplayId = "";
     private bool _useCustomGameResolution;
-    private int _customGameWidth = 1920;
-    private int _customGameHeight = 1080;
+    private string _customGameWidthText = "1920";
+    private string _customGameHeightText = "1080";
     private bool _useCustomDisplayScale;
-    private float _customDisplayScale = 1;
     private string _customDisplayScaleText = "100";
+    private string? _displayPersistenceError;
+
+    internal SettingsVM(LocalizationService localizationService, SettingsPersistenceService persistence)
+    {
+        _localizationService = localizationService;
+        _persistence = persistence;
+        RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
+        LoadDisplaySettings();
+    }
 
     public string SelectedGameDisplayId
     {
         get => _selectedGameDisplayId;
         set
         {
-            if (_selectedGameDisplayId == value)
+            value ??= "";
+            if (string.Equals(_selectedGameDisplayId, value, StringComparison.Ordinal))
                 return;
-            _selectedGameDisplayId = value ?? "";
+            _selectedGameDisplayId = value;
             UpdateDisplayPreview();
         }
     }
@@ -77,26 +70,28 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public int CustomGameWidth
+    public string CustomGameWidthText
     {
-        get => _customGameWidth;
+        get => _customGameWidthText;
         set
         {
-            if (_customGameWidth == value)
+            value ??= "";
+            if (_customGameWidthText == value)
                 return;
-            _customGameWidth = value;
+            _customGameWidthText = value;
             UpdateDisplayPreview();
         }
     }
 
-    public int CustomGameHeight
+    public string CustomGameHeightText
     {
-        get => _customGameHeight;
+        get => _customGameHeightText;
         set
         {
-            if (_customGameHeight == value)
+            value ??= "";
+            if (_customGameHeightText == value)
                 return;
-            _customGameHeight = value;
+            _customGameHeightText = value;
             UpdateDisplayPreview();
         }
     }
@@ -113,53 +108,63 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public float CustomDisplayScale
-    {
-        get => _customDisplayScale;
-        set
-        {
-            if (Math.Abs(_customDisplayScale - value) < 0.0001)
-                return;
-            _customDisplayScale = value;
-            _customDisplayScaleText = FormatDisplayScalePercentage(value);
-            UpdateDisplayPreview();
-        }
-    }
-
     public string CustomDisplayScaleText
     {
         get => _customDisplayScaleText;
         set
         {
             value ??= "";
-            if (string.Equals(_customDisplayScaleText, value, StringComparison.Ordinal))
+            if (_customDisplayScaleText == value)
                 return;
-
             _customDisplayScaleText = value;
-            if (TryParseDisplayScalePercentage(value, out float scale))
-                _customDisplayScale = scale;
             UpdateDisplayPreview();
         }
     }
 
-    public bool CanSave =>
-        DisplaySelectionError is null && CustomResolutionError is null && CustomDisplayScaleError is null;
+    public int CustomGameWidth => TryParsePositiveInt(CustomGameWidthText, out int value) ? value : 0;
+    public int CustomGameHeight => TryParsePositiveInt(CustomGameHeightText, out int value) ? value : 0;
+    public float CustomDisplayScale =>
+        TryParseDisplayScalePercentage(CustomDisplayScaleText, out float value) ? value : float.NaN;
 
     public string? DisplaySelectionError =>
         GameDisplayOptions.Count == 0 || GameDisplayOptions.All(option => option.Id != SelectedGameDisplayId)
             ? _localizationService["GameDisplayUnavailableError"]
             : null;
 
-    public string? CustomResolutionError =>
-        UseCustomGameResolution && !GameDisplayValidation.IsValidResolution(CustomGameWidth, CustomGameHeight)
-            ? _localizationService.Format(
-                "CustomResolutionValidation",
-                GameDisplayValidation.MinimumWidth,
-                GameDisplayValidation.MinimumHeight,
-                GameDisplayValidation.MaximumWidth,
-                GameDisplayValidation.MaximumHeight
+    public string? CustomResolutionError
+    {
+        get
+        {
+            if (!UseCustomGameResolution)
+                return null;
+            if (
+                !TryParsePositiveInt(CustomGameWidthText, out int width)
+                || !TryParsePositiveInt(CustomGameHeightText, out int height)
             )
-            : null;
+                return _localizationService["CustomResolutionNumbersValidation"];
+            if (!GameDisplayValidation.IsValidResolution(width, height))
+            {
+                return _localizationService.Format(
+                    "CustomResolutionValidation",
+                    GameDisplayValidation.MinimumWidth,
+                    GameDisplayValidation.MinimumHeight,
+                    GameDisplayValidation.MaximumWidth,
+                    GameDisplayValidation.MaximumHeight
+                );
+            }
+
+            GameDisplayInfo? display = SelectedDisplay;
+            if (display is not null && (width > display.PhysicalBounds.Width || height > display.PhysicalBounds.Height))
+            {
+                return _localizationService.Format(
+                    "CustomResolutionDisplayValidation",
+                    display.PhysicalBounds.Width,
+                    display.PhysicalBounds.Height
+                );
+            }
+            return null;
+        }
+    }
 
     public string? CustomDisplayScaleError =>
         UseCustomDisplayScale
@@ -174,6 +179,10 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             )
             : null;
 
+    public string? DisplayPersistenceError => _displayPersistenceError;
+    public bool CanPersistDisplaySettings =>
+        DisplaySelectionError is null && CustomResolutionError is null && CustomDisplayScaleError is null;
+
     public GameDisplayStatusKind GameDisplayStatusKind => _displayPreview.StatusKind;
     public string GameDisplayStatus => FormatGameDisplayStatus(_displayPreview);
     public string PhysicalDisplayResolution => FormatSize(_displayPreview.ActiveDisplay?.PhysicalResolution);
@@ -185,189 +194,311 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         _displayPreview.UsesCustomGameResolution || _displayPreview.UsesCustomDisplayScale
             ? _localizationService["CustomMode"]
             : _localizationService["AutomaticMode"];
-    public TarkovDev.GameMode GameMode { get; set; }
-    public bool MinimizeToTray { get; set; }
-    public bool AlwaysOnTop { get; set; }
-    public bool LogDebug { get; set; }
 
-    // Progress Tracking Settings
-    public bool ShowNonFIRNeeds { get; set; }
+    internal Task<SettingSaveResult> SetEnableNameScanAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.NameScan.Enable),
+            "name scanner",
+            value,
+            () => RatConfig.NameScan.Enable,
+            v => RatConfig.NameScan.Enable = v
+        );
 
-    public bool ShowKappaNeeds { get; set; }
+    internal Task<SettingSaveResult> SetEnableAutoNameScanAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.NameScan.EnableAuto),
+            "automatic name scanning",
+            value,
+            () => RatConfig.NameScan.EnableAuto,
+            v => RatConfig.NameScan.EnableAuto = v
+        );
 
-    // TarkovTracker Specific Tracking Settings
-    public string TarkovTrackerToken { get; set; } = "";
+    internal Task<SettingSaveResult> SetNameScanLanguageAsync(int value) =>
+        SaveAsync(
+            nameof(RatConfig.NameScan.Language),
+            "name-scan language",
+            (Language)value,
+            () => RatConfig.NameScan.Language,
+            v => RatConfig.NameScan.Language = v,
+            _ => RatScannerMain.Instance.SetupRatEye()
+        );
 
-    public bool ShowTarkovTrackerTeam { get; set; }
+    internal Task<SettingSaveResult> SetEnableIconScanAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.IconScan.Enable),
+            "icon scanner",
+            value,
+            () => RatConfig.IconScan.Enable,
+            v => RatConfig.IconScan.Enable = v
+        );
 
-    public RatConfig.TarkovTrackerBackend TarkovTrackerBackend { get; set; }
+    internal Task<SettingSaveResult> SetScanRotatedIconsAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.IconScan.ScanRotatedIcons),
+            "rotated icon scanning",
+            value,
+            () => RatConfig.IconScan.ScanRotatedIcons,
+            v => RatConfig.IconScan.ScanRotatedIcons = v,
+            _ => RatScannerMain.Instance.SetupRatEye()
+        );
 
-    // Interactable Overlay
-    public bool EnableIneractableOverlay { get; set; }
-    public bool BlurBehindSearch { get; set; }
-    public Hotkey InteractableOverlayHotkey { get; set; } = new Hotkey();
+    internal Task<SettingSaveResult> SetUseCachedIconsAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.IconScan.UseCachedIcons),
+            "cached icon usage",
+            value,
+            () => RatConfig.IconScan.UseCachedIcons,
+            v => RatConfig.IconScan.UseCachedIcons = v,
+            _ => RatScannerMain.Instance.SetupRatEye()
+        );
 
-    private readonly LocalizationService _localizationService;
+    internal Task<SettingSaveResult> SetIconScanHotkeyAsync(Hotkey value) =>
+        SaveAsync(
+            nameof(RatConfig.IconScan.Hotkey),
+            "icon-scan hotkey",
+            new Hotkey(value),
+            () => new Hotkey(RatConfig.IconScan.Hotkey),
+            v => RatConfig.IconScan.Hotkey = new Hotkey(v),
+            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+        );
 
-    internal SettingsVM(LocalizationService localizationService)
+    internal Task<SettingSaveResult> SetUiLanguageAsync(UiLanguage value) =>
+        SaveAsync(
+            nameof(RatConfig.UserInterface.Language),
+            "interface language",
+            value,
+            () => RatConfig.UserInterface.Language,
+            v => RatConfig.UserInterface.Language = v,
+            _ => _localizationService.SetLanguage(value)
+        );
+
+    internal Task<SettingSaveResult> SetTooltipDurationAsync(int value) =>
+        SaveValidatedAsync(
+            nameof(RatConfig.ToolTip.Duration),
+            "tooltip delay",
+            value,
+            () => RatConfig.ToolTip.Duration,
+            v => RatConfig.ToolTip.Duration = v,
+            static v => v is 0 or 500 or 1500 or 3000 ? null : "Unsupported tooltip delay."
+        );
+
+    internal Task<SettingSaveResult> SetAlwaysOnTopAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.AlwaysOnTop),
+            "always-on-top",
+            value,
+            () => RatConfig.AlwaysOnTop,
+            v => RatConfig.AlwaysOnTop = v,
+            v => PageSwitcher.Instance.Topmost = v
+        );
+
+    internal Task<SettingSaveResult> SetLogDebugAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.LogDebug),
+            "debug logging",
+            value,
+            () => RatConfig.LogDebug,
+            v => RatConfig.LogDebug = v,
+            v => RatEye.Config.LogDebug = v
+        );
+
+    internal Task<SettingSaveResult> SetShowNonFirNeedsAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.Tracking.ShowNonFIRNeeds),
+            "non-FIR requirement display",
+            value,
+            () => RatConfig.Tracking.ShowNonFIRNeeds,
+            v => RatConfig.Tracking.ShowNonFIRNeeds = v
+        );
+
+    internal Task<SettingSaveResult> SetShowKappaNeedsAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.Tracking.ShowKappaNeeds),
+            "Kappa requirement display",
+            value,
+            () => RatConfig.Tracking.ShowKappaNeeds,
+            v => RatConfig.Tracking.ShowKappaNeeds = v
+        );
+
+    internal Task<SettingSaveResult> SetTarkovTrackerOrgTokenAsync(GameMode mode, string value) =>
+        SaveAsync(
+            $"TarkovTracker.Org.{mode}",
+            $"{mode} TarkovTracker.org API key",
+            value,
+            () => RatConfig.Tracking.TarkovTracker.TokenForMode(mode),
+            token => RatConfig.Tracking.TarkovTracker.SetTokenForMode(mode, token)
+        );
+
+    internal Task<SettingSaveResult> SetTarkovTrackerIoTokenAsync(string value) =>
+        SaveAsync(
+            "TarkovTracker.IO.PvP",
+            "TarkovTracker.io API key",
+            value,
+            () => RatConfig.Tracking.TarkovTracker.IoToken,
+            token => RatConfig.Tracking.TarkovTracker.IoToken = token
+        );
+
+    internal Task<SettingSaveResult> SetShowTarkovTrackerTeamAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.Tracking.TarkovTracker.ShowTeam),
+            "TarkovTracker team progress",
+            value,
+            () => RatConfig.Tracking.TarkovTracker.ShowTeam,
+            v => RatConfig.Tracking.TarkovTracker.ShowTeam = v,
+            ignored =>
+            {
+                _ = RatScannerMain.Instance.ActivateTrackerModeAsync(RatConfig.GameMode);
+            }
+        );
+
+    internal Task<SettingSaveResult> SetMinimalUiAsync(string key, bool value) =>
+        key switch
+        {
+            nameof(RatConfig.MinimalUi.ShowName) => SaveAsync(
+                key,
+                "minimal UI name",
+                value,
+                () => RatConfig.MinimalUi.ShowName,
+                v => RatConfig.MinimalUi.ShowName = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowAvgDayPrice) => SaveAsync(
+                key,
+                "minimal UI average price",
+                value,
+                () => RatConfig.MinimalUi.ShowAvgDayPrice,
+                v => RatConfig.MinimalUi.ShowAvgDayPrice = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowPricePerSlot) => SaveAsync(
+                key,
+                "minimal UI price per slot",
+                value,
+                () => RatConfig.MinimalUi.ShowPricePerSlot,
+                v => RatConfig.MinimalUi.ShowPricePerSlot = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowTraderPrice) => SaveAsync(
+                key,
+                "minimal UI trader price",
+                value,
+                () => RatConfig.MinimalUi.ShowTraderPrice,
+                v => RatConfig.MinimalUi.ShowTraderPrice = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowUpdated) => SaveAsync(
+                key,
+                "minimal UI update time",
+                value,
+                () => RatConfig.MinimalUi.ShowUpdated,
+                v => RatConfig.MinimalUi.ShowUpdated = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowKappa) => SaveAsync(
+                key,
+                "minimal UI Kappa status",
+                value,
+                () => RatConfig.MinimalUi.ShowKappa,
+                v => RatConfig.MinimalUi.ShowKappa = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowQuestHideoutTracker) => SaveAsync(
+                key,
+                "minimal UI personal tracking",
+                value,
+                () => RatConfig.MinimalUi.ShowQuestHideoutTracker,
+                v => RatConfig.MinimalUi.ShowQuestHideoutTracker = v
+            ),
+            nameof(RatConfig.MinimalUi.ShowQuestHideoutTeamTracker) => SaveAsync(
+                key,
+                "minimal UI team tracking",
+                value,
+                () => RatConfig.MinimalUi.ShowQuestHideoutTeamTracker,
+                v => RatConfig.MinimalUi.ShowQuestHideoutTeamTracker = v
+            ),
+            _ => throw new ArgumentOutOfRangeException(nameof(key)),
+        };
+
+    internal Task<SettingSaveResult> SetOpacityAsync(int value) =>
+        SaveValidatedAsync(
+            nameof(RatConfig.MinimalUi.Opacity),
+            "minimal UI opacity",
+            value,
+            () => RatConfig.MinimalUi.Opacity,
+            v => RatConfig.MinimalUi.Opacity = v,
+            static v => v is >= 0 and <= 100 ? null : "Opacity must be between 0 and 100."
+        );
+
+    internal Task<SettingSaveResult> SetOverlayEnabledAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.Overlay.Search.Enable),
+            "search overlay",
+            value,
+            () => RatConfig.Overlay.Search.Enable,
+            v => RatConfig.Overlay.Search.Enable = v,
+            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+        );
+
+    internal Task<SettingSaveResult> SetOverlayBlurAsync(bool value) =>
+        SaveAsync(
+            nameof(RatConfig.Overlay.Search.BlurBehind),
+            "search overlay blur",
+            value,
+            () => RatConfig.Overlay.Search.BlurBehind,
+            v => RatConfig.Overlay.Search.BlurBehind = v
+        );
+
+    internal Task<SettingSaveResult> SetOverlayHotkeyAsync(Hotkey value) =>
+        SaveAsync(
+            nameof(RatConfig.Overlay.Search.Hotkey),
+            "search-overlay hotkey",
+            new Hotkey(value),
+            () => new Hotkey(RatConfig.Overlay.Search.Hotkey),
+            v => RatConfig.Overlay.Search.Hotkey = new Hotkey(v),
+            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+        );
+
+    internal async Task<SettingSaveResult> PersistDisplaySettingsAsync()
     {
-        _localizationService = localizationService;
-        RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
-        LoadSettings();
-    }
+        if (!CanPersistDisplaySettings)
+            return new SettingSaveResult(
+                false,
+                CustomResolutionError ?? CustomDisplayScaleError ?? DisplaySelectionError
+            );
 
-    public void LoadSettings()
-    {
-        EnableNameScan = RatConfig.NameScan.Enable;
-        EnableAutoNameScan = RatConfig.NameScan.EnableAuto;
-        NameScanLanguage = (int)RatConfig.NameScan.Language;
-
-        EnableIconScan = RatConfig.IconScan.Enable;
-        ScanRotatedIcons = RatConfig.IconScan.ScanRotatedIcons;
-        UseCachedIcons = RatConfig.IconScan.UseCachedIcons;
-        IconScanHotkey = new Hotkey(RatConfig.IconScan.Hotkey);
-
-        ToolTipDuration = RatConfig.ToolTip.Duration.ToString();
-        ToolTipMilli = RatConfig.ToolTip.Duration;
-        UiLanguage = RatConfig.UserInterface.Language;
-
-        ShowName = RatConfig.MinimalUi.ShowName;
-        ShowAvgDayPrice = RatConfig.MinimalUi.ShowAvgDayPrice;
-        ShowPricePerSlot = RatConfig.MinimalUi.ShowPricePerSlot;
-        ShowTraderPrice = RatConfig.MinimalUi.ShowTraderPrice;
-        ShowKappa = RatConfig.MinimalUi.ShowKappa;
-        ShowQuestHideoutTracker = RatConfig.MinimalUi.ShowQuestHideoutTracker;
-        ShowQuestHideoutTeamTracker = RatConfig.MinimalUi.ShowQuestHideoutTeamTracker;
-        ShowUpdated = RatConfig.MinimalUi.ShowUpdated;
-        Opacity = RatConfig.MinimalUi.Opacity;
-
-        LoadDisplaySettings();
-        GameMode = RatConfig.GameMode;
-        MinimizeToTray = RatConfig.MinimizeToTray;
-        AlwaysOnTop = RatConfig.AlwaysOnTop;
-        LogDebug = RatConfig.LogDebug;
-
-        ShowNonFIRNeeds = RatConfig.Tracking.ShowNonFIRNeeds;
-        ShowKappaNeeds = RatConfig.Tracking.ShowKappaNeeds;
-
-        TarkovTrackerToken = RatConfig.Tracking.TarkovTracker.Token;
-        ShowTarkovTrackerTeam = RatConfig.Tracking.TarkovTracker.ShowTeam;
-        TarkovTrackerBackend = RatConfig.Tracking.TarkovTracker.Backend;
-
-        EnableIneractableOverlay = RatConfig.Overlay.Search.Enable;
-        BlurBehindSearch = RatConfig.Overlay.Search.BlurBehind;
-        InteractableOverlayHotkey = new Hotkey(RatConfig.Overlay.Search.Hotkey);
-
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
-    }
-
-    public async Task SaveSettings()
-    {
-        if (!CanSave)
-            throw new InvalidOperationException("The game display configuration is invalid.");
-
-        bool updateTarkovTrackerToken = TarkovTrackerToken != RatConfig.Tracking.TarkovTracker.Token;
-        bool updateTarkovTrackerBackend = TarkovTrackerBackend != RatConfig.Tracking.TarkovTracker.Backend;
-        int previousScreenWidth = RatConfig.ScreenWidth;
-        int previousScreenHeight = RatConfig.ScreenHeight;
-        bool updateLanguage = RatConfig.NameScan.Language != (Language)NameScanLanguage;
-        bool updateUiLanguage = RatConfig.UserInterface.Language != UiLanguage;
-        bool updateGameMode = GameMode != RatConfig.GameMode;
-        bool updateCachedIcons = UseCachedIcons != RatConfig.IconScan.UseCachedIcons;
-        bool updateRotatedIcons = ScanRotatedIcons != RatConfig.IconScan.ScanRotatedIcons;
-        ConfigSnapshot previousConfiguration = new();
-
+        await _displaySaveLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Stage the requested values in the runtime configuration. The prior
-            // state is restored if any fallible apply or persistence step fails.
-            RatConfig.NameScan.Enable = EnableNameScan;
-            RatConfig.NameScan.EnableAuto = EnableAutoNameScan;
-            RatConfig.NameScan.Language = (Language)NameScanLanguage;
-
-            RatConfig.IconScan.Enable = EnableIconScan;
-            RatConfig.IconScan.ScanRotatedIcons = ScanRotatedIcons;
-            RatConfig.IconScan.UseCachedIcons = UseCachedIcons;
-            RatConfig.IconScan.Hotkey = new Hotkey(IconScanHotkey);
-
-            RatConfig.ToolTip.Duration = ToolTipMilli;
-            RatConfig.UserInterface.Language = UiLanguage;
-
-            RatConfig.MinimalUi.ShowName = ShowName;
-            RatConfig.MinimalUi.ShowAvgDayPrice = ShowAvgDayPrice;
-            RatConfig.MinimalUi.ShowPricePerSlot = ShowPricePerSlot;
-            RatConfig.MinimalUi.ShowTraderPrice = ShowTraderPrice;
-            RatConfig.MinimalUi.ShowKappa = ShowKappa;
-            RatConfig.MinimalUi.ShowQuestHideoutTracker = ShowQuestHideoutTracker;
-            RatConfig.MinimalUi.ShowQuestHideoutTeamTracker = ShowQuestHideoutTeamTracker;
-            RatConfig.MinimalUi.ShowUpdated = ShowUpdated;
-            RatConfig.MinimalUi.Opacity = Opacity;
-
-            RatConfig.Tracking.ShowNonFIRNeeds = ShowNonFIRNeeds;
-            RatConfig.Tracking.ShowKappaNeeds = ShowKappaNeeds;
-
-            RatConfig.Tracking.TarkovTracker.ShowTeam = ShowTarkovTrackerTeam;
-            TrackerConfigurationHandle trackerConfiguration = RatScannerMain.Instance.ApplyTarkovTrackerConfiguration(
-                TarkovTrackerToken.Trim(),
-                TarkovTrackerBackend
-            );
-
-            RatConfig.Overlay.Search.Enable = EnableIneractableOverlay;
-            RatConfig.Overlay.Search.BlurBehind = BlurBehindSearch;
-            RatConfig.Overlay.Search.Hotkey = new Hotkey(InteractableOverlayHotkey);
-
-            RatConfig.SetGameDisplayPreferences(CreateDraftDisplayPreferences());
-            RatConfig.RefreshGameDisplayConfiguration(force: true);
-            bool updateResolution =
-                previousScreenWidth != RatConfig.ScreenWidth || previousScreenHeight != RatConfig.ScreenHeight;
-            ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: false);
-            RatConfig.GameMode = GameMode;
-            RatConfig.MinimizeToTray = MinimizeToTray;
-            RatConfig.AlwaysOnTop = AlwaysOnTop;
-            RatConfig.LogDebug = LogDebug;
-
-            // Apply config
-            PageSwitcher.Instance.Topmost = RatConfig.AlwaysOnTop;
-            PageSwitcher.Instance.ResetWindowSize();
-            await TarkovDevAPI.InitializeCache();
-            if (updateTarkovTrackerToken || updateTarkovTrackerBackend)
-                await UpdateTarkovTrackerTokenAsync(trackerConfiguration);
-            if (updateUiLanguage)
-                _localizationService.SetLanguage(UiLanguage);
-            if (updateResolution || updateLanguage || updateGameMode || updateCachedIcons || updateRotatedIcons)
-                RatScannerMain.Instance.SetupRatEye();
-
-            RatEye.Config.LogDebug = RatConfig.LogDebug;
-            RatScannerMain.Instance.HotkeyManager.RegisterHotkeys();
-
-            // Save config to file only after every runtime apply step succeeds.
-            Logger.LogInfo("Saving config...");
-            RatConfig.SaveConfig();
-            Logger.LogInfo("Config saved!");
+            GameDisplayPreferences next = CreateDraftDisplayPreferences();
+            SettingSaveResult result = await SaveAsync(
+                    "GameDisplayPreferences",
+                    "game display configuration",
+                    next,
+                    RatConfig.GetGameDisplayPreferences,
+                    RatConfig.SetGameDisplayPreferences,
+                    _ =>
+                    {
+                        bool changed = RatConfig.RefreshGameDisplayConfiguration(force: true);
+                        ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: false);
+                        if (changed)
+                            RatScannerMain.Instance.SetupRatEye();
+                    }
+                )
+                .ConfigureAwait(false);
+            _displayPersistenceError = result.Succeeded ? null : _localizationService["SettingSaveFailed"];
+            OnPropertyChanged();
+            return result;
         }
-        catch
+        finally
         {
-            previousConfiguration.Restore();
-            RatScannerMain.Instance.ApplyTarkovTrackerConfiguration(
-                previousConfiguration.TrackerToken,
-                previousConfiguration.TrackerBackend
-            );
-            // Re-seed the item cache for the restored game mode so runtime state matches the
-            // rolled-back configuration. Never let this mask the original save failure.
-            try
-            {
-                await TarkovDevAPI.InitializeCache();
-            }
-            catch (Exception cacheException)
-            {
-                Logger.LogWarning("Failed to reinitialize the item cache during settings rollback.", cacheException);
-            }
-            RestoreRuntimeAfterFailedSave();
-            LoadSettings();
-            throw;
+            _displaySaveLock.Release();
         }
+    }
 
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+    internal void ResetDisplayDraftToDetected()
+    {
+        GameDisplayConfiguration automatic = RatConfig.DetectGameDisplayConfiguration(GameDisplayPreferences.Automatic);
+        _selectedGameDisplayId = automatic.ActiveDisplay?.StableId ?? "";
+        _useCustomGameResolution = false;
+        _useCustomDisplayScale = false;
+        _customGameWidthText = automatic.GameViewport.Width.ToString(CultureInfo.CurrentCulture);
+        _customGameHeightText = automatic.GameViewport.Height.ToString(CultureInfo.CurrentCulture);
+        _customDisplayScaleText = FormatDisplayScalePercentage((float)automatic.DisplayScale);
+        UpdateDisplayPreview();
     }
 
     public void RefreshGameDisplays()
@@ -376,20 +507,6 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         LoadDisplaySettings();
         if (updateResolution)
             RatScannerMain.Instance.SetupRatEye();
-    }
-
-    private void LoadDisplaySettings()
-    {
-        GameDisplayPreferences preferences = RatConfig.GetGameDisplayPreferences();
-        ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: true);
-
-        _useCustomGameResolution = preferences.UseCustomGameResolution;
-        _customGameWidth = preferences.CustomGameWidth;
-        _customGameHeight = preferences.CustomGameHeight;
-        _useCustomDisplayScale = preferences.UseCustomDisplayScale;
-        _customDisplayScale = (float)preferences.CustomDisplayScale;
-        _customDisplayScaleText = FormatDisplayScalePercentage(_customDisplayScale);
-        UpdateDisplayPreview();
     }
 
     internal static bool TryParseDisplayScalePercentage(string? text, out float scale)
@@ -408,6 +525,40 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         return float.IsFinite(scale);
     }
 
+    internal static bool TryParsePositiveInt(string? text, out int value) =>
+        int.TryParse(text?.Trim(), NumberStyles.Integer, CultureInfo.CurrentCulture, out value) && value > 0;
+
+    private Task<SettingSaveResult> SaveAsync<T>(
+        string key,
+        string description,
+        T value,
+        Func<T> read,
+        Action<T> apply,
+        Action<T>? applyRuntime = null
+    ) => _persistence.SaveImmediateAsync(key, description, value, read, apply, applyRuntime);
+
+    private Task<SettingSaveResult> SaveValidatedAsync<T>(
+        string key,
+        string description,
+        T value,
+        Func<T> read,
+        Action<T> apply,
+        Func<T, string?> validate,
+        Action<T>? applyRuntime = null
+    ) => _persistence.SaveValidatedAsync(key, description, value, read, apply, validate, applyRuntime);
+
+    private void LoadDisplaySettings()
+    {
+        GameDisplayPreferences preferences = RatConfig.GetGameDisplayPreferences();
+        ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: true);
+        _useCustomGameResolution = preferences.UseCustomGameResolution;
+        _customGameWidthText = preferences.CustomGameWidth.ToString(CultureInfo.CurrentCulture);
+        _customGameHeightText = preferences.CustomGameHeight.ToString(CultureInfo.CurrentCulture);
+        _useCustomDisplayScale = preferences.UseCustomDisplayScale;
+        _customDisplayScaleText = FormatDisplayScalePercentage((float)preferences.CustomDisplayScale);
+        UpdateDisplayPreview();
+    }
+
     private static string FormatDisplayScalePercentage(float scale) =>
         (scale * 100).ToString("0.##", CultureInfo.CurrentCulture);
 
@@ -417,7 +568,6 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         GameDisplayOptions = configuration
             .Displays.Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
             .ToArray();
-
         if (resetDraft)
         {
             string preferredId = RatConfig.PreferredGameDisplayId;
@@ -425,7 +575,6 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                 ? preferredId
                 : configuration.ActiveDisplay?.StableId ?? "";
         }
-
         ScreenWidth = configuration.GameViewport.Width;
         ScreenHeight = configuration.GameViewport.Height;
         ScreenScale = (float)configuration.DisplayScale;
@@ -433,43 +582,53 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
 
     private void UpdateDisplayPreview()
     {
-        _displayPreview = RatConfig.DetectGameDisplayConfiguration(CreateDraftDisplayPreferences());
+        GameDisplayPreferences preferences = CreateDraftDisplayPreferences();
+        _displayPreview = RatConfig.DetectGameDisplayConfiguration(preferences);
         GameDisplayOptions = _displayPreview
             .Displays.Select(display => new GameDisplayOption(display.StableId, FormatGameDisplayOption(display)))
             .ToArray();
         ScreenWidth = _displayPreview.GameViewport.Width;
         ScreenHeight = _displayPreview.GameViewport.Height;
         ScreenScale = (float)_displayPreview.DisplayScale;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
+        OnPropertyChanged();
     }
+
+    private GameDisplayInfo? SelectedDisplay =>
+        _displayPreview.Displays.FirstOrDefault(display =>
+            string.Equals(display.StableId, SelectedGameDisplayId, StringComparison.OrdinalIgnoreCase)
+        );
 
     private GameDisplayPreferences CreateDraftDisplayPreferences()
     {
-        GameDisplayInfo? selectedDisplay = _displayPreview.Displays.FirstOrDefault(display =>
-            string.Equals(display.StableId, SelectedGameDisplayId, StringComparison.OrdinalIgnoreCase)
-        );
+        GameDisplayInfo? selectedDisplay = SelectedDisplay;
+        int width = TryParsePositiveInt(CustomGameWidthText, out int parsedWidth) ? parsedWidth : 0;
+        int height = TryParsePositiveInt(CustomGameHeightText, out int parsedHeight) ? parsedHeight : 0;
+        float scale = TryParseDisplayScalePercentage(CustomDisplayScaleText, out float parsedScale)
+            ? parsedScale
+            : float.NaN;
         return new GameDisplayPreferences(
             selectedDisplay?.StableId ?? SelectedGameDisplayId,
             selectedDisplay?.DeviceName ?? "",
             selectedDisplay?.PhysicalBounds,
             UseCustomGameResolution,
-            CustomGameWidth,
-            CustomGameHeight,
+            width,
+            height,
             UseCustomDisplayScale,
-            CustomDisplayScale
+            scale
         );
     }
 
     private string FormatGameDisplayOption(GameDisplayInfo display)
     {
         string primarySuffix = display.IsPrimary ? _localizationService["PrimaryDisplaySuffix"] : "";
+        string friendlyName = string.IsNullOrWhiteSpace(display.FriendlyName) ? "" : $" — {display.FriendlyName}";
         return _localizationService.Format(
             "GameDisplayOption",
             display.DisplayNumber,
             display.PhysicalResolution.Width,
             display.PhysicalResolution.Height,
             Math.Round(display.DpiScale * 100),
-            primarySuffix
+            primarySuffix + friendlyName
         );
     }
 
@@ -517,140 +676,20 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration)
     {
         ApplyDisplayConfiguration(configuration, resetDraft: false);
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
-    }
-
-    public void Dispose()
-    {
-        RatConfig.GameDisplayConfigurationChanged -= OnGameDisplayConfigurationChanged;
-    }
-
-    private void RestoreRuntimeAfterFailedSave()
-    {
-        TryRestore(() => PageSwitcher.Instance.Topmost = RatConfig.AlwaysOnTop, "window topmost state");
-        TryRestore(PageSwitcher.Instance.ResetWindowSize, "window dimensions");
-        TryRestore(() => _localizationService.SetLanguage(RatConfig.UserInterface.Language), "UI language");
-        TryRestore(RatScannerMain.Instance.SetupRatEye, "RatEye configuration");
-        RatEye.Config.LogDebug = RatConfig.LogDebug;
-        TryRestore(RatScannerMain.Instance.HotkeyManager.RegisterHotkeys, "hotkeys");
-    }
-
-    private static void TryRestore(System.Action action, string description)
-    {
-        try
-        {
-            action();
-        }
-        catch (System.Exception exception)
-        {
-            Logger.LogWarning($"Unable to restore the previous {description} after a settings failure.", exception);
-        }
-    }
-
-    private async Task UpdateTarkovTrackerTokenAsync(TrackerConfigurationHandle configuration)
-    {
-        string token = RatConfig.Tracking.TarkovTracker.Token;
-        var db = RatScannerMain.Instance.TarkovTrackerDB;
-        if (string.IsNullOrWhiteSpace(token))
-            return;
-
-        TokenValidationResult result = await Task.Run(db.UpdateToken);
-        if (result == TokenValidationResult.Valid)
-            return;
-
-        if (result == TokenValidationResult.Unavailable)
-        {
-            Logger.ShowWarning(
-                "RatScanner could not reach TarkovTracker to validate the token. The token was kept and will be retried later."
-            );
-            return;
-        }
-
-        int visibleLength = (int)(token.Length * 0.25);
-        token = token[..visibleLength] + string.Concat(Enumerable.Repeat(" *", token.Length - visibleLength));
-        if (!RatScannerMain.Instance.TryClearTarkovTrackerConfiguration(configuration))
-            return;
-
-        TarkovTrackerToken = "";
-        Logger.ShowWarning($"The TarkovTracker API Token does not seem to work.\n\n{token}");
+        OnPropertyChanged();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    internal virtual void OnPropertyChanged(string? propertyName = null)
-    {
+    internal virtual void OnPropertyChanged(string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 
-    private sealed class ConfigSnapshot
+    public void Dispose()
     {
-        private readonly bool _enableNameScan = RatConfig.NameScan.Enable;
-        private readonly bool _enableAutoNameScan = RatConfig.NameScan.EnableAuto;
-        private readonly Language _nameScanLanguage = RatConfig.NameScan.Language;
-        private readonly bool _enableIconScan = RatConfig.IconScan.Enable;
-        private readonly bool _scanRotatedIcons = RatConfig.IconScan.ScanRotatedIcons;
-        private readonly bool _useCachedIcons = RatConfig.IconScan.UseCachedIcons;
-        private readonly Hotkey _iconScanHotkey = new(RatConfig.IconScan.Hotkey);
-        private readonly int _toolTipDuration = RatConfig.ToolTip.Duration;
-        private readonly UiLanguage _uiLanguage = RatConfig.UserInterface.Language;
-        private readonly bool _showName = RatConfig.MinimalUi.ShowName;
-        private readonly bool _showAvgDayPrice = RatConfig.MinimalUi.ShowAvgDayPrice;
-        private readonly bool _showPricePerSlot = RatConfig.MinimalUi.ShowPricePerSlot;
-        private readonly bool _showTraderPrice = RatConfig.MinimalUi.ShowTraderPrice;
-        private readonly bool _showUpdated = RatConfig.MinimalUi.ShowUpdated;
-        private readonly bool _showKappa = RatConfig.MinimalUi.ShowKappa;
-        private readonly bool _showQuestHideoutTracker = RatConfig.MinimalUi.ShowQuestHideoutTracker;
-        private readonly bool _showQuestHideoutTeamTracker = RatConfig.MinimalUi.ShowQuestHideoutTeamTracker;
-        private readonly int _opacity = RatConfig.MinimalUi.Opacity;
-        private readonly bool _showNonFirNeeds = RatConfig.Tracking.ShowNonFIRNeeds;
-        private readonly bool _showKappaNeeds = RatConfig.Tracking.ShowKappaNeeds;
-        private readonly string _trackerToken = RatConfig.Tracking.TarkovTracker.Token;
-        private readonly bool _showTrackerTeam = RatConfig.Tracking.TarkovTracker.ShowTeam;
-        private readonly RatConfig.TarkovTrackerBackend _trackerBackend = RatConfig.Tracking.TarkovTracker.Backend;
-        private readonly bool _enableOverlay = RatConfig.Overlay.Search.Enable;
-        private readonly bool _blurBehindSearch = RatConfig.Overlay.Search.BlurBehind;
-        private readonly Hotkey _overlayHotkey = new(RatConfig.Overlay.Search.Hotkey);
-        private readonly GameDisplayPreferences _gameDisplayPreferences = RatConfig.GetGameDisplayPreferences();
-        private readonly TarkovDev.GameMode _gameMode = RatConfig.GameMode;
-        private readonly bool _minimizeToTray = RatConfig.MinimizeToTray;
-        private readonly bool _alwaysOnTop = RatConfig.AlwaysOnTop;
-        private readonly bool _logDebug = RatConfig.LogDebug;
-
-        internal string TrackerToken => _trackerToken;
-        internal RatConfig.TarkovTrackerBackend TrackerBackend => _trackerBackend;
-
-        internal void Restore()
-        {
-            RatConfig.NameScan.Enable = _enableNameScan;
-            RatConfig.NameScan.EnableAuto = _enableAutoNameScan;
-            RatConfig.NameScan.Language = _nameScanLanguage;
-            RatConfig.IconScan.Enable = _enableIconScan;
-            RatConfig.IconScan.ScanRotatedIcons = _scanRotatedIcons;
-            RatConfig.IconScan.UseCachedIcons = _useCachedIcons;
-            RatConfig.IconScan.Hotkey = new Hotkey(_iconScanHotkey);
-            RatConfig.ToolTip.Duration = _toolTipDuration;
-            RatConfig.UserInterface.Language = _uiLanguage;
-            RatConfig.MinimalUi.ShowName = _showName;
-            RatConfig.MinimalUi.ShowAvgDayPrice = _showAvgDayPrice;
-            RatConfig.MinimalUi.ShowPricePerSlot = _showPricePerSlot;
-            RatConfig.MinimalUi.ShowTraderPrice = _showTraderPrice;
-            RatConfig.MinimalUi.ShowUpdated = _showUpdated;
-            RatConfig.MinimalUi.ShowKappa = _showKappa;
-            RatConfig.MinimalUi.ShowQuestHideoutTracker = _showQuestHideoutTracker;
-            RatConfig.MinimalUi.ShowQuestHideoutTeamTracker = _showQuestHideoutTeamTracker;
-            RatConfig.MinimalUi.Opacity = _opacity;
-            RatConfig.Tracking.ShowNonFIRNeeds = _showNonFirNeeds;
-            RatConfig.Tracking.ShowKappaNeeds = _showKappaNeeds;
-            RatConfig.Tracking.TarkovTracker.ShowTeam = _showTrackerTeam;
-            RatConfig.Overlay.Search.Enable = _enableOverlay;
-            RatConfig.Overlay.Search.BlurBehind = _blurBehindSearch;
-            RatConfig.Overlay.Search.Hotkey = new Hotkey(_overlayHotkey);
-            RatConfig.SetGameDisplayPreferences(_gameDisplayPreferences);
-            RatConfig.RefreshGameDisplayConfiguration(force: true);
-            RatConfig.GameMode = _gameMode;
-            RatConfig.MinimizeToTray = _minimizeToTray;
-            RatConfig.AlwaysOnTop = _alwaysOnTop;
-            RatConfig.LogDebug = _logDebug;
-        }
+        if (_disposed)
+            return;
+        _disposed = true;
+        RatConfig.GameDisplayConfigurationChanged -= OnGameDisplayConfigurationChanged;
+        _displaySaveLock.Dispose();
     }
 }

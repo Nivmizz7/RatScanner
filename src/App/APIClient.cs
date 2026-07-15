@@ -2,6 +2,8 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Threading;
+using System.Threading.Tasks;
 using RatScanner.FetchModels.TarkovTracker;
 
 namespace RatScanner;
@@ -41,20 +43,38 @@ internal static class APIClient
 
     internal static string Get(string url, string? bearerToken = null) => Get(HttpClient, url, bearerToken);
 
-    internal static string Get(HttpClient client, string url, string? bearerToken = null)
+    internal static string Get(HttpClient client, string url, string? bearerToken = null) =>
+        GetAsync(client, url, bearerToken).GetAwaiter().GetResult();
+
+    internal static Task<string> GetAsync(
+        string url,
+        string? bearerToken = null,
+        CancellationToken cancellationToken = default
+    ) => GetAsync(HttpClient, url, bearerToken, cancellationToken);
+
+    internal static async Task<string> GetAsync(
+        HttpClient client,
+        string url,
+        string? bearerToken = null,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(client);
 
         using HttpRequestMessage request = CreateRequest(HttpMethod.Get, url, bearerToken);
-        using HttpResponseMessage response = client
-            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
-            .GetAwaiter()
-            .GetResult();
+        using HttpResponseMessage response = await client
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.Unauthorized)
             throw new UnauthorizedTokenException("Token was rejected by the API");
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            throw new MissingPermissionException(ParseApiError(body));
+        }
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
-            throw new RateLimitExceededException("Rate Limiting reached for token");
+            throw new RateLimitExceededException("Rate limit reached for this account");
         if (!response.IsSuccessStatusCode)
         {
             throw new HttpRequestException(
@@ -64,6 +84,22 @@ internal static class APIClient
             );
         }
 
-        return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static string ParseApiError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return "The API key is missing a required permission.";
+
+        try
+        {
+            Newtonsoft.Json.Linq.JToken token = Newtonsoft.Json.Linq.JToken.Parse(body);
+            return token.Value<string>("error") ?? "The API key is missing a required permission.";
+        }
+        catch (Newtonsoft.Json.JsonException)
+        {
+            return "The API key is missing a required permission.";
+        }
     }
 }

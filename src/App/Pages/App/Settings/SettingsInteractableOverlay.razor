@@ -1,56 +1,54 @@
 @page "/app/settings/interactableOverlay"
-@using RatScanner.Components;
+@using RatScanner.Components
 @inject SettingsVM SettingsVM
-@inject IJSRuntime JSRuntime
 @inject LocalizationService Localizer
-@implements IDisposable
+@inject ISnackbar Snackbar
 
-<div>
-    <MudGrid Class="pa-0 ma-0" Spacing="0" Style="height: 100%;">
-        <MudItem xs="12">
-            <div class="d-flex align-center justify-center mx-2 mb-1">
-                <MudText Typo="Typo.subtitle1" Color="Color.Inherit">@Localizer["OverlaySettingsTitle"]</MudText>
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["OverlayBehaviorSection"]</h2>
+                    <p>@Localizer["OverlayBehaviorDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.Overlay.Search.Enable"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["EnableSearchOverlay"]"
+                                    Persist="SettingsVM.SetOverlayEnabledAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.Overlay.Search.BlurBehind"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["BlurBehindSearch"]"
+                                    Persist="SettingsVM.SetOverlayBlurAsync"
+                                    Disabled="@(!RatConfig.Overlay.Search.Enable)" />
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["OverlayHotkeySection"]</h2>
+                    <p>@Localizer["HotkeyCaptureDescription"]</p>
+                </div>
+            </header>
+            <div class="setting-row">
+                <div class="setting-copy"><div class="setting-label">@Localizer["OpenSearchOverlay"]</div></div>
+                <div class="setting-control hotkey-control">
+                    <HotkeySelector Hotkey="@RatConfig.Overlay.Search.Hotkey" HotkeyChanged="SetOverlayHotkeyAsync" />
+                </div>
             </div>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudStack Spacing="0" Class="pa-0 ma-0">
-                    <MudCheckBox @bind-Value="@SettingsVM.EnableIneractableOverlay" Label="@Localizer["EnableSearchOverlay"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                    <MudCheckBox @bind-Value="@SettingsVM.BlurBehindSearch" Label="@Localizer["BlurBehindSearch"]" Dense="true" Size="Size.Small" Class="pa-0 ma-0"></MudCheckBox>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12">
-            <MudPaper Class="align-center justify-center pa-2 mx-2 mb-2" Elevation="2">
-                <MudStack Spacing="0" Justify="Justify.SpaceBetween" Row="true">
-                    <MudItem>
-                        <MudText>
-                            @Localizer["OpenSearchOverlay"]
-                        </MudText>
-                    </MudItem>
-                    <MudItem>
-                        <HotkeySelector Hotkey="@SettingsVM.InteractableOverlayHotkey"></HotkeySelector>
-                    </MudItem>
-                </MudStack>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
+        </section>
+    </aside>
 </div>
 
 @code {
-
-    protected override void OnInitialized()
+    private async Task SetOverlayHotkeyAsync(Hotkey value)
     {
-        SettingsVM.PropertyChanged += PropertyChangeHandler;
-    }
-
-    private async void PropertyChangeHandler(object? sender, EventArgs e)
-    {
-        await InvokeAsync(() => StateHasChanged());
-    }
-
-    public void Dispose()
-    {
-        SettingsVM.PropertyChanged -= PropertyChangeHandler;
+        SettingSaveResult result = await SettingsVM.SetOverlayHotkeyAsync(value);
+        if (!result.Succeeded)
+            Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
+        StateHasChanged();
     }
 }

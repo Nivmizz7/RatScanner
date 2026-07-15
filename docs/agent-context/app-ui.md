@@ -8,8 +8,9 @@ Scoped mandatory rules also live in `src/App/AGENTS.md`.
 - **Blazor** owns almost all product UI (scan page, history, settings, credits, overlays).
 - Host pages:
   - Main: `wwwroot/index.html` → `RazorApp` → routes under `/app`
-  - Overlay tooltip: `wwwroot/overlay.html`
-  - Interactable overlay: `wwwroot/interactableOverlay.html`
+  - Overlay tooltip: `wwwroot/overlay.html` → `/overlay`
+  - Interactable overlay: `wwwroot/interactableOverlay.html` → `/interactableOverlay`
+- Each `BlazorWebView` sets its route with `StartPath`. Do not replace this with `NavigateTo` from a root component: all routers scan the same assembly, so an initial `/` render leaks the main app page into transparent overlay windows.
 - Icons/static Data files are exposed to WebView via virtual host `local.data` → `Data/`.
 
 Do not invent a second navigation stack in WPF for features that already live as Blazor routes.
@@ -30,7 +31,7 @@ Package version: see App `.csproj` only.
 
 | Area | Location |
 | --- | --- |
-| App shell (sidebar, header, status) | `Shared/AppLayout.razor(+.css)` |
+| App shell (sidebar, header, status, PVP/PVE selector) | `Shared/AppLayout.razor(+.css)` |
 | Mud providers / shared theme | `Shared/MainLayout.razor` |
 | Settings chrome | `Shared/SettingsLayout.razor(+.css)` |
 | Overlay shells | `Shared/OverlayLayout.razor`, overlay page trees |
@@ -99,7 +100,9 @@ Capture is **not** in Razor; UI only reflects scan state. Capture orchestration:
 
 ## Configuration model (UI surface)
 
-Settings pages bind through `SettingsVM` → `RatConfig` → `config.cfg`. Save/cancel flows must keep VM and disk config consistent; invalid tokens may clear tracking configuration.
+Settings use control-specific persistence through `SettingsVM` and `SettingsPersistenceService` into `RatConfig` / `config.cfg`; there is no page-level Save or Cancel bar. Complete choices (switches, selects, presets, game mode) apply immediately and are saved asynchronously with per-setting rollback on failure. Editable capture fields keep draft text, validate on blur/Enter, and persist only when valid. TarkovTracker credentials are an explicit exception: they remain local drafts until a successful connection test.
+
+The always-visible PVP/PVE selector in `AppLayout` switches mode-specific tarkov.dev caches and the matching TarkovTracker.org progress context immediately, then persists the selection. Stale tracker requests are canceled or rejected by configuration generation before they can overwrite the active mode.
 
 ## Package ownership (UI-related)
 

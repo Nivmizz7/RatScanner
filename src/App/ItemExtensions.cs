@@ -22,7 +22,7 @@ public static class ItemExtensions
     private static UserProgress GetUserProgress()
     {
         UserProgress? progress = null;
-        if (RatConfig.Tracking.TarkovTracker.Enable && RatScannerMain.Instance.TarkovTrackerDB.Progress.Count >= 1)
+        if (RatScannerMain.Instance.TarkovTrackerDB.Progress.Count >= 1)
         {
             List<UserProgress> teamProgress = RatScannerMain.Instance.TarkovTrackerDB.Progress;
             progress = teamProgress.FirstOrDefault(x => x.UserId == RatScannerMain.Instance.TarkovTrackerDB.Self);
@@ -49,29 +49,16 @@ public static class ItemExtensions
         int nonFir = 0;
         bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
 
-        TarkovDev.Task[] tasks = TarkovDevAPI.GetTasks();
-
-        foreach (TarkovDev.Task task in tasks)
+        foreach (TarkovDev.Task task in TarkovDevAPI.GetTasks())
         {
             if (progress.Tasks.Any(p => p.Id == task.Id && p.Complete))
                 continue;
-
-            if (ExcludedTasks.Contains(task.Id))
+            if (ExcludedTasks.Contains(task.Id) || task.Objectives == null)
                 continue;
 
-            if (task.Objectives == null)
-                continue;
-
-            foreach (TaskObjective objective in task.Objectives)
-            {
-                int needed = RemainingForObjective(item, objective, progress, showNonFir, out bool requiresFir);
-                if (needed <= 0)
-                    continue;
-                if (requiresFir)
-                    fir += needed;
-                else
-                    nonFir += needed;
-            }
+            RequirementBreakdown taskNeed = GetTaskRequirementBreakdown(item, task.Objectives, progress, showNonFir);
+            fir += taskNeed.FoundInRaid;
+            nonFir += taskNeed.NonFoundInRaid;
         }
 
         return new RequirementBreakdown(fir + nonFir, fir, nonFir);
@@ -92,11 +79,68 @@ public static class ItemExtensions
             if (ExcludedTasks.Contains(task.Id) || task.Objectives == null)
                 continue;
 
-            foreach (TaskObjective objective in task.Objectives)
-                kappaCount += RemainingForObjective(item, objective, progress, showNonFir, out _);
+            kappaCount += GetTaskRequirementBreakdown(item, task.Objectives, progress, showNonFir).Total;
         }
 
         return kappaCount;
+    }
+
+    internal static RequirementBreakdown GetTaskRequirementBreakdown(
+        Item item,
+        IReadOnlyList<TaskObjective> objectives,
+        UserProgress progress,
+        bool showNonFir
+    )
+    {
+        int fir = 0;
+        int nonFir = 0;
+        Dictionary<TaskObjective, TaskObjective> pairedFindByGive = [];
+        HashSet<TaskObjective> pairedFindObjectives = [];
+
+        foreach (
+            TaskObjective giveObjective in objectives.Where(objective =>
+                objective.Type == "giveItem" && objective.ItemIds?.Contains(item.Id) == true
+            )
+        )
+        {
+            // Current tarkov.dev find/give pairs share count and FIR flags;
+            // loosen this match only if the upstream data starts emitting asymmetric pairs.
+            TaskObjective? pairedFind = objectives.FirstOrDefault(candidate =>
+                candidate.Type == "findItem"
+                && candidate.Count == giveObjective.Count
+                && candidate.FoundInRaid == giveObjective.FoundInRaid
+                && candidate.ItemIds?.Contains(item.Id) == true
+                && !pairedFindObjectives.Contains(candidate)
+            );
+            if (pairedFind == null)
+                continue;
+            pairedFindByGive[giveObjective] = pairedFind;
+            pairedFindObjectives.Add(pairedFind);
+        }
+
+        foreach (TaskObjective objective in objectives)
+        {
+            // Tarkov exposes "find" and "hand over" as separate objectives for the same
+            // physical items. Count the pair once using whichever objective is further along.
+            if (pairedFindObjectives.Contains(objective))
+                continue;
+
+            int needed = RemainingForObjective(item, objective, progress, showNonFir, out bool requiresFir);
+            if (pairedFindByGive.TryGetValue(objective, out TaskObjective? pairedFind))
+            {
+                int findRemaining = RemainingForObjective(item, pairedFind, progress, showNonFir, out _);
+                needed = Math.Min(needed, findRemaining);
+            }
+            if (needed <= 0)
+                continue;
+
+            if (requiresFir)
+                fir += needed;
+            else
+                nonFir += needed;
+        }
+
+        return new RequirementBreakdown(fir + nonFir, fir, nonFir);
     }
 
     private static int RemainingForObjective(

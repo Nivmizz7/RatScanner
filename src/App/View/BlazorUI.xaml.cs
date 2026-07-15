@@ -74,8 +74,10 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         // Presentation helpers build user-visible strings outside Razor; share the same catalog.
         Presentation.PresentationText.Localizer = localizationService;
 
+        serviceCollection.AddSingleton<SettingsPersistenceService>();
         serviceCollection.AddSingleton<SettingsVM>(services => new SettingsVM(
-            services.GetRequiredService<LocalizationService>()
+            services.GetRequiredService<LocalizationService>(),
+            services.GetRequiredService<SettingsPersistenceService>()
         ));
 
         System.Collections.Generic.IEnumerable<System.Drawing.Rectangle> bounds =

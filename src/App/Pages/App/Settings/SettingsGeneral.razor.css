@@ -1,35 +1,33 @@
-.section-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
+.detected-details,
+.advanced-capture {
+    padding: 12px;
+    border: 1px solid var(--rs-border-subtle);
+    border-radius: var(--rs-radius-sm);
+    background: var(--rs-surface-2);
 }
 
-.display-status {
-    font-size: 0.8125rem;
-}
-
-.configuration-heading {
-    display: block;
-    color: var(--rs-text-2);
-    letter-spacing: 0.08em;
+.detetected-details summary,
+.advanced-capture summary,
+.detected-details summary {
+    cursor: pointer;
+    color: var(--rs-text);
+    font-weight: 600;
 }
 
 .configuration-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px 20px;
-    margin: 6px 0 0;
+    gap: 6px 18px;
+    margin: 12px 0 0;
 }
 
 .configuration-grid > div {
     display: flex;
-    align-items: baseline;
     justify-content: space-between;
     gap: 12px;
     min-width: 0;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--rs-border);
+    padding: 7px 0;
+    border-bottom: 1px solid var(--rs-border-subtle);
 }
 
 .configuration-grid dt {
@@ -39,56 +37,28 @@
 
 .configuration-grid dd {
     margin: 0;
-    color: var(--rs-text-1);
+    color: var(--rs-text);
     font-size: 0.8125rem;
     font-weight: 600;
     text-align: right;
+    overflow-wrap: anywhere;
 }
 
-.advanced-description {
-    display: block;
-    margin: -2px 0 0 30px;
-    max-width: 720px;
-}
-
-.advanced-override {
-    padding: 12px;
-    border: 1px solid var(--rs-border);
-    border-radius: var(--rs-radius);
-    background: color-mix(in srgb, var(--rs-surface) 86%, black);
+.capture-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
 }
 
 .resolution-presets {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 8px;
-}
-
-.resolution-presets > div {
-    display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 6px;
+    gap: 8px;
 }
 
-::deep .mud-button-root.mud-icon-button.mud-icon-button-color-default.mud-ripple.mud-ripple-checkbox {
-    padding: 4px;
-}
-
-@media (max-width: 699px) {
-    .section-heading,
-    .resolution-presets {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .configuration-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .resolution-presets > div {
-        justify-content: flex-start;
+@container (max-width: 679px) {
+    .configuration-grid,
+    .capture-fields {
+        grid-template-columns: minmax(0, 1fr);
     }
 }

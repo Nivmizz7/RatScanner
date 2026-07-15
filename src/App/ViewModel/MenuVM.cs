@@ -112,9 +112,9 @@ internal class MenuVM : INotifyPropertyChanged
     {
         get
         {
-            if (!RatConfig.Tracking.TarkovTracker.Enable)
-                return null;
             List<FetchModels.TarkovTracker.UserProgress> progress = RatScannerMain.Instance.TarkovTrackerDB.Progress;
+            if (progress.Count == 0)
+                return null;
             IEnumerable<FetchModels.TarkovTracker.UserProgress> teamProgress = progress.Where(x =>
                 x.UserId != RatScannerMain.Instance.TarkovTrackerDB.Self
             );
