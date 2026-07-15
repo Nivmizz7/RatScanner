@@ -58,7 +58,7 @@ The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/
 
 A separate tag-only release job has `contents: write`. It downloads the validated artifact, rejects a tag that is not exactly `v` + the App project `<Version>`, and creates the **draft** GitHub release. PR and branch-push builds never receive release permissions.
 
-`softprops/action-gh-release` must stay pinned to the commit SHA allowlisted under the TarkovTracker org **selected actions** policy. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not on that list. Do not bump that pin unless the org allowlist is updated in lockstep.
+`softprops/action-gh-release` must stay pinned to a commit SHA on the TarkovTracker org **selected actions** allowlist. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not listed. Process for bumps: (1) review the new softprops release, (2) add the SHA via org Actions selected-actions policy (`admin:org`), (3) update this workflow pin, (4) only then remove older softprops SHAs from the allowlist once no org workflow still references them.
 
 Release naming marks TarkovTracker Edition explicitly.
 
