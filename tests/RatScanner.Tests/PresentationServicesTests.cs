@@ -224,10 +224,7 @@ public class RatEyeIconManagerTests
                     UseCache = false,
                     IconConfig = new RatEye.Config.Processing.Icon { UseStaticIcons = true },
                 },
-            };
-            config.RatStashDB = RatStash.Database.FromItems(
-                new RatStash.Item[]
-                {
+                RatStashDB = RatStash.Database.FromItems([
                     new()
                     {
                         Id = "one",
@@ -244,8 +241,8 @@ public class RatEyeIconManagerTests
                         Width = 2,
                         Height = 1,
                     },
-                }
-            );
+                ]),
+            };
 
             using RatEye.IconManager manager = new(config);
             Assert.Empty(manager.StaticIcons);
@@ -310,7 +307,7 @@ public class RatEyeProcessingTests
             ProcessingConfig = new RatEye.Config.Processing { Scale = 1, InspectionConfig = inspectionConfig },
         };
 
-        using RatEye.RatEyeEngine engine = new(config, RatStash.Database.FromItems(Array.Empty<RatStash.Item>()));
+        using RatEye.RatEyeEngine engine = new(config, RatStash.Database.FromItems([]));
         RatEye.Processing.MultiInspection result = engine.NewMultiInspection(source);
 
         Assert.Equal(2, result.Inspections.Count);

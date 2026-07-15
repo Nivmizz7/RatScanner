@@ -58,6 +58,8 @@ The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/
 
 A separate tag-only release job has `contents: write`. It downloads the validated artifact, rejects a tag that is not exactly `v` + the App project `<Version>`, and creates the **draft** GitHub release. PR and branch-push builds never receive release permissions.
 
+`softprops/action-gh-release` must stay pinned to the commit SHA allowlisted under the TarkovTracker org **selected actions** policy. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not on that list. Do not bump that pin unless the org allowlist is updated in lockstep.
+
 Release naming marks TarkovTracker Edition explicitly.
 
 ## Update channel in-app

@@ -116,7 +116,7 @@ public class OpenCvPipelineTests
         }
 
         Config config = CreateProcessingConfig(optimizeHighlighted: true);
-        using RatEyeEngine engine = new(config, RatStash.Database.FromItems(Array.Empty<RatStash.Item>()));
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([]));
         using RatEye.Processing.Inventory inventory = engine.NewInventory(screenshot);
 
         RatEye.Processing.Icon? icon = inventory.LocateIcon(new Vector2(120, 70));
@@ -132,7 +132,7 @@ public class OpenCvPipelineTests
         using Bitmap screenshot = new(32, 32);
         Config config = CreateProcessingConfig(optimizeHighlighted: false);
         config.ProcessingConfig.Scale = 0.01f;
-        using RatEyeEngine engine = new(config, RatStash.Database.FromItems(Array.Empty<RatStash.Item>()));
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([]));
         using RatEye.Processing.Inventory inventory = engine.NewInventory(screenshot);
 
         InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => _ = inventory.Icons);
@@ -145,7 +145,7 @@ public class OpenCvPipelineTests
     {
         using Bitmap screenshot = new(320, 180);
         Config config = CreateProcessingConfig(optimizeHighlighted: false);
-        using RatEyeEngine engine = new(config, RatStash.Database.FromItems(Array.Empty<RatStash.Item>()));
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([]));
 
         RatEye.Processing.Inspection inspection = engine.NewInspection(screenshot);
 
@@ -153,6 +153,40 @@ public class OpenCvPipelineTests
         Assert.True(inspection.MarkerConfidence < config.ProcessingConfig.InspectionConfig.MarkerThreshold);
         Assert.Null(inspection.Item);
         Assert.Equal(0, inspection.ItemConfidence);
+    }
+
+    [Theory]
+    [InlineData("Subject Search")]
+    [InlineData("subject search")]
+    [InlineData("SUBJECT SEARCH")]
+    [InlineData("Subject Searcn")] // minor OCR noise
+    [InlineData("Поиск предмета")]
+    [InlineData("Rechercher un objet")]
+    [InlineData("Buscar objeto")]
+    public void Inventory_subject_search_chrome_is_not_treated_as_item_title(string title)
+    {
+        Assert.True(RatEye.Processing.Inspection.IsUiChromeTitle(title));
+    }
+
+    [Theory]
+    [InlineData("Physical Bitcoin")]
+    [InlineData("Pack of sugar")]
+    [InlineData("Bolt-action sniper rifle Remington Model 700 7.62x51")]
+    [InlineData("Suchen")] // short DE token kept out of denylist; MinItemConfidence is the guard
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Real_item_names_are_not_flagged_as_ui_chrome(string title)
+    {
+        Assert.False(RatEye.Processing.Inspection.IsUiChromeTitle(title));
+    }
+
+    [Fact]
+    public void Weak_title_fuzzy_matches_are_rejected_below_min_item_confidence()
+    {
+        // Normed Levenshtein of short UI chrome vs a long catalog name is often
+        // nonzero; without a floor any best-effort match would become an Item.
+        Assert.True("Subject Search".NormedLevenshteinDistance("Physical Bitcoin") < 0.55f);
+        Assert.True("Subject Search".NormedLevenshteinDistance("Pack of sugar") < 0.55f);
     }
 
     [Fact]
@@ -182,7 +216,7 @@ public class OpenCvPipelineTests
             Width = 1,
             Height = 1,
         };
-        using RatEyeEngine engine = new(config, RatStash.Database.FromItems(new[] { expected }));
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([expected]));
         RatEye.Processing.Inspection inspection = engine.NewInspection(screenshot);
         Assert.True(inspection.ContainsMarker);
 
@@ -230,7 +264,7 @@ public class OpenCvPipelineTests
             config.ProcessingConfig.IconConfig.UseStaticIcons = true;
             config.ProcessingConfig.IconConfig.ScanRotatedIcons = false;
 
-            using RatEyeEngine engine = new(config, RatStash.Database.FromItems(new[] { expected, broken }));
+            using RatEyeEngine engine = new(config, RatStash.Database.FromItems([expected, broken]));
             engine.Config.IconManager.EnsureStaticIconsLoaded(new Vector2(1, 1));
             KeyValuePair<string, Mat> loaded = Assert.Single(engine.Config.IconManager.StaticIcons[new Vector2(1, 1)]);
             Assert.EndsWith("fixture.png", loaded.Key, StringComparison.Ordinal);
@@ -273,7 +307,7 @@ public class OpenCvPipelineTests
             Height = 1,
         };
 
-        using RatEyeEngine engine = new(config, RatStash.Database.FromItems(new[] { item }));
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([item]));
         engine.Config.IconManager.EnsureStaticIconsLoaded(new Vector2(1, 1));
 
         Assert.Empty(engine.Config.IconManager.StaticIcons);

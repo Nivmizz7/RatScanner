@@ -25,6 +25,16 @@ namespace RatEye
                 public float MarkerThreshold = 0.82f;
 
                 /// <summary>
+                /// Minimum OCR-to-item-name similarity required to accept a match.
+                /// <para>
+                /// Prevents weak fuzzy matches from inventory chrome (for example the
+                /// "Subject Search" bar, whose magnifier resembles the inspect marker)
+                /// from being reported as items.
+                /// </para>
+                /// </summary>
+                public float MinItemConfidence = 0.55f;
+
+                /// <summary>
                 /// The scale of the marker used by item inspection windows
                 /// </summary>
                 public float MarkerItemScale = 16f / 28f;
@@ -100,6 +110,7 @@ namespace RatEye
                     var components = new string[]
                     {
                         MarkerThreshold.ToString(),
+                        MinItemConfidence.ToString(),
                         MarkerItemScale.ToString(),
                         MarkerBackgroundColor.ToString(),
                         BaseTitleSearchWidth.ToString(),

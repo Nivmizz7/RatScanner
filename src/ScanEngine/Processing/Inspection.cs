@@ -259,6 +259,14 @@ namespace RatEye.Processing
             try
             {
                 Title = OCR(rescaledSearchBox);
+                if (IsUiChromeTitle(Title))
+                {
+                    Logger.LogDebug("Title matches inventory/UI chrome; skipping item match: " + Title);
+                    _item = null;
+                    _itemConfidence = 0;
+                    return;
+                }
+
                 MatchItem();
             }
             finally
@@ -387,15 +395,74 @@ namespace RatEye.Processing
             if (string.IsNullOrWhiteSpace(_title))
                 return;
 
+            Item best = null;
+            float bestConfidence = 0;
             foreach (Item item in _config.RatStashDB.GetItems())
             {
                 float confidence = item.Name.CyrillicToLatin().NormedLevenshteinDistance(_title);
-                if (confidence <= _itemConfidence)
+                if (confidence <= bestConfidence)
                     continue;
 
-                _item = item;
-                _itemConfidence = confidence;
+                best = item;
+                bestConfidence = confidence;
             }
+
+            // Always surface the best score for diagnostics/UI, but only accept
+            // items when similarity clears MinItemConfidence.
+            _itemConfidence = bestConfidence;
+            if (best != null && bestConfidence >= InspectionConfig.MinItemConfidence)
+                _item = best;
+            else
+                Logger.LogDebug(
+                    $"Best title match '{best?.Name}' confidence {bestConfidence:F3} below threshold {InspectionConfig.MinItemConfidence:F3}."
+                );
+        }
+
+        /// <summary>
+        /// Titles that come from non-inspect UI (inventory search bar, etc.).
+        /// OCR of these must never resolve to a catalog item.
+        /// </summary>
+        /// <remarks>
+        /// Matching is case-insensitive and tolerates minor OCR noise via
+        /// <see cref="Extensions.NormedLevenshteinDistance"/>.
+        /// </remarks>
+        // Prefer multi-word / distinctive phrases. Single short tokens (e.g. DE "Suchen")
+        // are too easy to collide with real short item names under fuzzy matching.
+        internal static readonly string[] UiChromeTitles =
+        {
+            "Subject Search",
+            // Common localizations of the inventory filter placeholder.
+            "Поиск предмета",
+            "Rechercher un objet",
+            "Buscar objeto",
+            "Procurar item",
+            "Cerca oggetto",
+            "Szukaj przedmiotu",
+            "搜索物品",
+            "아이템 검색",
+            "アイテム検索",
+        };
+
+        private const float UiChromeTitleMatchThreshold = 0.85f;
+
+        /// <summary>
+        /// Returns <see langword="true"/> when <paramref name="title"/> is inventory/UI chrome
+        /// rather than an inspection-window item name.
+        /// </summary>
+        internal static bool IsUiChromeTitle(string title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+                return false;
+
+            string normalized = title.CyrillicToLatin().Trim().ToLowerInvariant();
+            foreach (string chrome in UiChromeTitles)
+            {
+                string chromeNormalized = chrome.CyrillicToLatin().Trim().ToLowerInvariant();
+                if (chromeNormalized.NormedLevenshteinDistance(normalized) >= UiChromeTitleMatchThreshold)
+                    return true;
+            }
+
+            return false;
         }
     }
 }
