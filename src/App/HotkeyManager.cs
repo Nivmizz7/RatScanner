@@ -51,18 +51,18 @@ internal sealed class HotkeyManager : IDisposable
         // Unregister hotkeys to prevent multiple listeners for the same hotkey
         UnregisterHotkeys();
 
-        IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, ref IconScan.Enable);
+        IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, IconScan.Enable);
         Hotkey nameScanHotkey = new(null, new[] { MouseButton.Left });
         NameScanHotkey = new ActiveHotkey(
             nameScanHotkey,
             OnNameScanHotkey,
-            ref NameScan.Enable,
+            NameScan.Enable,
             canHandle: e => !IconScanHotkey.Enabled || !IconScanHotkey.IsPressed(e)
         );
         OpenInteractableOverlayHotkey = new ActiveHotkey(
             OverlayC.Search.Hotkey,
             OnOpenInteractableOverlayHotkey,
-            ref OverlayC.Search.Enable
+            OverlayC.Search.Enable
         );
         CloseInteractableOverlayHotkey = new ActiveHotkey(
             new Hotkey(new[] { Key.Escape }),

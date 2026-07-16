@@ -40,12 +40,12 @@ internal class ActiveHotkey : Hotkey, IDisposable
     /// </summary>
     /// <param name="hotkey">The hotkey which will be listened for</param>
     /// <param name="hotkeyPressedEventHandler">The event handler which will be notified</param>
-    /// <param name="enabled"><see langword="false"/> to disable the active hotkey by reference</param>
+    /// <param name="enabled"><see langword="false"/> to disable the active hotkey</param>
     /// <param name="suppressHotkey"><see langword="true"/> if the hotkey should not be forwarded down the chain</param>
     internal ActiveHotkey(
         Hotkey hotkey,
         UserActivityHelper.KeyUpEventHandler hotkeyPressedEventHandler,
-        ref bool enabled,
+        bool enabled,
         bool suppressHotkey = false,
         Func<KeyUpEventArgs, bool>? canHandle = null
     )
@@ -84,13 +84,13 @@ internal class ActiveHotkey : Hotkey, IDisposable
     /// <param name="keyboardKeys">The keyboard keys of the hotkey which will be listened for</param>
     /// <param name="mouseButtons">The mouse buttons of the hotkey which will be listened for</param>
     /// <param name="hotkeyPressedEventHandler">The event handler which will be notified</param>
-    /// <param name="enabled"><see langword="false"/> to disable the active hotkey by reference</param>
+    /// <param name="enabled"><see langword="false"/> to disable the active hotkey</param>
     /// <param name="suppressHotkey"><see langword="true"/> if the hotkey should not be forwarded down the chain</param>
     internal ActiveHotkey(
         List<Key> keyboardKeys,
         List<MouseButton> mouseButtons,
         UserActivityHelper.KeyUpEventHandler hotkeyPressedEventHandler,
-        ref bool enabled,
+        bool enabled,
         bool suppressHotkey = false
     )
         : base(keyboardKeys, mouseButtons)
