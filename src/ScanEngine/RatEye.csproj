@@ -5,7 +5,6 @@
 		<LangVersion>9</LangVersion>
 		<Company>RatScanner</Company>
 		<Authors>Blightbuster</Authors>
-		<Version>4.0.1</Version>
 		<Description>Image processing library for Escape from Tarkov</Description>
 		<!-- Vendored into RatScanner; do not publish NuGet from this monorepo build. -->
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>

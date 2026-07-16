@@ -297,3 +297,172 @@ public class TarkovTrackerDatabaseReliabilityTests
         Assert.Equal("PVP_existing", database.Token);
     }
 }
+
+public class TarkovTrackerResponseContractTests
+{
+    [Fact]
+    public void Missing_solo_data_is_not_synthesized_by_deserialization()
+    {
+        ProgressResponse response = Newtonsoft.Json.JsonConvert.DeserializeObject<ProgressResponse>(
+            "{\"meta\":{\"self\":\"pvp-self\",\"gameMode\":\"pvp\"}}"
+        )!;
+
+        Assert.Null(response.UserProgress);
+        Assert.NotNull(response.Meta);
+    }
+
+    [Fact]
+    public void Missing_solo_meta_is_not_synthesized_by_deserialization()
+    {
+        ProgressResponse response = Newtonsoft.Json.JsonConvert.DeserializeObject<ProgressResponse>(
+            "{\"data\":{\"userId\":\"pvp-self\"}}"
+        )!;
+
+        Assert.NotNull(response.UserProgress);
+        Assert.Null(response.Meta);
+    }
+
+    [Fact]
+    public void Missing_team_hidden_teammates_is_not_synthesized_by_deserialization()
+    {
+        TeamProgressResponse response = Newtonsoft.Json.JsonConvert.DeserializeObject<TeamProgressResponse>(
+            "{\"data\":[],\"meta\":{\"self\":\"pvp-self\"}}"
+        )!;
+
+        Assert.NotNull(response.TeamProgress);
+        Assert.NotNull(response.Meta);
+        Assert.Null(response.Meta!.HiddenTeammates);
+    }
+}
+
+public class TarkovTrackerMalformedResponseReliabilityTests
+{
+    private const string PvpTokenResponse = "{\"token\":\"PVP_abc\",\"permissions\":[\"GP\"],\"gameMode\":\"pvp\"}";
+
+    private const string PvpProgressResponse = """
+        {
+          "data": {
+            "userId": "pvp-self",
+            "displayName": "PvP",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          },
+          "meta": {"self":"pvp-self","gameMode":"pvp"}
+        }
+        """;
+
+    private const string PvpTeamTokenResponse =
+        "{\"token\":\"PVP_abc\",\"permissions\":[\"GP\",\"TP\"],\"gameMode\":\"pvp\"}";
+
+    private const string PvpTeamProgressResponse = """
+        {
+          "data": [{
+            "userId": "pvp-self",
+            "displayName": "PvP",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          }],
+          "meta": {"self":"pvp-self","hiddenTeammates":[]}
+        }
+        """;
+
+    [Theory]
+    [InlineData("{\"meta\":{\"self\":\"pvp-self\",\"gameMode\":\"pvp\"}}")]
+    [InlineData("{\"data\":null,\"meta\":{\"self\":\"pvp-self\",\"gameMode\":\"pvp\"}}")]
+    [InlineData("{\"data\":{},\"meta\":{\"self\":\"pvp-self\",\"gameMode\":\"pvp\"}}")]
+    [InlineData("{\"data\":{\"userId\":\"pvp-self\"}}")]
+    public async Task Malformed_solo_response_retains_last_good_progress(string malformedResponse)
+    {
+        bool returnMalformed = false;
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse
+                    : returnMalformed ? malformedResponse
+                    : PvpProgressResponse
+                )
+        );
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        returnMalformed = true;
+
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+    }
+
+    [Fact]
+    public async Task Malformed_team_response_retains_last_good_progress()
+    {
+        bool returnMalformed = false;
+        bool previousShowTeam = RatConfig.Tracking.TarkovTracker.ShowTeam;
+        RatConfig.Tracking.TarkovTracker.ShowTeam = true;
+        try
+        {
+            using TarkovTrackerDB database = new(
+                (url, _, _) =>
+                    Task.FromResult(
+                        url.EndsWith("/token", StringComparison.Ordinal) ? PvpTeamTokenResponse
+                        : returnMalformed ? "{\"data\":[],\"meta\":{\"self\":\"pvp-self\"}}"
+                        : PvpTeamProgressResponse
+                    )
+            );
+            database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+
+            Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+            returnMalformed = true;
+
+            Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+            Assert.Equal("pvp-self", database.Self);
+            Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+        }
+        finally
+        {
+            RatConfig.Tracking.TarkovTracker.ShowTeam = previousShowTeam;
+        }
+    }
+}
+
+public class TarkovTrackerApiContractTests
+{
+    [Fact]
+    public void Get_sends_expected_route_bearer_token_and_fork_user_agent()
+    {
+        string? requestUri = null;
+        string? authorizationScheme = null;
+        string? authorizationParameter = null;
+        string? userAgent = null;
+        using HttpClient client = new(
+            new CaptureHandler(request =>
+            {
+                requestUri = request.RequestUri?.ToString();
+                authorizationScheme = request.Headers.Authorization?.Scheme;
+                authorizationParameter = request.Headers.Authorization?.Parameter;
+                userAgent = request.Headers.UserAgent.ToString();
+            })
+        );
+
+        Assert.Equal("ok", APIClient.Get(client, "https://api.example/progress", "PVP_super-secret"));
+        Assert.Equal("https://api.example/progress", requestUri);
+        Assert.Equal("Bearer", authorizationScheme);
+        Assert.Equal("PVP_super-secret", authorizationParameter);
+        Assert.Contains("RatScanner-TT/", userAgent, StringComparison.Ordinal);
+    }
+
+    private sealed class CaptureHandler(Action<HttpRequestMessage> capture) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            capture(request);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("ok") });
+        }
+    }
+}

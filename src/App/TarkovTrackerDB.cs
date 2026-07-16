@@ -406,20 +406,24 @@ public class TarkovTrackerDB : IDisposable
             if (teamProgressAvailable)
             {
                 TeamProgressResponse response = await GetTeamProgressAsync(configuration).ConfigureAwait(false);
-                List<UserProgress> progress = response
-                    .TeamProgress.Where(x => !response.Meta.HiddenTeammates.Contains(x.UserId))
+                TeamProgressResponse.Metadata metadata = response.Meta!;
+                List<UserProgress> teamProgress = response.TeamProgress!;
+                List<UserProgress> progress = teamProgress
+                    .Where(x => !metadata.HiddenTeammates!.Contains(x.UserId))
                     .ToList();
-                CommitProgress(configuration, response.Meta.Self, progress);
+                CommitProgress(configuration, metadata.Self!, progress);
             }
             else
             {
                 ProgressResponse response = await GetProgressAsync(configuration).ConfigureAwait(false);
+                ProgressResponse.Metadata metadata = response.Meta!;
+                UserProgress userProgress = response.UserProgress!;
                 if (
-                    !string.IsNullOrWhiteSpace(response.Meta.GameMode)
-                    && !MatchesGameMode(response.Meta.GameMode, "", configuration.Mode)
+                    !string.IsNullOrWhiteSpace(metadata.GameMode)
+                    && !MatchesGameMode(metadata.GameMode, "", configuration.Mode)
                 )
                     throw new JsonSerializationException("TarkovTracker progress response used the wrong game mode.");
-                CommitProgress(configuration, response.Meta.Self, new List<UserProgress> { response.UserProgress });
+                CommitProgress(configuration, metadata.Self!, new List<UserProgress> { userProgress });
             }
         }
         catch (OperationCanceledException) when (configuration.CancellationToken.IsCancellationRequested) { }
@@ -467,11 +471,13 @@ public class TarkovTrackerDB : IDisposable
             )
             .ConfigureAwait(false);
         TeamProgressResponse response = DeserializeResponse<TeamProgressResponse>(responseText, "team progress");
+        TeamProgressResponse.Metadata? metadata = response.Meta;
+        List<UserProgress>? teamProgress = response.TeamProgress;
         if (
-            response.Meta is null
-            || response.TeamProgress is null
-            || response.Meta.HiddenTeammates is null
-            || string.IsNullOrWhiteSpace(response.Meta.Self)
+            metadata?.HiddenTeammates is null
+            || teamProgress is null
+            || string.IsNullOrWhiteSpace(metadata.Self)
+            || teamProgress.Any(x => x is null || string.IsNullOrWhiteSpace(x.UserId))
         )
         {
             throw new JsonSerializationException("TarkovTracker team progress response is missing required fields.");
@@ -488,7 +494,14 @@ public class TarkovTrackerDB : IDisposable
             )
             .ConfigureAwait(false);
         ProgressResponse response = DeserializeResponse<ProgressResponse>(responseText, "progress");
-        if (response.Meta is null || response.UserProgress is null || string.IsNullOrWhiteSpace(response.Meta.Self))
+        ProgressResponse.Metadata? metadata = response.Meta;
+        UserProgress? userProgress = response.UserProgress;
+        if (
+            metadata is null
+            || userProgress is null
+            || string.IsNullOrWhiteSpace(metadata.Self)
+            || string.IsNullOrWhiteSpace(userProgress.UserId)
+        )
             throw new JsonSerializationException("TarkovTracker progress response is missing required fields.");
         return response;
     }
