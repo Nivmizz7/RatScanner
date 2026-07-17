@@ -33,10 +33,10 @@
                     @for (int _i = 0; _i < _searchResults.Count(); _i++) {
                         int i = _i;
                         SearchResult searchResult = _searchResults.ElementAt(i);
-                        
+
                         @if (searchResult.Data is Item item) {
                             <ItemSearchResult Item="@item" IsExpanded="@(i == 0)" />
-                        } 
+                        }
                         else if (searchResult.Data is TTask task) {
                             <TaskSearchResult Task="@task" IsExpanded="@(i == 0)" />
                         }

@@ -14,7 +14,7 @@ This is a **modified** community fork of RatScanner (see [Attribution & license]
 
 External item scanner for [Escape from Tarkov][escape-from-tarkov]. Screenshots identify items; pricing and related data come from the [tarkov.dev][tarkov-dev] API. This fork deepens [TarkovTracker.org][tarkovtracker] integration and continues active development.
 
-**Support / issues for this build:** [TarkovTracker Discord][discord] · [this GitHub repo][fork-repo]  
+**Support / issues for this build:** [TarkovTracker Discord][discord] · [this GitHub repo][fork-repo]
 Demo: [Tutorial video][demo-video] · [FAQ][faq-page]
 
 ## Can I get banned for using Rat Scanner?

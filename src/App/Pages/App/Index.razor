@@ -6,8 +6,10 @@
 @using System.Diagnostics
 @using System.ComponentModel
 @using System.Threading
+@using System.Globalization
 @inject MenuVM MenuVM
 @inject SessionHistoryService History
+@inject LocalizationService Localizer
 @implements IDisposable
 
 <div class="scan-page">
@@ -16,7 +18,7 @@
             <MudAutocomplete @ref="_search"
                              T="Item"
                              Class="rs-search-field"
-                             Placeholder="Search for an item"
+                             Placeholder="@Localizer["SearchItemsPlaceholder"]"
                              SearchFunc="SearchItems"
                              ValueChanged="SelectItem"
                              ToStringFunc="@(item => item?.Name ?? string.Empty)"
@@ -35,7 +37,7 @@
                     </div>
                 </ItemTemplate>
                 <NoItemsTemplate>
-                    <div class="search-empty">No matching items found.</div>
+                    <div class="search-empty">@Localizer["NoMatchingItems"]</div>
                 </NoItemsTemplate>
             </MudAutocomplete>
         </div>
@@ -44,8 +46,8 @@
 
     @if (_recent.Count > 0)
     {
-        <section class="recent" aria-label="Recent scans">
-            <span class="recent-label">Recent scans</span>
+        <section class="recent" aria-label="@Localizer["RecentScans"]">
+            <span class="recent-label">@Localizer["RecentScans"]</span>
             @foreach (ItemScan scan in _recent)
             {
                 <button type="button"
@@ -64,8 +66,8 @@
         <section class="empty-state" aria-live="polite">
             <MudIcon Icon="@Icons.Material.Filled.CenterFocusWeak" />
             <div>
-                <strong>Ready to scan</strong>
-                <span>Inspect or click an item in Escape from Tarkov, or search above.</span>
+                <strong>@Localizer["ReadyToScan"]</strong>
+                <span>@Localizer["ReadyToScanDescription"]</span>
             </div>
         </section>
     }
@@ -74,25 +76,25 @@
         @if (!IsScannerActive)
         {
             <section class="state-banner">
-                <strong>Scanner paused</strong>
-                <span>Enable name or icon scanning in Settings to resume.</span>
+                <strong>@Localizer["ScannerPaused"]</strong>
+                <span>@Localizer["EnableScannerInSettings"]</span>
             </section>
         }
 
         @if (IsLowConfidence)
         {
-            <section class="state-banner warning" aria-label="Low confidence match">
+            <section class="state-banner warning" aria-label="@Localizer["LowConfidenceMatch"]">
                 <div class="banner-copy">
-                    <strong>Low-confidence match @ConfidencePercent</strong>
-                    <span>This may not be the correct item. Confirm it or search for another match.</span>
+                    <strong>@Localizer.Format("LowConfidenceMatchWithPercent", ConfidencePercent)</strong>
+                    <span>@Localizer["LowConfidenceDescription"]</span>
                 </div>
                 <div class="banner-actions">
-                    <button type="button" class="banner-btn" @onclick="FocusSearch">Choose another match</button>
+                    <button type="button" class="banner-btn" @onclick="FocusSearch">@Localizer["ChooseAnotherMatch"]</button>
                 </div>
             </section>
         }
 
-        <article class="result-card" aria-live="polite" aria-label="Current scan result">
+        <article class="result-card" aria-live="polite" aria-label="@Localizer["CurrentScanResult"]">
             <header class="result-header">
                 <div class="item-art-wrap">
                     <div class="item-art">
@@ -109,7 +111,7 @@
                     <p class="identity-meta">
                         <span>@FriendlyItemType</span>
                         <span class="sep" aria-hidden="true"></span>
-                        <span>@_result.Item.SlotCount @(_result.Item.SlotCount == 1 ? "slot" : "slots")</span>
+                        <span>@_result.Item.SlotCount @(_result.Item.SlotCount == 1 ? Localizer["Slot"] : Localizer["Slots"])</span>
                     </p>
                     <p class="identity-source">@SelectionMethodLabel</p>
                 </div>
@@ -120,14 +122,14 @@
                 </div>
             </header>
 
-            <section class="market" aria-label="Market comparison">
+            <section class="market" aria-label="@Localizer["MarketComparison"]">
                 <div class="market-columns">
                     <div class="market-column">
-                        <label>Flea market</label>
+                        <label>@Localizer["FleaMarket"]</label>
                         <strong class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</strong>
                         @if (ShowPerSlot)
                         {
-                            <span class="supporting">@PriceFormatter.Format(_result.Pricing.FleaPricePerSlot) per slot</span>
+                            <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Pricing.FleaPricePerSlot))</span>
                         }
                         <span class="supporting">
                             @if (!string.IsNullOrWhiteSpace(FreshnessText))
@@ -136,24 +138,24 @@
                             }
                             else
                             {
-                                <text>Prices may vary</text>
+                                <text>@Localizer["PricesMayVary"]</text>
                             }
                         </span>
                     </div>
 
                     <div class="market-column">
-                        <label>Best trader</label>
+                        <label>@Localizer["BestTrader"]</label>
                         @if (_result.Trader is null)
                         {
-                            <strong class="price">Unavailable</strong>
+                            <strong class="price">@Localizer["Unavailable"]</strong>
                         }
                         else
                         {
-                            <strong class="trader-name">@(_result.Trader.Name ?? "Trader")</strong>
+                            <strong class="trader-name">@(_result.Trader.Name ?? Localizer["Trader"])</strong>
                             <span class="price supporting-price">@PriceFormatter.Format(_result.Trader.TotalPrice)</span>
                             @if (ShowPerSlot && _result.Trader.PricePerSlot is not null)
                             {
-                                <span class="supporting">@PriceFormatter.Format(_result.Trader.PricePerSlot) per slot</span>
+                                <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Trader.PricePerSlot))</span>
                             }
                         }
                     </div>
@@ -161,11 +163,11 @@
                 <p class="market-difference @DifferenceClass">@MarketDifferenceText</p>
             </section>
 
-            <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="Requirements">
+            <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="@Localizer["Requirements"]">
                 @if (HasAnyRequirement)
                 {
                     <div class="requirement-chip @(IsRequired(_result.Quests) ? "required" : "muted") @(_result.Quests.HasFirNeed ? "fir" : null)">
-                        <label>Quest requirements</label>
+                        <label>@Localizer["QuestRequirements"]</label>
                         <strong>@RequirementSummary(_result.Quests)</strong>
                         @if (IsRequired(_result.Quests))
                         {
@@ -173,7 +175,7 @@
                         }
                     </div>
                     <div class="requirement-chip @(IsRequired(_result.Hideout) ? "required" : "muted") @(_result.Hideout.HasFirNeed ? "fir" : null)">
-                        <label>Hideout requirements</label>
+                        <label>@Localizer["HideoutRequirements"]</label>
                         <strong>@RequirementSummary(_result.Hideout)</strong>
                         @if (IsRequired(_result.Hideout))
                         {
@@ -184,35 +186,35 @@
                 else
                 {
                     <p class="requirements-inline">
-                        <span>Quest: Not required</span>
+                        <span>@Localizer.Format("RequirementNotRequired", Localizer["QuestLabel"])</span>
                         <span class="sep" aria-hidden="true"></span>
-                        <span>Hideout: Not required</span>
+                        <span>@Localizer.Format("RequirementNotRequired", Localizer["HideoutLabel"])</span>
                     </p>
                 }
             </section>
 
             @if (_result.Acquisition.Any || HasFirNeedAnywhere)
             {
-                <section class="acquisition" aria-label="Acquisition and found-in-raid">
+                <section class="acquisition" aria-label="@Localizer["AcquisitionAndFir"]">
                     @if (HasFirNeedAnywhere)
                     {
-                        <div class="acq-chip fir" title="At least one remaining need requires found in raid. Confirm FIR on the item yourself — automatic FIR icon detection is not implemented yet.">
-                            <strong>FIR required</strong>
-                            <span>Confirm the checkmark on the item (not detected automatically)</span>
+                        <div class="acq-chip fir" title="@Localizer["FirRequiredTooltip"]">
+                            <strong>@Localizer["FirRequired"]</strong>
+                            <span>@Localizer["ConfirmFir"]</span>
                         </div>
                     }
                     @if (_result.Acquisition.CanCraft)
                     {
-                        <div class="acq-chip craft" title="Hideout craft products are always found in raid.">
-                            <strong>Craftable</strong>
-                            <span>@_result.Acquisition.CraftRecipeCount recipe(s) · always FIR</span>
+                        <div class="acq-chip craft" title="@Localizer["CraftableTooltip"]">
+                            <strong>@Localizer["Craftable"]</strong>
+                            <span>@Localizer.Format("CraftableDescription", _result.Acquisition.CraftRecipeCount)</span>
                         </div>
                     }
                     @if (_result.Acquisition.CanBarter)
                     {
-                        <div class="acq-chip barter" title="Trader barter offers this item (not FIR unless noted elsewhere).">
-                            <strong>Barterable</strong>
-                            <span>@_result.Acquisition.BarterOfferCount offer(s)</span>
+                        <div class="acq-chip barter" title="@Localizer["BarterableTooltip"]">
+                            <strong>@Localizer["Barterable"]</strong>
+                            <span>@Localizer.Format("BarterableDescription", _result.Acquisition.BarterOfferCount)</span>
                         </div>
                     }
                 </section>
@@ -224,14 +226,14 @@
                             class="link-btn"
                             @onclick="OpenMarket"
                             disabled="@string.IsNullOrWhiteSpace(_result.Item.MarketUrl)">
-                        View on Tarkov.dev
+                        @Localizer["ViewOnTarkovDev"]
                         <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
                     </button>
                     <button type="button"
                             class="link-btn"
                             @onclick="OpenWiki"
                             disabled="@string.IsNullOrWhiteSpace(_result.Item.WikiUrl)">
-                        Open wiki
+                        @Localizer["OpenWiki"]
                         <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
                     </button>
                 </div>
@@ -239,50 +241,50 @@
                         class="details-toggle"
                         aria-expanded="@_detailsOpen"
                         @onclick="ToggleDetails">
-                    @(_detailsOpen ? "Hide details" : "Details")
+                    @(_detailsOpen ? Localizer["HideDetails"] : Localizer["ShowDetails"])
                     <MudIcon Icon="@(_detailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
                 </button>
             </div>
 
             @if (_detailsOpen)
             {
-                <section class="details" aria-label="Scan details">
+                <section class="details" aria-label="@Localizer["ScanDetails"]">
                     <div class="details-group">
-                        <h3>Scan information</h3>
+                        <h3>@Localizer["ScanInformation"]</h3>
                         <div class="details-rows">
                             <div>
-                                <label>Selection method</label>
+                                <label>@Localizer["SelectionMethod"]</label>
                                 <strong>@SelectionMethodDetail</strong>
                             </div>
                             <div>
-                                <label>Scan confidence</label>
+                                <label>@Localizer["ScanConfidence"]</label>
                                 <strong>@ScanConfidenceDetail</strong>
                             </div>
                         </div>
                     </div>
 
                     <div class="details-group">
-                        <h3>Item information</h3>
+                        <h3>@Localizer["ItemInformation"]</h3>
                         <div class="details-rows">
                             <div>
-                                <label>Item type</label>
+                                <label>@Localizer["ItemType"]</label>
                                 <strong>@FriendlyItemType</strong>
                             </div>
                             <div>
-                                <label>Inventory size</label>
+                                <label>@Localizer["InventorySize"]</label>
                                 <strong>@_result.Item.Width × @_result.Item.Height</strong>
                             </div>
                             <div class="item-id-row">
-                                <label>Item ID</label>
+                                <label>@Localizer["ItemId"]</label>
                                 <div class="item-id-value">
-                                    <strong class="mono">@(_result.Item.Id ?? "Unavailable")</strong>
+                                    <strong class="mono">@(_result.Item.Id ?? Localizer["Unavailable"])</strong>
                                     @if (!string.IsNullOrWhiteSpace(_result.Item.Id))
                                     {
                                         <button type="button"
                                                 class="copy-btn"
-                                                title="Copy item ID"
+                                                title="@Localizer["CopyItemId"]"
                                                 @onclick="CopyItemId">
-                                            @(_copiedId ? "Copied" : "Copy")
+                                            @(_copiedId ? Localizer["Copied"] : Localizer["Copy"])
                                         </button>
                                     }
                                 </div>
@@ -291,14 +293,14 @@
                     </div>
 
                     <div class="details-group">
-                        <h3>Market data</h3>
+                        <h3>@Localizer["MarketData"]</h3>
                         <div class="details-rows">
                             <div>
-                                <label>Market data source</label>
+                                <label>@Localizer["MarketDataSource"]</label>
                                 <strong>@_result.Pricing.SourceName</strong>
                             </div>
                             <div>
-                                <label>Last updated</label>
+                                <label>@Localizer["LastUpdated"]</label>
                                 <strong>@ExactUpdatedText</strong>
                             </div>
                         </div>
@@ -350,31 +352,31 @@
     private string DisplayName =>
         _result?.Item.Name
         ?? _result?.Item.ShortName
-        ?? "Unknown item";
+        ?? Localizer["UnknownItem"];
 
     private string FriendlyItemType => ItemTypeLabel.Format(_result?.Item.ItemType);
 
     private string SelectionMethodLabel =>
         IsManual
-            ? "Selected manually"
+            ? Localizer["SelectedManually"]
             : _result?.Recognition.Confidence is float confidence
-                ? $"Automatic scan · {confidence:P0} confidence"
-                : "Automatic scan";
+                ? Localizer.Format("AutomaticScanWithConfidence", confidence.ToString("P0"))
+                : Localizer["AutomaticScan"];
 
     private string SelectionMethodDetail =>
-        IsManual ? "Selected manually" : "Automatic scan";
+        IsManual ? Localizer["SelectedManually"] : Localizer["AutomaticScan"];
 
     private string ScanConfidenceDetail =>
         IsManual
-            ? "Not applicable"
+            ? Localizer["NotApplicable"]
             : _result?.Recognition.Confidence is float confidence
                 ? $"{confidence:P0}"
-                : _result?.Recognition.Label ?? "Unavailable";
+                : _result?.Recognition.Label ?? Localizer["Unavailable"];
 
     private string ExactUpdatedText =>
         _result?.Pricing.UpdatedAt is DateTimeOffset updated
-            ? updated.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt")
-            : "Unknown";
+            ? updated.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+            : Localizer["Unknown"];
 
     private string RecommendationTone =>
         _result?.Recommendation.Type switch
@@ -396,9 +398,9 @@
             return _result.Recommendation.Type switch
             {
                 RecommendationType.KeepForQuest when _result.Quests.RemainingRequired is int needed =>
-                    $"{needed} more {(needed == 1 ? "is" : "are")} required for active quests.",
+                    Localizer.Format("ActiveQuestRequirementSummary", needed),
                 RecommendationType.KeepForHideout when _result.Hideout.RemainingRequired is int needed =>
-                    $"{needed} more {(needed == 1 ? "is" : "are")} required for hideout upgrades.",
+                    Localizer.Format("HideoutRequirementSummary", needed),
                 _ => _result.Recommendation.Explanation,
             };
         }
@@ -409,13 +411,13 @@
         get
         {
             if (Difference is not int value)
-                return "No trader comparison available";
-            string traderName = _result?.Trader?.Name ?? "trader";
+                return Localizer["NoTraderComparison"];
+            string traderName = _result?.Trader?.Name ?? Localizer["TraderLabel"];
             if (value > 0)
-                return $"Flea market pays {PriceFormatter.Format(value)} more than selling to {traderName}";
+                return Localizer.Format("FleaMarketPaysMore", PriceFormatter.Format(value), traderName);
             if (value < 0)
-                return $"{traderName} pays {PriceFormatter.Format(-value)} more than flea market";
-            return "Flea and trader values match";
+                return Localizer.Format("TraderPaysMore", traderName, PriceFormatter.Format(-value));
+            return Localizer["FleaAndTraderMatch"];
         }
     }
 
@@ -539,22 +541,22 @@
     private static bool IsRequired(RequirementViewModel? value) =>
         value?.Status == RequirementStatus.Required;
 
-    private static string RequirementSummary(RequirementViewModel value) =>
+    private string RequirementSummary(RequirementViewModel value) =>
         value.Status switch
         {
-            RequirementStatus.Required => $"{value.RemainingRequired} still needed",
-            RequirementStatus.NotRequired => "Not required",
-            _ => "Unavailable",
+            RequirementStatus.Required => Localizer.Format("RequiredStillNeeded", value.RemainingRequired ?? 0),
+            RequirementStatus.NotRequired => Localizer["NotRequired"],
+            _ => Localizer["Unavailable"],
         };
 
-    private static string FirLabel(RequirementViewModel value)
+    private string FirLabel(RequirementViewModel value)
     {
         if (value.HasFirNeed && value.HasNonFirNeed)
-            return $"{value.RequiresFoundInRaid} FIR · {value.NonFoundInRaid} non-FIR OK";
+            return Localizer.Format("FirMixed", value.RequiresFoundInRaid, value.NonFoundInRaid);
         if (value.HasFirNeed)
-            return "Must be found in raid";
+            return Localizer["MustBeFoundInRaid"];
         if (value.HasNonFirNeed)
-            return "Non-FIR is OK";
+            return Localizer["NonFirOkay"];
         return string.Empty;
     }
 

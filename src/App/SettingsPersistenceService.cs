@@ -106,8 +106,8 @@ internal sealed class SettingsPersistenceService : IDisposable
                             RunSaveAsync(
                                 key,
                                 generation,
+                                value,
                                 description,
-                                read,
                                 apply,
                                 applyRuntime,
                                 lifetimeToken,
@@ -160,8 +160,8 @@ internal sealed class SettingsPersistenceService : IDisposable
     private async Task RunSaveAsync<T>(
         string key,
         long generation,
+        T persistedValue,
         string description,
-        Func<T> read,
         Action<T> apply,
         Action<T>? applyRuntime,
         CancellationToken cancellationToken,
@@ -170,7 +170,8 @@ internal sealed class SettingsPersistenceService : IDisposable
     {
         if (cancellationToken.IsCancellationRequested)
         {
-            completion.TrySetCanceled(cancellationToken);
+            TryRestoreAfterFailure(key, generation, description, apply, applyRuntime, allowDuringDispose: true);
+            completion.TrySetResult(new SettingSaveResult(false));
             return;
         }
 
@@ -179,41 +180,63 @@ internal sealed class SettingsPersistenceService : IDisposable
             await _persist(cancellationToken).ConfigureAwait(false);
             lock (_gate)
             {
+                // Saves are serialized, so this operation is the last value known to
+                // have reached disk until a later generation completes. Do not call
+                // read() here: a newer optimistic UI change may already be in memory.
                 if (_states.TryGetValue(key, out SettingState? state))
-                    state.LastPersisted = read();
+                    state.LastPersisted = persistedValue;
             }
             completion.TrySetResult(new SettingSaveResult(true));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            completion.TrySetCanceled(cancellationToken);
+            TryRestoreAfterFailure(key, generation, description, apply, applyRuntime, allowDuringDispose: true);
+            completion.TrySetResult(new SettingSaveResult(false));
         }
         catch (Exception exception)
         {
-            T? persisted = default;
-            bool restore = false;
-            lock (_gate)
-            {
-                if (
-                    !_disposed
-                    && _states.TryGetValue(key, out SettingState? state)
-                    && state.Generation == generation
-                    && state.LastPersisted is T value
-                )
-                {
-                    persisted = value;
-                    restore = true;
-                }
-            }
-
-            if (restore)
-            {
-                apply(persisted!);
-                TryApplyRuntime(description, persisted!, applyRuntime);
-            }
-
+            TryRestoreAfterFailure(key, generation, description, apply, applyRuntime, allowDuringDispose: false);
             _logFailure(description, exception);
             completion.TrySetResult(new SettingSaveResult(false));
+        }
+    }
+
+    private void TryRestoreAfterFailure<T>(
+        string key,
+        long generation,
+        string description,
+        Action<T> apply,
+        Action<T>? applyRuntime,
+        bool allowDuringDispose
+    )
+    {
+        T? persisted = default;
+        bool restore = false;
+        lock (_gate)
+        {
+            if (
+                (allowDuringDispose || !_disposed)
+                && _states.TryGetValue(key, out SettingState? state)
+                && state.Generation == generation
+                && state.LastPersisted is T value
+            )
+            {
+                persisted = value;
+                restore = true;
+            }
+        }
+
+        if (!restore)
+            return;
+
+        try
+        {
+            apply(persisted!);
+            TryApplyRuntime(description, persisted!, applyRuntime);
+        }
+        catch (Exception exception)
+        {
+            _logFailure($"previous {description} value", exception);
         }
     }
 

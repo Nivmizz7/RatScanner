@@ -1,6 +1,6 @@
 # Vendored scan engine (historical RatEye)
 
-Folder: `src/ScanEngine/`  
+Folder: `src/ScanEngine/`
 Assembly / namespaces: still **`RatEye`** (unchanged for now to avoid a large API rename).
 
 Sources vendored from <https://github.com/RatScanner/RatEye> at tag `v4.0.1`

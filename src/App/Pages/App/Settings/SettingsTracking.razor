@@ -309,6 +309,7 @@
         _orgValidation[mode]?.Dispose();
         CancellationTokenSource cancellation = new();
         _orgValidation[mode] = cancellation;
+        string previousToken = RatConfig.Tracking.TarkovTracker.TokenForMode(mode);
         _orgTesting[mode] = true;
         _orgState[mode] = TrackerConnectionState.Testing;
         _orgError[mode] = null;
@@ -325,14 +326,17 @@
                 return;
             }
 
-            SettingSaveResult saved = await SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, candidate);
+            SettingSaveResult saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
+                () => SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, candidate),
+                () => SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, previousToken),
+                cancellation.Token
+            );
             if (!saved.Succeeded)
             {
                 _orgError[mode] = Localizer["CredentialSaveFailed"];
                 _orgState[mode] = HasOrgKey(mode) ? TrackerConnectionState.Connected : TrackerConnectionState.NotConfigured;
                 return;
             }
-
             _orgState[mode] = TrackerConnectionState.Connected;
             CancelOrgReplacement(mode);
             if (RatConfig.GameMode == mode)
@@ -407,6 +411,7 @@
         _ioValidation?.Dispose();
         CancellationTokenSource validation = new();
         _ioValidation = validation;
+        string previousToken = RatConfig.Tracking.TarkovTracker.IoToken;
         _ioTesting = true;
         _ioError = null;
         try
@@ -421,13 +426,16 @@
                 return;
             }
 
-            SettingSaveResult saved = await SettingsVM.SetTarkovTrackerIoTokenAsync(candidate);
+            SettingSaveResult saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
+                () => SettingsVM.SetTarkovTrackerIoTokenAsync(candidate),
+                () => SettingsVM.SetTarkovTrackerIoTokenAsync(previousToken),
+                validation.Token
+            );
             if (!saved.Succeeded)
             {
                 _ioError = Localizer["CredentialSaveFailed"];
                 return;
             }
-
             CancelIoReplacement();
             if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
                 await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, validation.Token);

@@ -94,6 +94,68 @@ public sealed class SettingsPersistenceTests
     }
 
     [Fact]
+    public async Task Successful_older_save_keeps_the_value_written_to_disk_for_later_rollback()
+    {
+        bool runtime = false;
+        int call = 0;
+        using ManualResetEventSlim firstStarted = new(false);
+        using ManualResetEventSlim releaseFirst = new(false);
+        using SettingsPersistenceService service = new(_ =>
+        {
+            if (Interlocked.Increment(ref call) == 1)
+            {
+                firstStarted.Set();
+                releaseFirst.Wait(TimeSpan.FromSeconds(5));
+                return Task.CompletedTask;
+            }
+
+            throw new InvalidOperationException("disk full");
+        });
+
+        Task<SettingSaveResult> first = service.SaveImmediateAsync(
+            "toggle",
+            "test toggle",
+            true,
+            () => runtime,
+            value => runtime = value
+        );
+        Assert.True(firstStarted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
+        Task<SettingSaveResult> second = service.SaveImmediateAsync(
+            "toggle",
+            "test toggle",
+            false,
+            () => runtime,
+            value => runtime = value
+        );
+        releaseFirst.Set();
+
+        Assert.True((await first).Succeeded);
+        Assert.False((await second).Succeeded);
+        Assert.True(runtime);
+    }
+
+    [Fact]
+    public async Task Disposing_during_persistence_returns_a_failed_result_instead_of_cancellation()
+    {
+        using ManualResetEventSlim started = new(false);
+        SettingsPersistenceService service = new(async cancellationToken =>
+        {
+            started.Set();
+            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+        });
+
+        Task<SettingSaveResult> save = service.SaveImmediateAsync("toggle", "test toggle", true, () => false, _ => { });
+        Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
+        service.Dispose();
+        SettingSaveResult result = await save;
+
+        Assert.False(result.Succeeded);
+        service.Dispose();
+    }
+
+    [Fact]
     public async Task Invalid_numeric_value_does_not_apply_or_persist()
     {
         int runtime = 10;

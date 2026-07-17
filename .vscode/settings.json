@@ -32,4 +32,3 @@
 	"markdownlint.run": "onType",
 	"markdownlint.fixOnSave": true
 }
-
