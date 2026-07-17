@@ -167,6 +167,34 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
+    public void Current_config_does_not_resurrect_a_removed_io_key_from_legacy_fields()
+    {
+        string root = CreateTemporaryDirectory();
+        try
+        {
+            string configPath = Path.Combine(root, "config.cfg");
+            SimpleConfig config = new(configPath, "TarkovTracker");
+            config.WriteSecureString("Token", "tt_stale");
+            config.WriteInt("Backend", 0);
+            config.WriteSecureString("PvpToken", "PVP_current");
+            config.WriteSecureString("PveToken", "PVE_current");
+            config.WriteSecureString("IoToken", "");
+            config.Section = "Other";
+            config.WriteInt("ConfigVersion", 3);
+
+            RatConfig.LoadConfig(configPath);
+
+            Assert.Equal("PVP_current", RatConfig.Tracking.TarkovTracker.PvpToken);
+            Assert.Equal("PVE_current", RatConfig.Tracking.TarkovTracker.PveToken);
+            Assert.Equal("", RatConfig.Tracking.TarkovTracker.IoToken);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Malformed_legacy_key_is_preserved_in_the_pvp_slot_for_user_validation()
     {
         string root = CreateTemporaryDirectory();

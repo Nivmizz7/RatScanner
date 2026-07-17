@@ -181,12 +181,15 @@ public class OpenCvPipelineTests
     }
 
     [Fact]
-    public void Weak_title_fuzzy_matches_are_rejected_below_min_item_confidence()
+    public void Ui_chrome_fuzzy_scores_stay_below_the_configured_min_item_confidence()
     {
         // Normed Levenshtein of short UI chrome vs a long catalog name is often
-        // nonzero; without a floor any best-effort match would become an Item.
-        Assert.True("Subject Search".NormedLevenshteinDistance("Physical Bitcoin") < 0.55f);
-        Assert.True("Subject Search".NormedLevenshteinDistance("Pack of sugar") < 0.55f);
+        // nonzero; keep those scores below the configured acceptance threshold.
+        float threshold = CreateProcessingConfig(optimizeHighlighted: false)
+            .ProcessingConfig.InspectionConfig.MinItemConfidence;
+
+        Assert.True("Subject Search".NormedLevenshteinDistance("Physical Bitcoin") < threshold);
+        Assert.True("Subject Search".NormedLevenshteinDistance("Pack of sugar") < threshold);
     }
 
     [Fact]

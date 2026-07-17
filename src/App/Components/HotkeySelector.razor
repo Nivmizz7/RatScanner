@@ -57,17 +57,23 @@
 
     private async Task StopListeningAsync(bool discard = false) {
         if (!_listening) return;
-
-        if (discard) {
-            _tmpHotkey = new Hotkey(Hotkey);
-        }
-        else {
-            Hotkey.Set(_tmpHotkey);
-            await HotkeyChanged.InvokeAsync(new Hotkey(Hotkey));
-        }
-
+        // Clear synchronously: OnKeyUp fires for every key/mouse release, so a
+        // second release while HotkeyChanged is awaited would commit the hotkey
+        // again, and an exception would leave the component stuck listening.
         _listening = false;
-        await InvokeAsync(StateHasChanged);
+
+        try {
+            if (discard) {
+                _tmpHotkey = new Hotkey(Hotkey);
+            }
+            else {
+                Hotkey.Set(_tmpHotkey);
+                await HotkeyChanged.InvokeAsync(new Hotkey(Hotkey));
+            }
+        }
+        finally {
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     protected override void OnInitialized() {

@@ -232,7 +232,7 @@
         _refreshing = true;
         try
         {
-            await Task.Run(SettingsVM.RefreshGameDisplays);
+            await SettingsVM.RefreshGameDisplaysAsync();
         }
         finally
         {

@@ -324,11 +324,20 @@ internal static class RatConfig
         Tracking.ShowKappaNeeds = config.ReadBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
 
         config.Section = nameof(Tracking.TarkovTracker);
-        string legacyToken = config.ReadSecureString("Token", "");
+        // Only migrate the legacy single-token layout from pre-v3 configs. SaveConfig
+        // copies the existing file, so stale "Token"/"Backend" keys survive on disk;
+        // without the version gate a removed IoToken would resurrect from them on the
+        // next launch and clear the PvP token.
+        bool migrateLegacyTrackerToken = configFileExists && loadPlan.ExistingVersion < ConfigVersion;
+        string legacyToken = migrateLegacyTrackerToken ? config.ReadSecureString("Token", "") : "";
         Tracking.TarkovTracker.PvpToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PvpToken), legacyToken);
         Tracking.TarkovTracker.PveToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PveToken), "");
         Tracking.TarkovTracker.IoToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.IoToken), "");
-        if (string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken) && config.ReadInt("Backend", 1) == 0)
+        if (
+            migrateLegacyTrackerToken
+            && string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken)
+            && config.ReadInt("Backend", 1) == 0
+        )
         {
             Tracking.TarkovTracker.IoToken = legacyToken;
             Tracking.TarkovTracker.PvpToken = "";
@@ -394,8 +403,11 @@ internal static class RatConfig
                 throw new InvalidOperationException("No item data is available for the selected game mode.");
             RatScannerMain.Instance.SetupRatEye();
             RatScannerMain.Instance.RefreshItemsForGameMode();
-            SaveConfig();
+            // Persist only after activation succeeds; the catch below rolls back
+            // the in-memory mode but never re-saves, so saving first would leave
+            // a failed mode in config.cfg after an abnormal exit.
             await RatScannerMain.Instance.ActivateTrackerModeAsync(gameMode);
+            SaveConfig();
         }
         catch
         {

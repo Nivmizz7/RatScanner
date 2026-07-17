@@ -55,6 +55,7 @@ internal sealed class SettingsPersistenceService : IDisposable
 
         SettingState state;
         long generation;
+        CancellationToken lifetimeToken;
         T previous = read();
         lock (_gate)
         {
@@ -70,6 +71,10 @@ internal sealed class SettingsPersistenceService : IDisposable
                 state.Initialized = true;
             }
             generation = ++state.Generation;
+            // Capture while provably undisposed; Dispose() may dispose _lifetime
+            // between this lock and the enqueue below, after which reading
+            // _lifetime.Token would throw ObjectDisposedException.
+            lifetimeToken = _lifetime.Token;
         }
 
         if (EqualityComparer<T>.Default.Equals(previous, value))
@@ -89,17 +94,38 @@ internal sealed class SettingsPersistenceService : IDisposable
         }
 
         TaskCompletionSource<SettingSaveResult> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool disposed;
         lock (_gate)
         {
-            CancellationToken token = _lifetime.Token;
-            _tail = _tail
-                .ContinueWith(
-                    _ => RunSaveAsync(key, generation, description, read, apply, applyRuntime, token, completion),
-                    CancellationToken.None,
-                    TaskContinuationOptions.None,
-                    TaskScheduler.Default
-                )
-                .Unwrap();
+            disposed = _disposed;
+            if (!disposed)
+            {
+                _tail = _tail
+                    .ContinueWith(
+                        _ =>
+                            RunSaveAsync(
+                                key,
+                                generation,
+                                description,
+                                read,
+                                apply,
+                                applyRuntime,
+                                lifetimeToken,
+                                completion
+                            ),
+                        CancellationToken.None,
+                        TaskContinuationOptions.None,
+                        TaskScheduler.Default
+                    )
+                    .Unwrap();
+            }
+        }
+
+        if (disposed)
+        {
+            apply(previous);
+            TryApplyRuntime(description, previous, applyRuntime);
+            completion.TrySetResult(new SettingSaveResult(false));
         }
         return completion.Task;
     }

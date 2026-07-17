@@ -63,7 +63,7 @@
             </MudToggleGroup>
             @if (TrackerNeedsAttention)
             {
-                <NavLink href="/app/settings/tracking" class="tracker-attention">
+                <NavLink href="/app/settings/tracking" class="tracker-attention" @onclick="CloseDrawerAfterNavAsync">
                     @TrackerAttentionMessage
                 </NavLink>
             }

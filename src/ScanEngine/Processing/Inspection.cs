@@ -258,10 +258,13 @@ namespace RatEye.Processing
             Bitmap rescaledSearchBox = searchBox.Rescale(ProcessingConfig.InverseScale * 2f);
             try
             {
+                // Use the _title backing field below: the Title getter calls
+                // SatisfyState(State.ScannedTitle), which re-enters ScanTitle()
+                // because _currentState only advances after this method returns.
                 Title = OCR(rescaledSearchBox);
-                if (IsUiChromeTitle(Title))
+                if (IsUiChromeTitle(_title))
                 {
-                    Logger.LogDebug("Title matches inventory/UI chrome; skipping item match: " + Title);
+                    Logger.LogDebug("Title matches inventory/UI chrome; skipping item match: " + _title);
                     _item = null;
                     _itemConfidence = 0;
                     return;

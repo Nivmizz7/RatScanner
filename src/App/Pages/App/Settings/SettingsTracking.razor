@@ -95,7 +95,7 @@
                                 </MudButton>
                                 @if (HasOrgKey(mode))
                                 {
-                                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => CancelOrgReplacement(mode))">
+                                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => AbortOrgReplacement(mode))">
                                         @Localizer["CancelButton"]
                                     </MudButton>
                                 }
@@ -162,7 +162,7 @@
                     </MudButton>
                     @if (HasIoKey)
                     {
-                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="CancelIoReplacement">@Localizer["CancelButton"]</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="AbortIoReplacement">@Localizer["CancelButton"]</MudButton>
                     }
                 </div>
             }
@@ -281,12 +281,22 @@
         _orgError[mode] = null;
     }
 
+    // User-facing cancel: also aborts an in-flight validation so a completed
+    // request cannot persist the candidate key after the user backed out.
+    // The success path must keep calling CancelOrgReplacement directly —
+    // it reuses the same token for ActivateTrackerModeAsync afterwards.
+    private void AbortOrgReplacement(GameMode mode)
+    {
+        _orgValidation[mode]?.Cancel();
+        CancelOrgReplacement(mode);
+    }
+
     private async Task HandleOrgKeyDownAsync(GameMode mode, KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
             await TestOrgKeyAsync(mode);
         else if (args.Key == "Escape" && HasOrgKey(mode))
-            CancelOrgReplacement(mode);
+            AbortOrgReplacement(mode);
     }
 
     private async Task TestOrgKeyAsync(GameMode mode)
@@ -305,6 +315,9 @@
         try
         {
             TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(mode, candidate, cancellation.Token);
+            // The user may have aborted while the request was in flight; never
+            // persist a canceled candidate even when validation succeeded.
+            cancellation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
                 _orgState[mode] = StateFor(result);
@@ -369,12 +382,19 @@
         _ioError = null;
     }
 
+    // See AbortOrgReplacement: user cancel also aborts the in-flight validation.
+    private void AbortIoReplacement()
+    {
+        _ioValidation?.Cancel();
+        CancelIoReplacement();
+    }
+
     private async Task HandleIoKeyDownAsync(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
             await TestIoKeyAsync();
         else if (args.Key == "Escape" && HasIoKey)
-            CancelIoReplacement();
+            AbortIoReplacement();
     }
 
     private async Task TestIoKeyAsync()
@@ -385,12 +405,16 @@
 
         _ioValidation?.Cancel();
         _ioValidation?.Dispose();
-        _ioValidation = new CancellationTokenSource();
+        CancellationTokenSource validation = new();
+        _ioValidation = validation;
         _ioTesting = true;
         _ioError = null;
         try
         {
-            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, _ioValidation.Token);
+            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, validation.Token);
+            // The user may have aborted while the request was in flight; never
+            // persist a canceled candidate even when validation succeeded.
+            validation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
                 _ioError = ValidationMessage(result, GameMode.Regular);
@@ -406,12 +430,17 @@
 
             CancelIoReplacement();
             if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
-                await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, _ioValidation.Token);
+                await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, validation.Token);
         }
-        catch (OperationCanceledException) when (_ioValidation?.IsCancellationRequested == true) { }
+        catch (OperationCanceledException) when (validation.IsCancellationRequested) { }
         finally
         {
-            _ioTesting = false;
+            if (_ioValidation == validation)
+            {
+                _ioTesting = false;
+                _ioValidation = null;
+                validation.Dispose();
+            }
         }
     }
 

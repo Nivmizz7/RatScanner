@@ -19,6 +19,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private readonly LocalizationService _localizationService;
     private readonly SettingsPersistenceService _persistence;
     private readonly SemaphoreSlim _displaySaveLock = new(1, 1);
+    private readonly SynchronizationContext? _synchronizationContext;
     private bool _disposed;
 
     public int ScreenWidth { get; private set; }
@@ -39,6 +40,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     {
         _localizationService = localizationService;
         _persistence = persistence;
+        _synchronizationContext = SynchronizationContext.Current;
         RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
         LoadDisplaySettings();
     }
@@ -351,7 +353,16 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             v => RatConfig.Tracking.TarkovTracker.ShowTeam = v,
             ignored =>
             {
-                _ = RatScannerMain.Instance.ActivateTrackerModeAsync(RatConfig.GameMode);
+                _ = RatScannerMain
+                    .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
+                    .ContinueWith(
+                        t =>
+                            Logger.LogWarning(
+                                "Unable to refresh tracker progress after changing team visibility.",
+                                t.Exception
+                            ),
+                        TaskContinuationOptions.OnlyOnFaulted
+                    );
             }
         );
 
@@ -508,6 +519,18 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     public void RefreshGameDisplays()
     {
         bool updateResolution = RatConfig.RefreshGameDisplayConfiguration(force: true);
+        LoadDisplaySettings();
+        if (updateResolution)
+            RatScannerMain.Instance.SetupRatEye();
+    }
+
+    public async System.Threading.Tasks.Task RefreshGameDisplaysAsync()
+    {
+        // Detection can be expensive, but all view-model draft mutations must
+        // resume on the Blazor renderer context to avoid racing user edits/rendering.
+        bool updateResolution = await System.Threading.Tasks.Task.Run(static () =>
+            RatConfig.RefreshGameDisplayConfiguration(force: true)
+        );
         LoadDisplaySettings();
         if (updateResolution)
             RatScannerMain.Instance.SetupRatEye();
@@ -679,8 +702,18 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
 
     private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration)
     {
-        ApplyDisplayConfiguration(configuration, resetDraft: false);
-        OnPropertyChanged();
+        void ApplyChange()
+        {
+            if (_disposed)
+                return;
+            ApplyDisplayConfiguration(configuration, resetDraft: false);
+            OnPropertyChanged();
+        }
+
+        if (_synchronizationContext is null || ReferenceEquals(SynchronizationContext.Current, _synchronizationContext))
+            ApplyChange();
+        else
+            _synchronizationContext.Post(_ => ApplyChange(), null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

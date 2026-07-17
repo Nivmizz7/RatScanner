@@ -26,6 +26,11 @@ internal static class GitHubUpdateService
 
     private static readonly HttpClient Http = CreateHttpClient();
 
+    // Redirects are validated per hop in DownloadToFile, so this client must not
+    // follow them silently (a trusted GitHub asset URL redirects on the normal path
+    // and must never be able to land the download on an untrusted host).
+    private static readonly HttpClient NoRedirectHttp = CreateNoRedirectHttpClient();
+
     private static HttpClient CreateHttpClient()
     {
         HttpClient client = new(
@@ -37,6 +42,22 @@ internal static class GitHubUpdateService
             $"RatScanner-TT/{RatConfig.Version} (+https://github.com/{Owner}/{Repo})"
         );
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        client.Timeout = TimeSpan.FromMinutes(10);
+        return client;
+    }
+
+    private static HttpClient CreateNoRedirectHttpClient()
+    {
+        HttpClient client = new(
+            new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+                AllowAutoRedirect = false,
+            }
+        );
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(
+            $"RatScanner-TT/{RatConfig.Version} (+https://github.com/{Owner}/{Repo})"
+        );
         client.Timeout = TimeSpan.FromMinutes(10);
         return client;
     }
@@ -265,18 +286,63 @@ internal static class GitHubUpdateService
         return extractDir;
     }
 
+    private const int MaxRedirects = 5;
+
     private static void DownloadToFile(string url, string destination)
     {
-        if (!IsAllowedReleaseAssetUrl(url))
-            throw new InvalidOperationException($"Refusing to download update from untrusted URL: {url}");
+        Uri current = new(url, UriKind.Absolute);
+        HttpResponseMessage? response = null;
+        try
+        {
+            for (int hop = 0; ; hop++)
+            {
+                if (!IsAllowedReleaseAssetUrl(current.AbsoluteUri))
+                    throw new InvalidOperationException(
+                        $"Refusing to download update from untrusted URL: {current.AbsoluteUri}"
+                    );
 
-        using HttpResponseMessage response = Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead)
-            .GetAwaiter()
-            .GetResult();
-        response.EnsureSuccessStatusCode();
-        using Stream network = response.Content.ReadAsStream();
-        using FileStream file = File.Create(destination);
-        network.CopyTo(file);
+                response?.Dispose();
+                response = NoRedirectHttp
+                    .GetAsync(current, HttpCompletionOption.ResponseHeadersRead)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (
+                    response.StatusCode
+                    is not (
+                        HttpStatusCode.Moved
+                        or HttpStatusCode.Redirect
+                        or HttpStatusCode.RedirectMethod
+                        or HttpStatusCode.RedirectKeepVerb
+                        or HttpStatusCode.PermanentRedirect
+                    )
+                )
+                    break;
+
+                if (hop >= MaxRedirects)
+                    throw new InvalidOperationException(
+                        $"Update download exceeded {MaxRedirects} redirects; refusing to continue."
+                    );
+
+                Uri? location = response.Headers.Location;
+                if (location is null)
+                    throw new InvalidOperationException("Update download redirect is missing a Location header.");
+
+                current = location.IsAbsoluteUri ? location : new Uri(current, location);
+            }
+
+            response.EnsureSuccessStatusCode();
+            using (response)
+            {
+                using Stream network = response.Content.ReadAsStream();
+                using FileStream file = File.Create(destination);
+                network.CopyTo(file);
+            }
+        }
+        finally
+        {
+            response?.Dispose();
+        }
     }
 
     /// <summary>
