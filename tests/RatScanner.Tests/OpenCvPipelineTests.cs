@@ -181,7 +181,7 @@ public class OpenCvPipelineTests
     }
 
     [Fact]
-    public void Ui_chrome_fuzzy_scores_stay_below_the_configured_min_item_confidence()
+    public void Ui_chrome_title_similarity_scores_stay_below_min_item_confidence()
     {
         // Normed Levenshtein of short UI chrome vs a long catalog name is often
         // nonzero; keep those scores below the configured acceptance threshold.
