@@ -1,7 +1,6 @@
 @page "/app/settings/minimal"
+@inherits SettingsPageBase
 @inject SettingsVM SettingsVM
-@inject LocalizationService Localizer
-@inject ISnackbar Snackbar
 
 <div class="settings-page">
     <div class="settings-column">
@@ -58,11 +57,6 @@
         new(nameof(RatConfig.MinimalUi.ShowUpdated), Localizer["UpdatedTimestamp"], RatConfig.MinimalUi.ShowUpdated),
     ];
 
-    private async Task SetOpacityAsync(int value)
-    {
-        SettingSaveResult result = await SettingsVM.SetOpacityAsync(value);
-        if (!result.Succeeded)
-            Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
-        StateHasChanged();
-    }
+    private async Task SetOpacityAsync(int value) =>
+        await ReportAsync(await SettingsVM.SetOpacityAsync(value));
 }

@@ -1,8 +1,7 @@
 @page "/app/settings/interactableOverlay"
+@inherits SettingsPageBase
 @using RatScanner.Components
 @inject SettingsVM SettingsVM
-@inject LocalizationService Localizer
-@inject ISnackbar Snackbar
 
 <div class="settings-page">
     <div class="settings-column">
@@ -44,11 +43,6 @@
 </div>
 
 @code {
-    private async Task SetOverlayHotkeyAsync(Hotkey value)
-    {
-        SettingSaveResult result = await SettingsVM.SetOverlayHotkeyAsync(value);
-        if (!result.Succeeded)
-            Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
-        StateHasChanged();
-    }
+    private async Task SetOverlayHotkeyAsync(Hotkey value) =>
+        await ReportAsync(await SettingsVM.SetOverlayHotkeyAsync(value));
 }

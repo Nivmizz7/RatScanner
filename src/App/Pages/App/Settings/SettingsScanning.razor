@@ -1,10 +1,9 @@
 @page "/app/settings/scanning"
+@inherits SettingsPageBase
 @using RatScanner.Components
 @using RatStash
 @using System.Linq
 @inject SettingsVM SettingsVM
-@inject LocalizationService Localizer
-@inject ISnackbar Snackbar
 
 <div class="settings-page">
     <div class="settings-column">
@@ -101,11 +100,4 @@
     private async Task SetNameScanLanguageAsync(int value) => await ReportAsync(await SettingsVM.SetNameScanLanguageAsync(value));
     private async Task SetIconHotkeyAsync(Hotkey value) => await ReportAsync(await SettingsVM.SetIconScanHotkeyAsync(value));
 
-    private Task ReportAsync(SettingSaveResult result)
-    {
-        if (!result.Succeeded)
-            Snackbar.Add(result.ErrorMessage ?? Localizer["SettingSaveFailed"], Severity.Error);
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
 }

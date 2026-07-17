@@ -1,11 +1,10 @@
 @page "/app/settings/general"
 @layout SettingsLayout
+@inherits SettingsPageBase
 @using RatScanner.Display
 @using System.Globalization
 @using System.Linq
 @inject SettingsVM SettingsVM
-@inject LocalizationService Localizer
-@inject ISnackbar Snackbar
 @implements IDisposable
 
 <div class="settings-page">
@@ -291,19 +290,11 @@
         await PersistDisplayAsync();
     }
 
-    private async Task SetUiLanguageAsync(UiLanguage value)
-    {
-        SettingSaveResult result = await SettingsVM.SetUiLanguageAsync(value);
-        if (!result.Succeeded)
-            Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
-    }
+    private async Task SetUiLanguageAsync(UiLanguage value) =>
+        await ReportAsync(await SettingsVM.SetUiLanguageAsync(value));
 
-    private async Task SetTooltipDelayAsync(int value)
-    {
-        SettingSaveResult result = await SettingsVM.SetTooltipDurationAsync(value);
-        if (!result.Succeeded)
-            Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
-    }
+    private async Task SetTooltipDelayAsync(int value) =>
+        await ReportAsync(await SettingsVM.SetTooltipDurationAsync(value));
 
     private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
 
