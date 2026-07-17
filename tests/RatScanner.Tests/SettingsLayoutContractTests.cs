@@ -56,16 +56,8 @@ public sealed class SettingsLayoutContractTests
 
         int nextMethod = source.IndexOf("internal Task<SettingSaveResult>", methodStart + 1, StringComparison.Ordinal);
         string methodBody = nextMethod < 0 ? source[methodStart..] : source[methodStart..nextMethod];
-        string executableBody = Regex.Replace(
-            methodBody,
-            @"//[^\r\n]*|/\*.*?\*/",
-            "",
-            RegexOptions.Singleline
-        );
-        return Regex.IsMatch(
-            executableBody,
-            @"_\s*=>\s*RatScannerMain\.Instance\.HotkeyManager\.RegisterHotkeys\(\)"
-        );
+        string executableBody = Regex.Replace(methodBody, @"//[^\r\n]*|/\*.*?\*/", "", RegexOptions.Singleline);
+        return Regex.IsMatch(executableBody, @"_\s*=>\s*RatScannerMain\.Instance\.HotkeyManager\.RegisterHotkeys\(\)");
     }
 
     private static string FindRepositoryRoot()

@@ -123,8 +123,17 @@ internal sealed class SettingsPersistenceService : IDisposable
 
         if (disposed)
         {
-            apply(previous);
-            TryApplyRuntime(description, previous, applyRuntime);
+            // Guard the rollback: if apply(previous) throws, the returned task
+            // must still complete so the caller does not hang awaiting it.
+            try
+            {
+                apply(previous);
+                TryApplyRuntime(description, previous, applyRuntime);
+            }
+            catch (Exception exception)
+            {
+                _logFailure(description, exception);
+            }
             completion.TrySetResult(new SettingSaveResult(false));
         }
         return completion.Task;

@@ -185,8 +185,9 @@ public class OpenCvPipelineTests
     {
         // Normed Levenshtein of short UI chrome vs a long catalog name is often
         // nonzero; keep those scores below the configured acceptance threshold.
-        float threshold = CreateProcessingConfig(optimizeHighlighted: false)
-            .ProcessingConfig.InspectionConfig.MinItemConfidence;
+        float threshold = CreateProcessingConfig(
+            optimizeHighlighted: false
+        ).ProcessingConfig.InspectionConfig.MinItemConfidence;
 
         Assert.True("Subject Search".NormedLevenshteinDistance("Physical Bitcoin") < threshold);
         Assert.True("Subject Search".NormedLevenshteinDistance("Pack of sugar") < threshold);

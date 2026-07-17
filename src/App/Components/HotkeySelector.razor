@@ -67,8 +67,10 @@
                 _tmpHotkey = new Hotkey(Hotkey);
             }
             else {
-                Hotkey.Set(_tmpHotkey);
-                await HotkeyChanged.InvokeAsync(new Hotkey(Hotkey));
+                // Do not mutate the bound Hotkey before the callback: the parent
+                // uses RatConfig.IconScan.Hotkey for rollback snapshots, so an
+                // in-place Set here would corrupt the previous value on failure.
+                await HotkeyChanged.InvokeAsync(new Hotkey(_tmpHotkey));
             }
         }
         finally {
