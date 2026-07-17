@@ -21,13 +21,14 @@ public static class ItemExtensions
 
     private static UserProgress GetUserProgress()
     {
-        UserProgress? progress = null;
-        if (RatScannerMain.Instance.TarkovTrackerDB.Progress.Count >= 1)
+        TarkovTrackerDB db = RatScannerMain.Instance.TarkovTrackerDB;
+        List<UserProgress> progress = db.Progress;
+        if (progress.Count >= 1)
         {
-            List<UserProgress> teamProgress = RatScannerMain.Instance.TarkovTrackerDB.Progress;
-            progress = teamProgress.FirstOrDefault(x => x.UserId == RatScannerMain.Instance.TarkovTrackerDB.Self);
+            string self = db.Self;
+            return progress.FirstOrDefault(x => x.UserId == self) ?? new UserProgress();
         }
-        return progress ?? new UserProgress();
+        return new UserProgress();
     }
 
     public static (int count, int kappaCount) GetTaskRemaining(this Item item, UserProgress? progress = null)

@@ -15,7 +15,7 @@ public class RateLimitExceededException : Exception
         : base(message, inner) { }
 }
 
-// Exception for when TarkovTracker rate limiting is hit
+// Exception for when TarkovTracker rejects an API token (authentication failure)
 public class UnauthorizedTokenException : Exception
 {
     public UnauthorizedTokenException()
