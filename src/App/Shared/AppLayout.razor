@@ -9,13 +9,15 @@
 @implements IDisposable
 
 <div class="app-shell">
-    <header class="compact-bar">
+    <header class="compact-bar"
+            aria-hidden="@(_drawerOpen ? "true" : null)"
+            @attributes="_headerAttributes">
         <button class="icon-button"
                 @ref="_toggleButton"
                 aria-label="@Localizer["OpenNavigation"]"
                 aria-controls="primary-sidebar"
                 aria-expanded="@_drawerOpen"
-                @onclick="OpenDrawerAsync">
+                @onclick="ToggleDrawerAsync">
             <MudIcon Icon="@Icons.Material.Filled.Menu" />
         </button>
         <span class="compact-title">@Constants.Branding.Name</span>
@@ -28,10 +30,17 @@
            class="sidebar @(_drawerOpen ? "open" : null)"
            @onkeydown="HandleKey"
            tabindex="-1">
-        <div class="product-identity">
-            <img src="RatLogoMedium.png" alt="" />
-            <strong>@Constants.Branding.Name</strong>
-            <span>@MenuVM.VersionDisplay</span>
+        <div class="sidebar-header">
+            <div class="product-identity">
+                <img src="RatLogoMedium.png" alt="" />
+                <strong>@Constants.Branding.Name</strong>
+                <span>@MenuVM.VersionDisplay</span>
+            </div>
+            <button class="icon-button sidebar-close"
+                    aria-label="@Localizer["CloseNavigation"]"
+                    @onclick="CloseDrawerAsync">
+                <MudIcon Icon="@Icons.Material.Filled.Close" />
+            </button>
         </div>
         <nav aria-label="@Localizer["PrimaryNavigation"]">
             <NavLink href="/app" Match="NavLinkMatch.All" @onclick="CloseDrawerAfterNavAsync">
@@ -103,6 +112,11 @@
             ? new Dictionary<string, object> { ["inert"] = true }
             : new Dictionary<string, object>();
 
+    private Dictionary<string, object> _headerAttributes =>
+        _drawerOpen
+            ? new Dictionary<string, object> { ["inert"] = true }
+            : new Dictionary<string, object>();
+
     protected override void OnInitialized()
     {
         Navigation.LocationChanged += OnLocationChanged;
@@ -123,6 +137,8 @@
             // Focus is best-effort; keep drawer open even if the element is not focusable yet.
         }
     }
+
+    private Task ToggleDrawerAsync() => _drawerOpen ? CloseDrawerAsync() : OpenDrawerAsync();
 
     private async Task CloseDrawerAsync()
     {
