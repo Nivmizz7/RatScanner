@@ -54,7 +54,11 @@ internal static class ScanResultAdapter
             };
 
         DateTimeOffset? updatedAt = DateTimeOffset.TryParse(item.Updated, out DateTimeOffset updated) ? updated : null;
-        int? fleaPrice = item.Avg24HPrice is > 0 ? item.Avg24HPrice : null;
+        bool bannedOnFlea = item.IsBannedOnFlea;
+        int? fleaPrice =
+            bannedOnFlea ? null
+            : item.Avg24HPrice is > 0 ? item.Avg24HPrice
+            : null;
         var traderOffer = item.GetBestTraderOffer();
         var trader = item.GetBestTraderOfferVendor();
         int? traderPrice = traderOffer?.PriceRub is > 0 ? traderOffer.PriceRub : null;
@@ -78,7 +82,8 @@ internal static class ScanResultAdapter
                 fleaPrice,
                 fleaPrice / slots,
                 PresentationText.T("PriceSourceTarkovDev", "Tarkov.dev"),
-                updatedAt
+                updatedAt,
+                bannedOnFlea
             ),
             traderPrice is null
                 ? null

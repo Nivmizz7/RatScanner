@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RatScanner.TarkovDev;
 
@@ -39,6 +40,10 @@ public sealed class Item
     public IReadOnlyList<string>? Types { get; set; }
     public ItemProperties? Properties { get; set; }
     public IReadOnlyList<ItemSellPrice>? SellFor { get; set; }
+
+    /// <summary>True when the item has the <c>noFlea</c> type tag (cannot be sold on the flea market).</summary>
+    public bool IsBannedOnFlea =>
+        Types is not null && Types.Contains("noFlea", System.StringComparer.OrdinalIgnoreCase);
 
     // Future: craft/barter/FIR recommendation surfaces (not populated in this pass).
     // public bool CanBeCrafted { get; set; }

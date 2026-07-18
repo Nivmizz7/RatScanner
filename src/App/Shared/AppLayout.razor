@@ -45,7 +45,7 @@
 		</nav>
 	</aside>
 
-	@if (_isNarrow && _sidebarOpen)
+	@if (_isNarrow && AppState.DrawerOpen)
 	{
 		<button class="scrim"
 		        type="button"
@@ -54,7 +54,7 @@
 	}
 
 	<main class="main-content @(_isNarrow ? null : "sidebar-docked")"
-	      aria-hidden="@(_isNarrow && _sidebarOpen ? "true" : null)"
+	      aria-hidden="@(_isNarrow && AppState.DrawerOpen ? "true" : null)"
 	      @attributes="_mainAttributes">
 		@Body
 	</main>
@@ -63,23 +63,22 @@
 @code {
 	private ElementReference _sidebar;
 	private DotNetObjectReference<AppLayout>? _dotNetRef;
-	private bool _sidebarOpen = true;
 	private bool _isNarrow;
 	private Dictionary<string, object> _mainAttributes = new() { ["tabindex"] = "-1" };
 
 	private string SidebarClasses =>
-		(_isNarrow, _sidebarOpen) switch
+		(_isNarrow, AppState.DrawerOpen, AppState.DesktopSidebarOpen) switch
 		{
-			(true, true) => "open overlay",
-			(true, false) => "overlay",
-			(false, true) => "open",
-			(false, false) => "rail",
+			(true, true, _) => "open overlay",
+			(true, false, _) => "overlay",
+			(false, _, true) => "open",
+			(false, _, false) => "rail",
 		};
 
 	protected override void OnInitialized()
 	{
 		Navigation.LocationChanged += OnLocationChanged;
-		AppState.SidebarOpenChanged += OnSidebarOpenChanged;
+		AppState.SidebarToggleRequested += OnSidebarToggleRequested;
 		base.OnInitialized();
 	}
 
@@ -90,10 +89,10 @@
 
 		_dotNetRef = DotNetObjectReference.Create(this);
 		await JS.InvokeVoidAsync("RatScanner.registerViewportRef", _dotNetRef);
-		_isNarrow = await JS.InvokeAsync<bool>("RatScanner.isNarrow");
 
-		_sidebarOpen = !_isNarrow;
-		AppState.SetSidebarOpen(_sidebarOpen);
+		_isNarrow = await JS.InvokeAsync<bool>("RatScanner.isNarrow");
+		AppState.IsNarrow = _isNarrow;
+
 		await SyncSidebarStateAsync();
 		StateHasChanged();
 	}
@@ -105,6 +104,7 @@
 			return;
 
 		_isNarrow = isNarrow;
+		AppState.IsNarrow = _isNarrow;
 		_ = SyncSidebarStateAsync();
 		StateHasChanged();
 	}
@@ -112,26 +112,49 @@
 	[JSInvokable]
 	public void CloseDrawerFromJs()
 	{
-		if (_isNarrow && _sidebarOpen)
+		if (_isNarrow && AppState.DrawerOpen)
 			_ = CloseDrawerAsync();
+	}
+
+	private void OnSidebarToggleRequested(object? sender, EventArgs e)
+	{
+		// Raised from the WPF UI thread (PageSwitcher title-bar button); marshal
+		// to the Blazor render thread before touching component state.
+		_ = InvokeAsync(ToggleAsync);
+	}
+
+	private async Task ToggleAsync()
+	{
+		if (_isNarrow)
+		{
+			if (AppState.DrawerOpen)
+				await CloseDrawerAsync();
+			else
+				await OpenDrawerAsync();
+		}
+		else
+		{
+			AppState.SetDesktopSidebarOpen(!AppState.DesktopSidebarOpen);
+			await SyncSidebarStateAsync();
+			StateHasChanged();
+		}
 	}
 
 	private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
 	{
-		if (_isNarrow && _sidebarOpen)
+		if (_isNarrow && AppState.DrawerOpen)
 			_ = CloseDrawerAsync();
 	}
 
 	private async Task CloseDrawerAfterNavAsync()
 	{
-		if (_isNarrow && _sidebarOpen)
+		if (_isNarrow && AppState.DrawerOpen)
 			await CloseDrawerAsync();
 	}
 
 	private async Task CloseDrawerAsync()
 	{
-		_sidebarOpen = false;
-		AppState.SetSidebarOpen(false);
+		AppState.SetDrawerOpen(false);
 		await SyncSidebarStateAsync();
 		StateHasChanged();
 		AppState.RequestFocusNavigationToggle();
@@ -139,8 +162,7 @@
 
 	private async Task OpenDrawerAsync()
 	{
-		_sidebarOpen = true;
-		AppState.SetSidebarOpen(true);
+		AppState.SetDrawerOpen(true);
 		await SyncSidebarStateAsync();
 		StateHasChanged();
 		await _sidebar.FocusAsync();
@@ -148,7 +170,7 @@
 
 	private async Task HandleKey(KeyboardEventArgs e)
 	{
-		if (e.Key == "Escape" && _isNarrow && _sidebarOpen)
+		if (e.Key == "Escape" && _isNarrow && AppState.DrawerOpen)
 			await CloseDrawerAsync();
 	}
 
@@ -156,7 +178,7 @@
 	{
 		try
 		{
-			await JS.InvokeVoidAsync("RatScanner.setSidebarState", _sidebarOpen, _isNarrow);
+			await JS.InvokeVoidAsync("RatScanner.setSidebarState", GetSidebarStateName());
 		}
 		catch (JSDisconnectedException)
 		{
@@ -164,25 +186,14 @@
 		}
 	}
 
-	private async void OnSidebarOpenChanged(object? sender, bool open)
-	{
-		await InvokeAsync(async () =>
-		{
-			if (_sidebarOpen == open)
-				return;
-
-			_sidebarOpen = open;
-			await SyncSidebarStateAsync();
-			StateHasChanged();
-
-			if (_sidebarOpen && _isNarrow)
-				await _sidebar.FocusAsync();
-		});
-	}
+	private string GetSidebarStateName() =>
+		_isNarrow
+			? AppState.DrawerOpen ? "narrow-open" : "narrow-closed"
+			: AppState.DesktopSidebarOpen ? "expanded" : "rail";
 
 	public void Dispose()
 	{
-		AppState.SidebarOpenChanged -= OnSidebarOpenChanged;
+		AppState.SidebarToggleRequested -= OnSidebarToggleRequested;
 		Navigation.LocationChanged -= OnLocationChanged;
 		_dotNetRef?.Dispose();
 	}

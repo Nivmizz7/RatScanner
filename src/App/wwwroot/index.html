@@ -39,20 +39,28 @@
 		(function () {
 			const root = document.documentElement;
 			const mq = matchMedia("(max-width: 680px)");
-			let sidebarOpen = !mq.matches;
+			let sidebarState = mq.matches ? "narrow-closed" : "expanded";
 			let narrowRef = null;
+
+			const getActiveWidth = (state) => {
+				switch (state) {
+					case "expanded":
+						return "var(--rs-sidebar-width)";
+					case "rail":
+						return "var(--rs-sidebar-rail-width)";
+					case "narrow-open":
+					case "narrow-closed":
+					default:
+						return "0px";
+				}
+			};
 
 			const render = () => {
 				root.classList.toggle("rs-narrow", mq.matches);
-				let activeWidth;
-				if (mq.matches) {
-					activeWidth = "0px";
-				} else {
-					activeWidth = sidebarOpen
-						? "var(--rs-sidebar-width)"
-						: "var(--rs-sidebar-rail-width)";
-				}
-				root.style.setProperty("--rs-sidebar-active-width", activeWidth);
+				root.style.setProperty(
+					"--rs-sidebar-active-width",
+					getActiveWidth(sidebarState)
+				);
 			};
 
 			mq.addEventListener("change", () => {
@@ -63,8 +71,8 @@
 			});
 
 			window.RatScanner.isNarrow = () => mq.matches;
-			window.RatScanner.setSidebarState = (open, narrow) => {
-				sidebarOpen = !!open;
+			window.RatScanner.setSidebarState = (state) => {
+				sidebarState = state;
 				render();
 			};
 			window.RatScanner.registerViewportRef = (ref) => { narrowRef = ref; };

@@ -37,7 +37,8 @@ internal sealed record PricingViewModel(
     int? FleaPrice,
     int? FleaPricePerSlot,
     string SourceName,
-    DateTimeOffset? UpdatedAt
+    DateTimeOffset? UpdatedAt,
+    bool BannedOnFlea
 );
 
 internal sealed record TraderViewModel(string? Name, string? ImageUrl, int? TotalPrice, int? PricePerSlot);

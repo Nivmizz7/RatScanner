@@ -12,7 +12,8 @@
 						 SizeChanged="OnSizeChanged"
 						 mc:Ignorable="d">
 
-	<StackPanel Background="Transparent">
+	<StackPanel Background="Transparent"
+	            MaxWidth="280">
 		<StackPanel.Effect>
 			<DropShadowEffect BlurRadius="3"
 												ShadowDepth="1"
@@ -21,10 +22,15 @@
 		<StackPanel x:Name="NameDisplay" Margin="2"
 								VerticalAlignment="Center"
 								Orientation="Horizontal">
-			<Label Padding="0"
-						 VerticalAlignment="Center"
-						 Content="{Binding LastItem.Name}"
-						 d:Content="AKMN 7.62x39 assault rifle" />
+			<TextBlock Padding="0"
+			           VerticalAlignment="Center"
+			           FontFamily="Roboto Medium"
+			           FontSize="14"
+			           Foreground="#EEEEEE"
+			           MaxWidth="260"
+			           Text="{Binding LastItem.Name}"
+			           TextWrapping="Wrap"
+			           d:Text="AKMN 7.62x39 assault rifle" />
 		</StackPanel>
 		<Separator />
 

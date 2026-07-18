@@ -153,6 +153,7 @@
   "CreditsLicenseHeading": "License",
   "CreditsLicenseRestriction": "Commercial resale prohibited",
   "FleaMarket": "Flea Market",
+  "BannedOnFlea": "Banned on flea",
   "PerSlot": "per slot",
   "VsTrader": "vs {0}",
   "NotRequired": "Not required",
@@ -383,5 +384,9 @@
   "MinimizeWindow": "Minimize",
   "MaximizeWindow": "Maximize",
   "RestoreWindow": "Restore",
-  "CloseWindow": "Close"
+  "CloseWindow": "Close",
+  "ExpandNavigation": "Expand navigation",
+  "CollapseNavigation": "Collapse navigation",
+  "EnterMinimalUi": "Enter minimal UI",
+  "ExitMinimalUi": "Exit minimal UI"
 }

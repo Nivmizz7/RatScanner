@@ -41,6 +41,16 @@ public partial class PageSwitcher : Window
     public static PageSwitcher Instance => _instance ??= new PageSwitcher();
 
     private UserControl? activeControl;
+    private bool _isMinimalUi;
+    private WindowState _restoreWindowState = WindowState.Normal;
+    private Rect _restoreBounds;
+
+    // Screen-space offset from the window's outer top-right corner to the
+    // minimal-UI button center. Captured when the user clicks the button to
+    // enter minimal UI, used when exiting to position the main window so the
+    // button lands under the mouse — no matter where they double-clicked on
+    // the compact overlay.
+    private Vector? _minimalButtonOffset;
 
     public PageSwitcher()
     {
@@ -52,6 +62,7 @@ public partial class PageSwitcher : Window
 
             InitializeComponent();
             _normalChrome = WindowChrome.GetWindowChrome(this) ?? new WindowChrome();
+            VersionTextBlock.Text = GetProductVersionDisplay();
             ApplyWindowsTheme();
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ResetWindowSize();
@@ -60,8 +71,9 @@ public partial class PageSwitcher : Window
             _appStateService = BlazorUI.Instance.Services.GetRequiredService<AppStateService>();
             _appStateService.SidebarOpenChanged += OnSidebarOpenChanged;
             _appStateService.FocusNavigationToggleRequested += OnFocusNavigationToggleRequested;
-            UpdateNavigationToggle(_appStateService.SidebarOpen);
+            UpdateNavigationToggle(_appStateService.IsSidebarOpen);
             UpdateCaptionButtonAccessibility();
+            UpdateMinimalUIButton();
 
             AddJumpList();
             AddTrayIcon();
@@ -297,16 +309,145 @@ public partial class PageSwitcher : Window
 
     internal void ShowUI()
     {
+        if (_isMinimalUi)
+        {
+            // Capture the minimal UI's current geometry BEFORE any changes.
+            // The minimal window has WindowRoot.Margin=0, so Left+ActualWidth is
+            // the actual visible right edge. ShowMinimalUI shifted the window left
+            // by half its width for ergonomics, so we compensate here to land the
+            // main window's title-bar corner at the correct anchor point.
+            double minimalWidth = ActualWidth;
+            double minimalRight = Left + minimalWidth + minimalWidth / 2;
+            double minimalTop = Top;
+
+            // If we have a captured button offset (entered via the title-bar
+            // button) and the mouse is currently over the minimal UI, position
+            // the main window so the minimal-UI button lands exactly under the
+            // mouse. This prevents the user from accidentally landing on the
+            // close button when double-clicking an arbitrary spot on the
+            // compact overlay.
+            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
+            bool mouseOverMinimal =
+                cursor.X >= Left && cursor.X <= Left + ActualWidth && cursor.Y >= Top && cursor.Y <= Top + ActualHeight;
+            bool useMouseAnchor = _minimalButtonOffset.HasValue && mouseOverMinimal;
+
+            // Fade out during the transition so the user never sees the
+            // intermediate default-size flash from ResetWindowSize or the chrome
+            // swap. Using Opacity instead of Visibility=Hidden keeps the window
+            // alive in the taskbar — Visibility toggling makes the taskbar entry
+            // disappear and reappear, which looks like the app is restarting.
+            double savedOpacity = Opacity;
+            Opacity = 0;
+
+            // Stop SizeToContent before navigating so the content swap doesn't
+            // trigger a window resize via SizeToContent.
+            SizeToContent = SizeToContent.Manual;
+
+            // Navigate away from MinimalMenu FIRST, before any window size changes.
+            // MinimalMenu.OnSizeChanged shifts Left when the window is on the right
+            // half of the screen; if it fires during the size changes below it would
+            // override the restored bounds and shift the window off-position.
+            Navigate(BlazorUI.Instance);
+            _isMinimalUi = false;
+
+            RatConfig.LastWindowMode = RatConfig.WindowMode.Normal;
+            WindowChrome.SetWindowChrome(this, _normalChrome);
+            ResetWindowSize();
+            SetBackgroundOpacity(1);
+            ShowTitleBar();
+
+            const double chromeMargin = 7;
+
+            if (_restoreWindowState == WindowState.Maximized)
+            {
+                if (!_restoreBounds.IsEmpty)
+                {
+                    WindowState = WindowState.Normal;
+                    Width = _restoreBounds.Width;
+                    Height = _restoreBounds.Height;
+
+                    if (useMouseAnchor)
+                    {
+                        // Position so the minimal-UI button (at offset from the
+                        // window's outer top-right) lands at the current mouse
+                        // position: Left + Width + offset.X = mouseX.
+                        Left = cursor.X - _minimalButtonOffset!.Value.X - Width;
+                        Top = cursor.Y - _minimalButtonOffset.Value.Y;
+                    }
+                    else
+                    {
+                        Left = minimalRight - Width + chromeMargin;
+                        Top = minimalTop - chromeMargin;
+                    }
+                }
+                WindowState = WindowState.Maximized;
+            }
+            else if (!_restoreBounds.IsEmpty)
+            {
+                WindowState = WindowState.Normal;
+                Width = _restoreBounds.Width;
+                Height = _restoreBounds.Height;
+
+                if (useMouseAnchor)
+                {
+                    Left = cursor.X - _minimalButtonOffset!.Value.X - Width;
+                    Top = cursor.Y - _minimalButtonOffset.Value.Y;
+                }
+                else
+                {
+                    Left = minimalRight - Width + chromeMargin;
+                    Top = minimalTop - chromeMargin;
+                }
+            }
+
+            // The offset is only valid for one exit; clear it so a subsequent
+            // tray-menu exit doesn't use a stale value.
+            _minimalButtonOffset = null;
+
+            Opacity = savedOpacity;
+            Activate();
+        }
+        else
+        {
+            // The window is already in normal UI mode; just ensure it is visible.
+            if (WindowState == WindowState.Minimized)
+                WindowState = WindowState.Normal;
+            Show();
+            Activate();
+        }
+
         RatConfig.LastWindowMode = RatConfig.WindowMode.Normal;
-        WindowChrome.SetWindowChrome(this, _normalChrome);
-        ResetWindowSize();
-        SetBackgroundOpacity(1);
-        ShowTitleBar();
-        Navigate(BlazorUI.Instance);
+        UpdateMinimalUIButton();
     }
 
     internal void ShowMinimalUI()
     {
+        if (_isMinimalUi)
+        {
+            Show();
+            Activate();
+            return;
+        }
+
+        // Capture the top-right corner of the title bar (where the minimal-UI
+        // button sits). The main window has a 7px chrome margin (WindowRoot.Margin
+        // = 7, ResizeBorderThickness = 7), so the title bar's actual top-right is
+        // inset from the outer window bounds. Anchoring at the title bar corner
+        // instead of the outer window corner makes the minimal UI appear exactly
+        // where the button is, not 7px above and to the right.
+        const double chromeMargin = 7;
+        double rightEdge = Left + Width - chromeMargin;
+        double topEdge = Top + chromeMargin;
+
+        _restoreBounds = RestoreBounds;
+        _restoreWindowState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+
+        // Fade out during the transition so the user doesn't see the window
+        // shrink toward the top-left before we reposition. Using Opacity instead
+        // of Visibility=Hidden keeps the window alive in the taskbar.
+        double savedOpacity = Opacity;
+        Opacity = 0;
+
         RatConfig.LastWindowMode = RatConfig.WindowMode.Minimal;
         WindowChrome.SetWindowChrome(this, _minimalChrome);
         WindowRoot.Margin = new Thickness(0);
@@ -314,9 +455,59 @@ public partial class PageSwitcher : Window
         ResizeMode = ResizeMode.NoResize;
         MinWidth = 0;
         MinHeight = 0;
+        MaxWidth = double.PositiveInfinity;
+        MaxHeight = double.PositiveInfinity;
+        WindowState = WindowState.Normal;
         SizeToContent = SizeToContent.WidthAndHeight;
         SetBackgroundOpacity(RatConfig.MinimalUi.Opacity / 100f);
         Navigate(MinimalMenu.Instance);
+
+        // Force a layout pass so the content-derived size from SizeToContent is
+        // available, then anchor the minimal window's top-right corner near the
+        // main window's top-right corner (where the minimal-UI button sits).
+        UpdateLayout();
+        AnchorNearTopRight(rightEdge, topEdge);
+
+        // Shift the minimal UI left by half its width so the mouse — which was
+        // near the right edge of the title bar (where the minimal-UI button sits)
+        // — lands closer to the center of the compact overlay instead of at its
+        // right edge.
+        if (ActualWidth > 0)
+            Left -= ActualWidth / 2;
+
+        Opacity = savedOpacity;
+        Activate();
+
+        _isMinimalUi = true;
+        UpdateMinimalUIButton();
+    }
+
+    /// <summary>
+    /// Positions the window so its top-right corner is at the given screen
+    /// coordinates. Falls back to measuring the content directly if
+    /// ActualWidth/Height are not yet updated (SizeToContent may defer the
+    /// Win32 resize).
+    /// </summary>
+    private void AnchorNearTopRight(double rightEdge, double topEdge)
+    {
+        double w = ActualWidth;
+        double h = ActualHeight;
+
+        if (w <= 0 || h <= 0 || double.IsNaN(w) || double.IsNaN(h))
+        {
+            if (ContentControl.Content is FrameworkElement content)
+            {
+                content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                w = content.DesiredSize.Width;
+                h = content.DesiredSize.Height;
+            }
+        }
+
+        if (w > 0 && h > 0)
+        {
+            Left = rightEdge - w;
+            Top = topEdge;
+        }
     }
 
     internal void ExitApplication()
@@ -347,18 +538,37 @@ public partial class PageSwitcher : Window
         if (NavToggleIcon == null || NavToggleButton == null)
             return;
 
-        string tooltipKey = open ? "CloseNavigation" : "OpenNavigation";
+        string tooltipKey = open ? "CollapseNavigation" : "ExpandNavigation";
         string tooltip = Presentation.PresentationText.T(tooltipKey, tooltipKey);
         NavToggleButton.ToolTip = tooltip;
         AutomationProperties.SetName(NavToggleButton, tooltip);
         NavToggleIcon.Data = open ? GetPanelLeftCloseGeometry() : GetPanelLeftOpenGeometry();
     }
 
-    private static Geometry GetPanelLeftCloseGeometry() =>
-        Geometry.Parse("M 3,3 H 21 V 21 H 3 Z M 9,3 V 21 M 16,15 L 13,12 L 16,9");
+    private static Geometry GetPanelLeftCloseGeometry() => Geometry.Parse("M 4,4 V 20 M 14,8 L 8,12 L 14,16");
 
-    private static Geometry GetPanelLeftOpenGeometry() =>
-        Geometry.Parse("M 3,3 H 21 V 21 H 3 Z M 9,3 V 21 M 8,9 L 11,12 L 8,15");
+    private static Geometry GetPanelLeftOpenGeometry() => Geometry.Parse("M 4,4 V 20 M 8,8 L 14,12 L 8,16");
+
+    private static Geometry GetMinimalUIIconGeometry() =>
+        Geometry.Parse("M 3,3 H 21 V 21 H 3 Z M 13,13 H 21 V 21 H 13 Z");
+
+    private void OnTitleBarMinimal(object? sender, RoutedEventArgs e)
+    {
+        if (_isMinimalUi)
+        {
+            ShowUI();
+        }
+        else
+        {
+            // Capture the mouse's screen-space offset from the window's outer
+            // top-right corner. The mouse is on the minimal-UI button, so this
+            // gives us the button's position relative to the window. We'll use
+            // it when exiting minimal UI to keep the button under the mouse.
+            System.Drawing.Point cursor = System.Windows.Forms.Cursor.Position;
+            _minimalButtonOffset = new Vector(cursor.X - (Left + Width), cursor.Y - Top);
+            ShowMinimalUI();
+        }
+    }
 
     private void OnTitleBarMinimize(object? sender, RoutedEventArgs e)
     {
@@ -416,6 +626,29 @@ public partial class PageSwitcher : Window
         }
 
         UpdateMaximizeRestoreIcon();
+    }
+
+    private void UpdateMinimalUIButton()
+    {
+        if (MinimalUIIcon == null || MinimalUIButton == null)
+            return;
+
+        string key = _isMinimalUi ? "ExitMinimalUi" : "EnterMinimalUi";
+        string fallback = _isMinimalUi ? "Exit minimal UI" : "Enter minimal UI";
+        string text = Presentation.PresentationText.T(key, fallback);
+        MinimalUIButton.ToolTip = text;
+        AutomationProperties.SetName(MinimalUIButton, text);
+        MinimalUIIcon.Data = GetMinimalUIIconGeometry();
+    }
+
+    private string GetProductVersionDisplay()
+    {
+        string version = RatConfig.VersionDisplay;
+        int plus = version.IndexOf('+');
+        if (plus >= 0)
+            version = version[..plus];
+
+        return version;
     }
 
     internal void CollapseTitleBar()

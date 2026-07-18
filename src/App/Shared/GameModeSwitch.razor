@@ -2,40 +2,20 @@
 @inject ISnackbar Snackbar
 
 <div class="game-mode-switch">
-	<div class="game-mode-desktop">
-		<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
-		                Value="@RatConfig.GameMode"
-		                ValueChanged="SetGameModeAsync"
-		                Size="Size.Small"
-		                Color="Color.Primary"
-		                CheckMark="true"
-		                FixedContent="true">
-			<MudToggleItem T="RatScanner.TarkovDev.GameMode"
-			               Value="RatScanner.TarkovDev.GameMode.Regular"
-			               Text="@Localizer["PvpMode"]" />
-			<MudToggleItem T="RatScanner.TarkovDev.GameMode"
-			               Value="RatScanner.TarkovDev.GameMode.Pve"
-			               Text="@Localizer["PveMode"]" />
-		</MudToggleGroup>
-	</div>
-
-	<div class="game-mode-narrow">
-		<MudMenu AnchorOrigin="Origin.BottomRight"
-		         TransformOrigin="Origin.TopRight">
-			<ActivatorContent>
-				<MudButton Variant="Variant.Text"
-				           Size="Size.Small"
-				           EndIcon="@Icons.Material.Filled.ArrowDropDown"
-				           Class="game-mode-pill">
-					@(RatConfig.GameMode == RatScanner.TarkovDev.GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"])
-				</MudButton>
-			</ActivatorContent>
-			<ChildContent>
-				<MudMenuItem OnClick="() => SetGameModeAsync(RatScanner.TarkovDev.GameMode.Regular)">@Localizer["PvpMode"]</MudMenuItem>
-				<MudMenuItem OnClick="() => SetGameModeAsync(RatScanner.TarkovDev.GameMode.Pve)">@Localizer["PveMode"]</MudMenuItem>
-			</ChildContent>
-		</MudMenu>
-	</div>
+	<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
+	                Value="@RatConfig.GameMode"
+	                ValueChanged="SetGameModeAsync"
+	                Size="Size.Small"
+	                Color="Color.Primary"
+	                CheckMark="true"
+	                FixedContent="true">
+		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Regular"
+		               Text="@Localizer["PvpMode"]" />
+		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Pve"
+		               Text="@Localizer["PveMode"]" />
+	</MudToggleGroup>
 </div>
 
 @code {

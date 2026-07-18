@@ -127,21 +127,28 @@
                 <div class="market-columns">
                     <div class="market-column">
                         <label>@Localizer["FleaMarket"]</label>
-                        <strong class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</strong>
-                        @if (ShowPerSlot)
+                        @if (_result.Pricing.BannedOnFlea)
                         {
-                            <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Pricing.FleaPricePerSlot))</span>
+                            <strong class="price banned">@Localizer["BannedOnFlea"]</strong>
                         }
-                        <span class="supporting">
-                            @if (!string.IsNullOrWhiteSpace(FreshnessText))
+                        else
+                        {
+                            <strong class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</strong>
+                            @if (ShowPerSlot)
                             {
-                                @FreshnessText
+                                <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Pricing.FleaPricePerSlot))</span>
                             }
-                            else
-                            {
-                                <text>@Localizer["PricesMayVary"]</text>
-                            }
-                        </span>
+                            <span class="supporting">
+                                @if (!string.IsNullOrWhiteSpace(FreshnessText))
+                                {
+                                    @FreshnessText
+                                }
+                                else
+                                {
+                                    <text>@Localizer["PricesMayVary"]</text>
+                                }
+                            </span>
+                        }
                     </div>
 
                     <div class="market-column">
@@ -161,7 +168,10 @@
                         }
                     </div>
                 </div>
-                <p class="market-difference @DifferenceClass">@MarketDifferenceText</p>
+                @if (!string.IsNullOrWhiteSpace(MarketDifferenceText))
+                {
+                    <p class="market-difference @DifferenceClass">@MarketDifferenceText</p>
+                }
             </section>
 
             <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="@Localizer["Requirements"]">
@@ -412,7 +422,7 @@
         get
         {
             if (Difference is not int value)
-                return Localizer["NoTraderComparison"];
+                return string.Empty;
             string traderName = _result?.Trader?.Name ?? Localizer["TraderLabel"];
             if (value > 0)
                 return Localizer.Format("FleaMarketPaysMore", PriceFormatter.Format(value), traderName);

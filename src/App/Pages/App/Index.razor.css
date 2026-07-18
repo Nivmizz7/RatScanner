@@ -350,6 +350,12 @@ label {
     font-weight: 650;
 }
 
+.market-column .price.banned {
+    font-size: 16px;
+    color: var(--rs-warning);
+    font-weight: 600;
+}
+
 .market-column .trader-name {
     font-size: 18px;
 }

@@ -7,7 +7,7 @@
     --rs-success: #58d17b; --rs-success-strong: #42bc69; --rs-success-surface: rgba(88,209,123,.10);
     --rs-warning: #e7ad55; --rs-danger: #eb6c73; --rs-info: #68a7f4;
     --rs-radius-sm: 8px; --rs-radius: 12px;
-    --rs-sidebar-width: 224px; --rs-sidebar-rail-width: 56px;
+    --rs-sidebar-width: 184px; --rs-sidebar-rail-width: 56px;
     /* Effective sidebar inset for main content. Updated at runtime by JS
        (RatScanner.setSidebarState) to the rail width, full width, or 0 so
        dialogs center in the actual content area. */
