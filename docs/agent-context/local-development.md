@@ -55,7 +55,9 @@ Scripts treat Data as ready when all exist:
 
 | Intent | Command |
 | --- | --- |
-| Watch (default) | `dev.bat` or `scripts\dev.ps1` |
+| Watch (debounced, default) | `dev.bat` or `scripts\dev.ps1` |
+| Watch (instant restart) | `dev.bat -NoDebounce` |
+| Custom quiet period | `dev.bat -Debounce 8` |
 | One-shot run | `dev.bat -Once` |
 | Force Data reinstall | `dev.bat -ForceSetup` |
 | Release config | `dev.bat -Release` |
@@ -68,9 +70,10 @@ What watch does (`scripts/dev.ps1`):
 
 1. Ensure Data.
 2. `dotnet restore RatScanner.sln` (unless skipped).
-3. `dotnet watch --project src\App\RatScanner.csproj --non-interactive --no-hot-reload run …`
+3. Default: debounced FileSystemWatcher on `src\` — after a quiet period (15s with no file edits) it kills the running app, rebuilds, and relaunches. Changes during a build are coalesced: after launch, if new edits occurred, the quiet timer restarts and triggers one more rebuild.
+4. `-NoDebounce`: falls back to `dotnet watch --project src\App\RatScanner.csproj --non-interactive --no-hot-reload run …` (rebuild within ~1-2s of each save).
 
-**Restart-on-save** is intentional. Full in-process hot reload is unreliable for this WPF/WebView stack.
+**Restart-on-save** is intentional. Full in-process hot reload is unreliable for this WPF/WebView stack. The debounce prevents endless close/reopen cycles when an agent edits files in rapid bursts.
 
 Equivalent one-shot without the bat:
 
