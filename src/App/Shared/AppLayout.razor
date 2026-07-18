@@ -6,28 +6,13 @@
 @inject LocalizationService Localizer
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="app-shell">
-    <header class="compact-bar"
-            aria-hidden="@(_drawerOpen ? "true" : null)"
-            @attributes="_headerAttributes">
-        <button class="icon-button"
-                @ref="_toggleButton"
-                aria-label="@Localizer["OpenNavigation"]"
-                aria-controls="primary-sidebar"
-                aria-expanded="@_drawerOpen"
-                @onclick="ToggleDrawerAsync">
-            <MudIcon Icon="@Icons.Material.Filled.Menu" />
-        </button>
-        <span class="compact-title">@Constants.Branding.Name</span>
-        <div class="compact-status">
-            <ScannerStatus Compact="true" />
-        </div>
-    </header>
     <aside id="primary-sidebar"
            @ref="_sidebar"
-           class="sidebar @(_drawerOpen ? "open" : null)"
+           class="sidebar @(_sidebarOpen ? "open" : "closed")"
            @onkeydown="HandleKey"
            tabindex="-1">
         <div class="sidebar-header">
@@ -38,8 +23,10 @@
             </div>
             <button class="icon-button sidebar-close"
                     aria-label="@Localizer["CloseNavigation"]"
+                    aria-controls="primary-sidebar"
+                    aria-expanded="@_sidebarOpen"
                     @onclick="CloseDrawerAsync">
-                <MudIcon Icon="@Icons.Material.Filled.Close" />
+                <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
             </button>
         </div>
         <nav aria-label="@Localizer["PrimaryNavigation"]">
@@ -78,22 +65,37 @@
             }
         </section>
     </aside>
-    @if (_drawerOpen)
+    @if (_sidebarOpen && _isNarrow)
     {
         <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawerAsync"></button>
     }
-    @* inert + aria-hidden keep Tab out of main content while the drawer is open. *@
-    <main class="main-content"
-          aria-hidden="@(_drawerOpen ? "true" : null)"
+    @if (!_sidebarOpen)
+    {
+        <button class="icon-button sidebar-expand"
+                @ref="_toggleButton"
+                aria-label="@Localizer["OpenNavigation"]"
+                aria-controls="primary-sidebar"
+                aria-expanded="@_sidebarOpen"
+                @onclick="OpenDrawerAsync">
+            <MudIcon Icon="@Icons.Material.Filled.Menu" />
+        </button>
+    }
+    @* inert + aria-hidden keep Tab out of main content while the mobile drawer is open.
+       At full width the sidebar is docked (not modal), so main stays interactive. *@
+    <main class="main-content @(_sidebarOpen && !_isNarrow ? "sidebar-docked" : null)"
+          aria-hidden="@(_sidebarOpen && _isNarrow ? "true" : null)"
           @attributes="_mainAttributes">@Body</main>
 </div>
 
 @code {
-    private bool _drawerOpen;
+    private bool _sidebarOpen = true;
+    private bool _isNarrow;
     private bool _changingGameMode;
+    private bool _subscribed;
+    private bool _viewportRefRegistered;
     private ElementReference _sidebar;
     private ElementReference _toggleButton;
-    private bool _subscribed;
+    private DotNetObjectReference<AppLayout>? _dotNetRef;
 
     private bool TrackerNeedsAttention =>
         RatScannerMain.Instance.TarkovTrackerDB.ConnectionState
@@ -108,12 +110,7 @@
             : Localizer["TrackerNotConnectedPvp"];
 
     private Dictionary<string, object> _mainAttributes =>
-        _drawerOpen
-            ? new Dictionary<string, object> { ["inert"] = true }
-            : new Dictionary<string, object>();
-
-    private Dictionary<string, object> _headerAttributes =>
-        _drawerOpen
+        _sidebarOpen && _isNarrow
             ? new Dictionary<string, object> { ["inert"] = true }
             : new Dictionary<string, object>();
 
@@ -123,9 +120,31 @@
         _subscribed = true;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("RatScanner.registerViewportRef", _dotNetRef);
+            _viewportRefRegistered = true;
+            _isNarrow = await JS.InvokeAsync<bool>("RatScanner.isNarrow");
+            _sidebarOpen = !_isNarrow;
+            await SyncSidebarStateAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (JSDisconnectedException)
+        {
+            // WebView may tear down interop during shutdown; safe to ignore.
+        }
+    }
+
     private async Task OpenDrawerAsync()
     {
-        _drawerOpen = true;
+        _sidebarOpen = true;
+        await SyncSidebarStateAsync();
         await InvokeAsync(StateHasChanged);
         await Task.Yield();
         try
@@ -138,13 +157,17 @@
         }
     }
 
-    private Task ToggleDrawerAsync() => _drawerOpen ? CloseDrawerAsync() : OpenDrawerAsync();
-
-    private async Task CloseDrawerAsync()
+    private Task CloseDrawerAsync()
     {
-        if (!_drawerOpen)
-            return;
-        _drawerOpen = false;
+        if (!_sidebarOpen)
+            return Task.CompletedTask;
+        _sidebarOpen = false;
+        return CloseDrawerInternalAsync();
+    }
+
+    private async Task CloseDrawerInternalAsync()
+    {
+        await SyncSidebarStateAsync();
         await InvokeAsync(StateHasChanged);
         try
         {
@@ -156,7 +179,27 @@
         }
     }
 
-    private Task CloseDrawerAfterNavAsync() => CloseDrawerAsync();
+    private Task CloseDrawerAfterNavAsync() => _isNarrow ? CloseDrawerAsync() : Task.CompletedTask;
+
+    private async Task SyncSidebarStateAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("RatScanner.setSidebarOpen", _sidebarOpen);
+        }
+        catch (JSDisconnectedException)
+        {
+            // Interop may be unavailable during shutdown; CSS fallback keeps the layout sane.
+        }
+    }
+
+    /// <summary>Called from JS when the viewport crosses the 760px breakpoint.</summary>
+    [JSInvokable]
+    public async Task OnViewportNarrow(bool isNarrow)
+    {
+        _isNarrow = isNarrow;
+        await InvokeAsync(StateHasChanged);
+    }
 
     private async Task SetGameModeAsync(GameMode gameMode)
     {
@@ -182,7 +225,7 @@
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        if (!_drawerOpen)
+        if (!_isNarrow || !_sidebarOpen)
             return;
         _ = InvokeAsync(CloseDrawerAsync);
     }
@@ -197,5 +240,17 @@
     {
         if (_subscribed)
             Navigation.LocationChanged -= OnLocationChanged;
+        if (_viewportRefRegistered)
+        {
+            try
+            {
+                _ = JS.InvokeVoidAsync("RatScanner.disposeViewportRef");
+            }
+            catch (JSDisconnectedException)
+            {
+                // WebView already torn down.
+            }
+        }
+        _dotNetRef?.Dispose();
     }
 }

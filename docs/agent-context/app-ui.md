@@ -31,7 +31,7 @@ Package version: see App `.csproj` only.
 
 | Area | Location |
 | --- | --- |
-| App shell (sidebar, header, status, PVP/PVE selector) | `Shared/AppLayout.razor(+.css)` |
+| App shell (collapsible sidebar, PVP/PVE selector) | `Shared/AppLayout.razor(+.css)` |
 | Mud providers / shared theme | `Shared/MainLayout.razor` |
 | Settings chrome | `Shared/SettingsLayout.razor(+.css)` |
 | Overlay shells | `Shared/OverlayLayout.razor`, overlay page trees |
@@ -82,7 +82,16 @@ Do not use `!important` to paper over conflicting selectors. Recent search-field
 
 - Prefer shell density already established in `AppLayout` / search chrome (single-line status chip, natural Mud input height).
 - Stretch full-width inputs with Mud props / flex, not forced content-box height hacks.
-- Keep scanner status and search co-located patterns coherent when editing the header.
+- Keep scanner status and search co-located patterns coherent when editing the scan page.
+
+## Sidebar collapse behavior
+
+`AppLayout` exposes a single collapsible sidebar that works at every viewport width; the native WPF title bar (`PageSwitcher.xaml`) supplies app identity, window drag, and caption buttons at all widths, so the Blazor shell no longer renders a duplicate compact header.
+
+- At full width (≥760px) the sidebar is docked: `main-content` reserves `--rs-sidebar-width` via the `sidebar-docked` class and the sidebar is non-modal (main stays interactive).
+- Below 760px the sidebar is an overlay drawer: a scrim renders and `main` gets `inert` / `aria-hidden` while open.
+- A collapse button in the sidebar header and a floating expand button (top-left of main content, rendered only when collapsed) share the `icon-button` base style and reuse the `OpenNavigation` / `CloseNavigation` i18n keys.
+- `--rs-sidebar-active-width` on `:root` is kept in sync by `wwwroot/index.html` (`RatScanner.setSidebarOpen` + the `(max-width: 759px)` matchMedia listener) so MudBlazor dialogs center in the actual content pane. `AppLayout` registers a `DotNetObjectReference` to receive breakpoint crossings via `OnViewportNarrow`.
 
 ## Visual smoke-test surfaces
 
@@ -90,9 +99,10 @@ After material UI changes, manually verify at least:
 
 1. Main `/app` scan page (search + status + results).
 2. Settings general page (language / display controls if touched).
-3. Sidebar navigation open/close on narrow window.
-4. Optional: interactable overlay search.
-5. Optional: DPI scale / multi-monitor if display logic changed.
+3. Settings advanced page (advanced capture / diagnostics / detected configuration if touched).
+4. Sidebar navigation open/close on narrow window.
+5. Optional: interactable overlay search.
+6. Optional: DPI scale / multi-monitor if display logic changed.
 
 ## Screenshot acquisition (UI-adjacent)
 

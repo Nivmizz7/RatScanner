@@ -7,6 +7,10 @@
     --rs-success: #58d17b; --rs-success-strong: #42bc69; --rs-success-surface: rgba(88,209,123,.10);
     --rs-warning: #e7ad55; --rs-danger: #eb6c73; --rs-info: #68a7f4;
     --rs-radius-sm: 8px; --rs-radius: 12px; --rs-sidebar-width: 224px;
+    /* Effective sidebar inset for main content. Updated at runtime by JS
+       (RatScanner.setSidebarOpen) to 0 when the sidebar is collapsed or the
+       viewport is narrow, so dialogs center in the actual content area. */
+    --rs-sidebar-active-width: var(--rs-sidebar-width);
 }
 
 html, body, #app { height: 100%; margin: 0; background: var(--rs-bg); color: var(--rs-text); }
@@ -105,7 +109,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    the main content pane, not the full native window. */
 .dialog-backdrop-light {
     background-color: rgba(0, 0, 0, 0.35) !important;
-    padding-left: var(--rs-sidebar-width);
+    padding-left: var(--rs-sidebar-active-width);
     box-sizing: border-box;
 }
 
@@ -113,7 +117,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
    content pane. Height-aware: top-align when viewport is short, center
    otherwise. Internal scrolling on the dialog content, not the page. */
 .mud-dialog-container.mud-dialog-center {
-    padding-left: var(--rs-sidebar-width);
+    padding-left: var(--rs-sidebar-active-width);
     box-sizing: border-box;
 }
 

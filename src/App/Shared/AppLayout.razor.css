@@ -10,7 +10,11 @@
     flex-direction: column;
     background: var(--rs-sidebar);
     border-right: 1px solid var(--rs-border-subtle);
+    transform: translateX(-100%);
+    transition: transform .16s ease;
 }
+
+.sidebar.open { transform: none; }
 
 .product-identity {
     display: grid;
@@ -29,7 +33,7 @@
 .product-identity strong { font-size: 18px; }
 .product-identity span { font-size: 12px; color: var(--rs-text-2); }
 
-/* Sidebar header — product identity + close button (mobile only) */
+/* Sidebar header — product identity + collapse control (all widths) */
 .sidebar-header {
     display: flex;
     align-items: flex-start;
@@ -39,10 +43,6 @@
 .sidebar-header .product-identity {
     flex: 1;
     min-width: 0;
-}
-
-.sidebar-close {
-    display: none;
 }
 
 nav { display: grid; gap: 6px; }
@@ -69,12 +69,6 @@ nav ::deep a:hover,
 nav a:hover {
     background: var(--rs-surface-2);
     color: var(--rs-text);
-}
-
-nav ::deep a:focus-visible,
-nav a:focus-visible {
-    outline: 2px solid var(--rs-purple);
-    outline-offset: -2px;
 }
 
 .sidebar-spacer { flex: 1; }
@@ -106,85 +100,64 @@ nav a:focus-visible {
     text-decoration: underline;
 }
 
+/* Shared icon-button base for sidebar collapse + floating expand controls. */
+.icon-button {
+    flex: none;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--rs-text);
+}
+
+.icon-button:hover {
+    background: var(--rs-surface-2);
+}
+
+.icon-button:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+}
+
+/* Collapse button lives in the sidebar header at all widths. */
+.sidebar-close {
+    margin-top: -4px;
+}
+
+/* Floating expand button — top-left of main content, shown only when collapsed. */
+.sidebar-expand {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 15;
+    background: var(--rs-surface-2);
+}
+
+.sidebar-expand:hover {
+    background: var(--rs-surface);
+}
+
 .main-content {
-    margin-left: var(--rs-sidebar-width);
+    margin-left: 0;
     height: 100vh;
     overflow-y: auto;
     scrollbar-gutter: stable;
+    transition: margin-left .16s ease;
 }
 
-.compact-bar { display: none; }
+/* Docked sidebar at full width reserves space for the sidebar. */
+.main-content.sidebar-docked {
+    margin-left: var(--rs-sidebar-width);
+}
+
 .scrim { display: none; }
 
 @media (max-width: 759px) {
-    .compact-bar {
-        height: 56px;
-        padding: 0 12px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        background: var(--rs-sidebar);
-        border-bottom: 1px solid var(--rs-border);
-    }
-
-    .compact-title {
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .compact-status {
-        flex: none;
-        display: flex;
-        align-items: center;
-    }
-
-    .icon-button {
-        width: 40px;
-        height: 40px;
-        border: 0;
-        border-radius: 8px;
-        background: transparent;
-        color: var(--rs-text);
-    }
-
-    .icon-button:focus-visible {
-        outline: 2px solid var(--rs-purple);
-        outline-offset: 2px;
-    }
-
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform .16s ease;
-    }
-
-    .sidebar.open { transform: none; }
-
-    .sidebar-close {
-        display: flex;
-        flex: none;
-        width: 40px;
-        height: 40px;
-        align-items: center;
-        justify-content: center;
-        border: 0;
-        border-radius: 8px;
-        background: transparent;
-        color: var(--rs-text);
-        margin-top: -4px;
-    }
-
-    .sidebar-close:hover {
-        background: var(--rs-surface-2);
-    }
-
-    .sidebar-close:focus-visible {
-        outline: 2px solid var(--rs-purple);
-        outline-offset: 2px;
-    }
-
+    /* Overlay drawer: scrim blocks main while the sidebar is open on narrow viewports. */
     .scrim {
         display: block;
         position: fixed;
@@ -194,8 +167,9 @@ nav a:focus-visible {
         background: rgba(0, 0, 0, .62);
     }
 
-    .main-content {
+    /* Sidebar never reserves layout space on narrow viewports; it overlays. */
+    .main-content,
+    .main-content.sidebar-docked {
         margin-left: 0;
-        height: calc(100vh - 56px);
     }
 }

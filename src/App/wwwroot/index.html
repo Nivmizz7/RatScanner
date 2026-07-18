@@ -30,6 +30,40 @@
 				document.querySelector(".search input")?.focus();
 			}
 		});
+
+		// Sidebar viewport tracking + dialog-offset sync.
+		// Toggles `rs-narrow` on <html> and keeps --rs-sidebar-active-width in
+		// step with the sidebar's open/closed state so MudBlazor dialogs center
+		// in the actual main content pane (see theme.css).
+		window.RatScanner = window.RatScanner || {};
+		(function () {
+			const root = document.documentElement;
+			const mq = matchMedia("(max-width: 759px)");
+			let sidebarOpen = !mq.matches;
+			let narrowRef = null;
+			const render = () => {
+				root.classList.toggle("rs-narrow", mq.matches);
+				const active = sidebarOpen && !mq.matches;
+				root.style.setProperty(
+					"--rs-sidebar-active-width",
+					active ? "var(--rs-sidebar-width)" : "0px"
+				);
+			};
+			mq.addEventListener("change", () => {
+				render();
+				if (narrowRef) {
+					narrowRef.invokeMethodAsync("OnViewportNarrow", mq.matches);
+				}
+			});
+			window.RatScanner.isNarrow = () => mq.matches;
+			window.RatScanner.setSidebarOpen = (open) => {
+				sidebarOpen = !!open;
+				render();
+			};
+			window.RatScanner.registerViewportRef = (ref) => { narrowRef = ref; };
+			window.RatScanner.disposeViewportRef = () => { narrowRef = null; };
+			render();
+		})();
 	</script>
 </body>
 
