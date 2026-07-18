@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shell;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using RatScanner.View;
 using ContextMenuStrip = System.Windows.Forms.ContextMenuStrip;
@@ -24,6 +25,16 @@ public partial class PageSwitcher : Window
 
     private NotifyIcon _notifyIcon = null!;
     private ContextMenuStrip _contextMenuStrip = new();
+    private AppStateService? _appStateService;
+    private WindowChrome _normalChrome = null!;
+    private readonly WindowChrome _minimalChrome = new()
+    {
+        CaptionHeight = 0,
+        CornerRadius = new CornerRadius(0),
+        GlassFrameThickness = new Thickness(0),
+        ResizeBorderThickness = new Thickness(0),
+        UseAeroCaptionButtons = false,
+    };
 
     private static PageSwitcher _instance = null!;
     public static PageSwitcher Instance => _instance ??= new PageSwitcher();
@@ -39,10 +50,17 @@ public partial class PageSwitcher : Window
             RatConfig.LoadConfig();
 
             InitializeComponent();
+            _normalChrome = WindowChrome.GetWindowChrome(this) ?? new WindowChrome();
             ApplyWindowsTheme();
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ResetWindowSize();
             Navigate(BlazorUI.Instance);
+
+            _appStateService = BlazorUI.Instance.Services.GetRequiredService<AppStateService>();
+            _appStateService.SidebarOpenChanged += OnSidebarOpenChanged;
+            _appStateService.FocusNavigationToggleRequested += OnFocusNavigationToggleRequested;
+            UpdateNavigationToggle(_appStateService.SidebarOpen);
+
             AddJumpList();
             AddTrayIcon();
 
@@ -103,12 +121,18 @@ public partial class PageSwitcher : Window
         if (RatConfig.MinimizeToTray && WindowState == WindowState.Minimized)
             Hide();
 
+        UpdateMaximizeRestoreIcon();
         base.OnStateChanged(e);
     }
 
     protected override void OnClosed(EventArgs e)
     {
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        if (_appStateService != null)
+        {
+            _appStateService.SidebarOpenChanged -= OnSidebarOpenChanged;
+            _appStateService.FocusNavigationToggleRequested -= OnFocusNavigationToggleRequested;
+        }
         if (_notifyIcon != null)
         {
             _notifyIcon.Visible = false;
@@ -272,6 +296,7 @@ public partial class PageSwitcher : Window
     internal void ShowUI()
     {
         RatConfig.LastWindowMode = RatConfig.WindowMode.Normal;
+        WindowChrome.SetWindowChrome(this, _normalChrome);
         ResetWindowSize();
         SetBackgroundOpacity(1);
         ShowTitleBar();
@@ -281,6 +306,7 @@ public partial class PageSwitcher : Window
     internal void ShowMinimalUI()
     {
         RatConfig.LastWindowMode = RatConfig.WindowMode.Minimal;
+        WindowChrome.SetWindowChrome(this, _minimalChrome);
         WindowRoot.Margin = new Thickness(0);
         CollapseTitleBar();
         ResizeMode = ResizeMode.NoResize;
@@ -299,11 +325,36 @@ public partial class PageSwitcher : Window
         Application.Current.Shutdown();
     }
 
-    private void OnTitleBarMouseDown(object? sender, MouseButtonEventArgs e)
+    private void OnToggleSidebar(object? sender, RoutedEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left)
-            DragMove();
+        _appStateService?.ToggleSidebar();
     }
+
+    private void OnSidebarOpenChanged(object? sender, bool open)
+    {
+        Dispatcher.Invoke(() => UpdateNavigationToggle(open));
+    }
+
+    private void OnFocusNavigationToggleRequested(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() => NavToggleButton?.Focus());
+    }
+
+    private void UpdateNavigationToggle(bool open)
+    {
+        if (NavToggleIcon == null || NavToggleButton == null)
+            return;
+
+        string tooltipKey = open ? "CloseNavigation" : "OpenNavigation";
+        NavToggleButton.ToolTip = Presentation.PresentationText.T(tooltipKey, tooltipKey);
+        NavToggleIcon.Data = open ? GetPanelLeftCloseGeometry() : GetPanelLeftOpenGeometry();
+    }
+
+    private static Geometry GetPanelLeftCloseGeometry() =>
+        Geometry.Parse("M 3,3 H 21 V 21 H 3 Z M 9,3 V 21 M 16,15 L 13,12 L 16,9");
+
+    private static Geometry GetPanelLeftOpenGeometry() =>
+        Geometry.Parse("M 3,3 H 21 V 21 H 3 Z M 9,3 V 21 M 8,9 L 11,12 L 8,15");
 
     private void OnTitleBarMinimize(object? sender, RoutedEventArgs e)
     {
@@ -311,11 +362,28 @@ public partial class PageSwitcher : Window
         WindowState = WindowState.Minimized;
     }
 
-    private void OnTitleBarMinimal(object? sender, RoutedEventArgs e) => ShowMinimalUI();
+    private void OnTitleBarMaximizeRestore(object? sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.Maximized)
+            WindowState = WindowState.Normal;
+        else
+            WindowState = WindowState.Maximized;
+    }
 
     private void OnTitleBarClose(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void UpdateMaximizeRestoreIcon()
+    {
+        if (MaximizeRestoreIcon == null)
+            return;
+
+        const string maximizePath = "M 3,3 H 21 V 21 H 3 Z";
+        const string restorePath = "M 4,10 H 18 V 20 H 4 Z M 8,4 H 20 V 14 H 18 V 6 H 8 Z";
+
+        MaximizeRestoreIcon.Data = Geometry.Parse(WindowState == WindowState.Maximized ? restorePath : maximizePath);
     }
 
     internal void CollapseTitleBar()

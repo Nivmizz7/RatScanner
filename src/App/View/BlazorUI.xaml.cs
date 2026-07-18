@@ -52,6 +52,8 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     public static BlazorOverlay BlazorOverlay { get; set; } = null!;
     public static BlazorInteractableOverlay BlazorInteractableOverlay { get; set; } = null!;
 
+    public IServiceProvider Services => _serviceProvider;
+
     private readonly ServiceProvider _serviceProvider;
     private WebView2CompositionControl? _initializedWebView;
     private bool _disposed;
@@ -94,6 +96,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         serviceCollection.AddSingleton<VirtualScreenOffset>(s => new VirtualScreenOffset(left, top));
 
         serviceCollection.AddSingleton<TarkovTrackerDB>(s => RatScannerMain.Instance.TarkovTrackerDB);
+        serviceCollection.AddSingleton<AppStateService>();
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
 

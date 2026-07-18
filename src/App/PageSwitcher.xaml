@@ -10,7 +10,7 @@
         WindowStyle="None"
         mc:Ignorable="d">
 	<WindowChrome.WindowChrome>
-		<WindowChrome CaptionHeight="0"
+		<WindowChrome CaptionHeight="48"
 		              CornerRadius="0"
 		              GlassFrameThickness="0"
 		              ResizeBorderThickness="7"
@@ -23,81 +23,117 @@
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<Border x:Name="TitleBar"
-		        Grid.Row="0">
-			<Grid Height="30"
-			      Background="{DynamicResource NativeTitleBarBackgroundBrush}"
-			      MouseDown="OnTitleBarMouseDown">
-				<Grid.ColumnDefinitions>
-					<ColumnDefinition Width="*" />
-					<ColumnDefinition Width="Auto" />
-				</Grid.ColumnDefinitions>
+		<Grid x:Name="TitleBar"
+		      Grid.Row="0"
+		      Height="48"
+		      Background="{DynamicResource NativeTitleBarBackgroundBrush}">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="Auto" />
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="Auto" />
+			</Grid.ColumnDefinitions>
 
-				<StackPanel Grid.Column="0"
-				            Orientation="Horizontal">
-					<Image Margin="7,6,4,6"
-					       RenderOptions.BitmapScalingMode="HighQuality"
-					       Source="/Resources/RatLogoMedium.png" />
+			<!-- Navigation toggle -->
+			<Button x:Name="NavToggleButton"
+			        Grid.Column="0"
+			        Width="40"
+			        Height="40"
+			        Margin="4,0,0,0"
+			        Click="OnToggleSidebar"
+			        FocusVisualStyle="{StaticResource FocusVisual}"
+			        IsTabStop="True"
+			        Style="{DynamicResource TitleBarButtonStyle}"
+			        WindowChrome.IsHitTestVisibleInChrome="True">
+				<Path x:Name="NavToggleIcon"
+				      Width="16"
+				      Height="16"
+				      Stretch="Uniform"
+				      SnapsToDevicePixels="True"
+				      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
+				      StrokeThickness="1.5" />
+			</Button>
 
-					<TextBlock VerticalAlignment="Center"
-					           FontSize="12"
-					           Text="Rat Scanner">
-						<TextBlock.Style>
-							<Style TargetType="{x:Type TextBlock}">
-								<Style.Triggers>
-									<DataTrigger
-										Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-										Value="True">
-						<Setter Property="Foreground"
-							        Value="{DynamicResource NativeTitleBarForegroundBrush}" />
-									</DataTrigger>
-									<DataTrigger
-										Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
-										Value="False">
-						<Setter Property="Foreground"
-							        Value="{DynamicResource NativeTitleBarInactiveForegroundBrush}" />
-									</DataTrigger>
-								</Style.Triggers>
-							</Style>
-						</TextBlock.Style>
-					</TextBlock>
-				</StackPanel>
+			<!-- App identity -->
+			<StackPanel Grid.Column="1"
+			            Margin="6,0,0,0"
+			            Orientation="Horizontal">
+				<Image Width="20"
+				       Height="20"
+				       Margin="0,0,8,0"
+				       RenderOptions.BitmapScalingMode="HighQuality"
+				       Source="/Resources/RatLogoMedium.png" />
 
-				<StackPanel Grid.Column="1"
-				            Margin="0,0,0,1"
-				            Orientation="Horizontal">
-					<Button Width="46"
-					        Background="{DynamicResource NativeTitleBarBackgroundBrush}"
-					        Click="OnTitleBarMinimize"
-					        Style="{DynamicResource TitleBarButtonStyle}">
-						<Path Data="M 0,0.5 H 10"
-						      SnapsToDevicePixels="True"
-						      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-						      StrokeThickness="1" />
-					</Button>
+				<TextBlock VerticalAlignment="Center"
+				           FontSize="12"
+				           Text="Rat Scanner">
+					<TextBlock.Style>
+						<Style TargetType="{x:Type TextBlock}">
+							<Style.Triggers>
+								<DataTrigger
+									Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
+									Value="True">
+									<Setter Property="Foreground"
+									        Value="{DynamicResource NativeTitleBarForegroundBrush}" />
+								</DataTrigger>
+								<DataTrigger
+									Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
+									Value="False">
+									<Setter Property="Foreground"
+									        Value="{DynamicResource NativeTitleBarInactiveForegroundBrush}" />
+								</DataTrigger>
+							</Style.Triggers>
+						</Style>
+					</TextBlock.Style>
+				</TextBlock>
+			</StackPanel>
 
-					<Button Width="46"
-					        Background="{DynamicResource NativeTitleBarBackgroundBrush}"
-					        Click="OnTitleBarMinimal"
-					        Style="{DynamicResource TitleBarButtonStyle}">
-						<Path Data="M 0.5 3.5 v -3 h 3 m 4 0 h 3 v 3 m 0 4 v 3 h -3 m -4 0 h -3 v -3 M 2.5 3.5 h 6 v 4 h -6 z"
-						      SnapsToDevicePixels="True"
-						      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-						      StrokeThickness="1" />
-					</Button>
+			<!-- Caption buttons -->
+			<StackPanel Grid.Column="3"
+			            Orientation="Horizontal">
+				<Button x:Name="MinimizeButton"
+				        Width="46"
+				        Click="OnTitleBarMinimize"
+				        Style="{DynamicResource TitleBarButtonStyle}"
+				        WindowChrome.IsHitTestVisibleInChrome="True">
+					<Path Width="10"
+					      Height="10"
+					      Stretch="Uniform"
+					      SnapsToDevicePixels="True"
+					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
+					      StrokeThickness="1"
+					      Data="M 4,17 H 20" />
+				</Button>
 
-					<Button Width="46"
-					        Background="{DynamicResource NativeTitleBarBackgroundBrush}"
-					        Click="OnTitleBarClose"
-					        Style="{DynamicResource TitleBarCloseButtonStyle}">
-						<Path Data="M 0,0 10,10 M 0,10 10,0"
-						      SnapsToDevicePixels="True"
-						      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-						      StrokeThickness="1" />
-					</Button>
-				</StackPanel>
-			</Grid>
-		</Border>
+				<Button x:Name="MaximizeRestoreButton"
+				        Width="46"
+				        Click="OnTitleBarMaximizeRestore"
+				        Style="{DynamicResource TitleBarButtonStyle}"
+				        WindowChrome.IsHitTestVisibleInChrome="True">
+					<Path x:Name="MaximizeRestoreIcon"
+					      Width="10"
+					      Height="10"
+					      Stretch="Uniform"
+					      SnapsToDevicePixels="True"
+					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
+					      StrokeThickness="1" />
+				</Button>
+
+				<Button x:Name="CloseButton"
+				        Width="46"
+				        Click="OnTitleBarClose"
+				        Style="{DynamicResource TitleBarCloseButtonStyle}"
+				        WindowChrome.IsHitTestVisibleInChrome="True">
+					<Path Width="10"
+					      Height="10"
+					      Stretch="Uniform"
+					      SnapsToDevicePixels="True"
+					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
+					      StrokeThickness="1"
+					      Data="M 4,4 L 20,20 M 4,20 L 20,4" />
+				</Button>
+			</StackPanel>
+		</Grid>
 
 		<ContentControl x:Name="ContentControl"
 		                Grid.Row="1" />
