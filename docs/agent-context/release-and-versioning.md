@@ -26,7 +26,7 @@ ScanEngine's own `<Version>` is historical engine packaging metadata; product re
 ### Prevention of accidental upstream reuse
 
 - Do not tag or ship `3.x` on this project.
-- Issues that cite only `3.9.x` are almost certainly not this build.
+- Issues that cite only `3.9.x` are almost certainly not from the 4.x line.
 
 ## Local publish
 

@@ -3,11 +3,11 @@
 Maintained by [TarkovTracker.org](https://tarkovtracker.org)
 
 [![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
-[![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/M8nBgA2sT6)
+[![Discord](https://img.shields.io/discord/687549250435153930?label=Discord&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2&style=for-the-badge)](https://discord.gg/aHZf7aP)
 
 ![Rat Scanner logo](media/RatLogo.png)
 
-This is a **modified** community fork. Support: [TarkovTracker Discord](https://discord.gg/M8nBgA2sT6) · [this repo](https://github.com/tarkovtracker-org/RatScanner). Original project attribution is in the [README](README.md#attribution--license).
+Based on RatScanner, originally created by Moritz / Blightbuster. Support: [Discord](https://discord.gg/aHZf7aP) · [TarkovTracker Discord](https://discord.gg/M8nBgA2sT6) · [this repo](https://github.com/tarkovtracker-org/RatScanner). Original project attribution is in the [README](README.md#attribution--license).
 
 ## Table of Contents
 

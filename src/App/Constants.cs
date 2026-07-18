@@ -5,17 +5,20 @@ public static class Constants
     public static class Branding
     {
         public const string Name = "RatScanner";
-        public const string OriginalAuthor = "Moritz / Blightbuster";
     }
 
     public static class Links
     {
-        public const string GitHub = "https://github.com/tarkovtracker-org/RatScanner";
-        public const string OriginalGitHub = "https://github.com/RatScanner/RatScanner";
-        public const string OriginalAuthorGitHub = "https://github.com/Blightbuster";
-        public const string Discord = "https://discord.gg/M8nBgA2sT6";
+        public const string GitHub = "https://github.com/RatScanner/RatScanner";
+        public const string Contributors = "https://github.com/RatScanner/RatScanner/graphs/contributors";
+        public const string License = "https://github.com/RatScanner/RatScanner/blob/master/LICENSE";
+        public const string DysektAI = "https://github.com/DysektAI";
+        public const string Blightbuster = "https://github.com/Blightbuster";
+        public const string Discord = "https://discord.gg/aHZf7aP";
+        public const string TarkovTrackerDiscord = "https://discord.gg/M8nBgA2sT6";
+        public const string OfficialWebsite = "https://ratscanner.com/";
         public const string TarkovDev = "https://tarkov.dev";
-        public const string FAQ = "https://github.com/tarkovtracker-org/RatScanner/blob/master/FAQ.md";
+        public const string FAQ = "https://github.com/RatScanner/RatScanner/blob/master/FAQ.md";
         public const string TarkovTracker = "https://tarkovtracker.org";
         public const string TarkovTrackerIo = "https://tarkovtracker.io";
     }

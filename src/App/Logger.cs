@@ -238,7 +238,7 @@ internal static class Logger
 
     private static void CreateGitHubIssue(string message, Exception? e)
     {
-        // Lead with edition + version so fork vs upstream is obvious in the issue list.
+        // Lead with version so the issue is easy to triage in the issue list.
         string body = "**Build**\n";
         body += RatConfig.FullVersionLabel + "\n";
         body += "Repo: " + Constants.Links.GitHub + "\n\n";

@@ -55,7 +55,7 @@ License: root `LICENSE` (Elastic License 2.0–based). Redistribution must inclu
 - External screenshots only; Borderless/Windowed game mode may be required for overlays.
 - Name/icon scan have known accuracy limits (shared icons, lighting, base item only for weapons, etc.) — see root `README.md` / `FAQ.md`.
 - Cold start should remain usable from offline API cache; maps and optional crafts/barters must not block readiness unnecessarily.
-- User-Agent and product strings identify this build (`RatScanner/…`).
+- User-Agent and product strings identify the product (`RatScanner/…`).
 
 ## Established non-goals
 

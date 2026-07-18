@@ -1,103 +1,102 @@
 .about-page {
-    padding: 8px 12px 16px;
-    max-width: 720px;
+    padding: 8px 16px 16px;
+    max-width: 520px;
     margin: 0 auto;
 }
 
-.about-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 10px;
+/* Visually hidden but accessible to screen readers */
+.about-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
+/* Single compact card with container queries for responsive project rows */
 .about-card {
     background: var(--rs-surface);
     border: 1px solid var(--rs-border);
     border-radius: var(--rs-radius);
-    padding: 14px 14px 12px;
-    margin-bottom: 10px;
+    padding: 16px;
+    container-type: inline-size;
 }
 
-.about-card-attribution {
-    background: var(--rs-surface-2);
-    border-color: var(--rs-border-subtle);
+/* Intro section — identity, description, maintainers grouped together */
+.about-intro {
+    display: grid;
+    gap: 6px;
 }
 
-.about-card-title {
-    margin: 0 0 4px;
+/* Identity — name + version on one line */
+.about-identity {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.about-name {
+    margin: 0;
     color: var(--rs-text);
 }
 
-.about-card-title-dim {
-    color: var(--rs-text-2);
-}
-
-.about-muted {
-    display: block;
+.about-version {
     color: var(--rs-muted);
-    margin: 0 0 6px;
+    white-space: nowrap;
 }
 
-.about-body {
+.about-description {
     color: var(--rs-text-2);
-    margin: 0 0 10px;
+    margin: 0;
     line-height: 1.4;
 }
 
-.about-body-dim {
-    color: var(--rs-muted);
+/* Maintainer credits — tighten gap after description */
+.about-maintainers {
+    color: var(--rs-text-2);
+    margin: -2px 0 0;
+    line-height: 1.4;
 }
 
-.about-modified {
-    display: block;
-    color: var(--rs-muted);
-    margin-top: 8px;
+/* Inline links */
+.about-link {
+    color: var(--rs-info);
+    text-decoration: none;
+    cursor: pointer;
 }
 
-.about-license {
-    display: block;
-    color: var(--rs-muted);
+.about-link:hover {
+    text-decoration: underline;
+}
+
+.about-link:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+    border-radius: 2px;
+    text-decoration: underline;
+}
+
+/* Actions section — buttons */
+.about-actions {
     margin-top: 12px;
-    line-height: 1.35;
 }
 
-/* Responsive equal-ish button grid:
-   - wide: 4 primary links share a row
-   - medium: 2x2
-   - narrow: stack full width */
+/* Primary action buttons — 2-column grid */
 .about-btn-grid {
     display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     width: 100%;
 }
 
-.about-btn-grid-primary {
-    grid-template-columns: 1fr;
-}
-
-.about-btn-grid-secondary {
-    grid-template-columns: 1fr;
-}
-
-.about-btn-grid-single {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 220px;
-}
-
-@media (min-width: 420px) {
-    .about-btn-grid-primary {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .about-btn-grid-secondary {
-        grid-template-columns: 1fr 1fr;
-    }
-}
-
-@media (min-width: 640px) {
-    .about-btn-grid-primary {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+@media (max-width: 380px) {
+    .about-btn-grid {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -106,7 +105,7 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 40px;
+    min-height: 38px;
     width: 100%;
     padding: 8px 12px;
     border-radius: var(--rs-radius-sm);
@@ -115,7 +114,7 @@
     color: var(--rs-text);
     font: inherit;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.2;
     text-align: center;
     white-space: nowrap;
@@ -141,65 +140,95 @@
     font-size: 18px;
 }
 
-/* Primary support actions — clearly button-like fills */
-.about-btn-repo {
-    background: #24292f;
-    border-color: #3d444d;
-    color: #f0f3f6;
+/* Related projects — border-top separator, not a MudDivider */
+.related-projects {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-border);
 }
 
-.about-btn-repo:hover {
-    background: #32383f;
-    border-color: #6e7681;
-    color: #fff;
-}
-
-.about-btn-discord {
-    background: #5865f2;
-    border-color: #6e79f5;
-    color: #fff;
-}
-
-.about-btn-discord:hover {
-    background: #4752c4;
-    border-color: #7983f5;
-    color: #fff;
-}
-
-.about-btn-site {
-    background: var(--rs-purple-surface);
-    border-color: rgba(146, 114, 248, 0.55);
+.related-projects__title {
+    margin: 0 0 10px;
     color: var(--rs-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
 }
 
-.about-btn-site:hover {
-    background: rgba(146, 114, 248, 0.28);
-    border-color: var(--rs-purple);
+.related-projects__list {
+    display: grid;
+    gap: 7px;
 }
 
-.about-btn-faq,
-.about-btn-data {
-    background: rgba(104, 167, 244, 0.12);
-    border-color: rgba(104, 167, 244, 0.45);
+/* Inline project row — name and description on one line, wrap naturally */
+.related-project {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: 5px;
+    line-height: 1.4;
+}
+
+.related-project__name {
+    flex: 0 0 auto;
+    color: var(--rs-info);
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.related-project__name:hover {
+    text-decoration: underline;
+}
+
+.related-project__name:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+    border-radius: 2px;
+    text-decoration: underline;
+}
+
+.related-project__separator {
+    color: var(--rs-muted);
+}
+
+.related-project__desc {
     color: var(--rs-text);
+    font-size: 12px;
+    opacity: 0.75;
 }
 
-.about-btn-faq:hover,
-.about-btn-data:hover {
-    background: rgba(104, 167, 244, 0.22);
-    border-color: var(--rs-info);
+/* Stack name/description at narrow card widths */
+@container (max-width: 390px) {
+    .related-project {
+        display: grid;
+        gap: 2px;
+    }
+
+    .related-project__separator {
+        display: none;
+    }
 }
 
-/* Historical attribution — still clearly clickable, less dominant */
-.about-btn-secondary {
-    background: transparent;
-    border-color: var(--rs-border);
-    color: var(--rs-text-2);
-    font-weight: 500;
+/* License footer — border-top separator, distinct from related projects */
+.about-license {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-border);
 }
 
-.about-btn-secondary:hover {
-    background: var(--rs-surface);
-    border-color: var(--rs-border);
+.about-license__title {
+    margin: 0 0 6px;
     color: var(--rs-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.about-license__details {
+    color: var(--rs-muted);
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
 }
