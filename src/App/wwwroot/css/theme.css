@@ -6,10 +6,11 @@
     --rs-purple: #9272f8; --rs-purple-hover: #a58bfa; --rs-purple-surface: rgba(146,114,248,.15);
     --rs-success: #58d17b; --rs-success-strong: #42bc69; --rs-success-surface: rgba(88,209,123,.10);
     --rs-warning: #e7ad55; --rs-danger: #eb6c73; --rs-info: #68a7f4;
-    --rs-radius-sm: 8px; --rs-radius: 12px; --rs-sidebar-width: 224px;
+    --rs-radius-sm: 8px; --rs-radius: 12px;
+    --rs-sidebar-width: 224px; --rs-sidebar-rail-width: 56px;
     /* Effective sidebar inset for main content. Updated at runtime by JS
-       (RatScanner.setSidebarOpen) to 0 when the sidebar is collapsed or the
-       viewport is narrow, so dialogs center in the actual content area. */
+       (RatScanner.setSidebarState) to the rail width, full width, or 0 so
+       dialogs center in the actual content area. */
     --rs-sidebar-active-width: var(--rs-sidebar-width);
 }
 
@@ -144,7 +145,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
     }
 }
 
-@media (max-width: 759px) {
+@media (max-width: 680px) {
     .dialog-backdrop-light {
         padding-left: 0;
     }

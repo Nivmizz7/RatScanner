@@ -10,9 +10,10 @@
 }
 
 .utility-bar {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto auto;
+    gap: 10px;
     align-items: stretch;
-    gap: 8px;
     min-width: 0;
 }
 
@@ -679,16 +680,11 @@ label {
     }
 }
 
-@media (max-width: 759px) {
+@media (max-width: 680px) {
     .scan-page {
         height: auto;
         min-height: calc(100vh - 56px);
         padding: 12px;
-    }
-
-    /* Status lives in the compact header as a dot; keep search full-width. */
-    .utility-bar > ::deep .scanner-status-root {
-        display: none;
     }
 
     .recent {

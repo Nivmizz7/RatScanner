@@ -1,4 +1,4 @@
-{
+﻿{
   "OpenNavigation": "Открыть навигацию",
   "CloseNavigation": "Закрыть навигацию",
   "PrimaryNavigation": "Основная навигация",
@@ -379,5 +379,9 @@
   "FirNonRequiredLabel": "Non-FIR is OK",
   "ExactDateFormat": "g",
   "Unavailable": "Недоступно",
-  "Unknown": "Неизвестно"
+  "Unknown": "Неизвестно",
+  "MinimizeWindow": "Minimize",
+  "MaximizeWindow": "Maximize",
+  "RestoreWindow": "Restore",
+  "CloseWindow": "Close"
 }

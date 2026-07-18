@@ -1,4 +1,4 @@
-{
+﻿{
   "OpenNavigation": "Ouvrir la navigation",
   "CloseNavigation": "Fermer la navigation",
   "PrimaryNavigation": "Navigation principale",
@@ -379,5 +379,9 @@
   "FirNonRequiredLabel": "Non-FIR is OK",
   "ExactDateFormat": "g",
   "Unavailable": "Indisponible",
-  "Unknown": "Inconnu"
+  "Unknown": "Inconnu",
+  "MinimizeWindow": "Minimize",
+  "MaximizeWindow": "Maximize",
+  "RestoreWindow": "Restore",
+  "CloseWindow": "Close"
 }

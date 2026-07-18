@@ -1,175 +1,107 @@
-.app-shell { min-height: 100%; background: var(--rs-bg); }
+﻿.app-shell {
+	min-height: 100%;
+}
 
 .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 20;
-    width: var(--rs-sidebar-width);
-    padding: 20px 14px 14px;
-    display: flex;
-    flex-direction: column;
-    background: var(--rs-sidebar);
-    border-right: 1px solid var(--rs-border-subtle);
-    transform: translateX(-100%);
-    transition: transform .16s ease;
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 20;
+	width: var(--rs-sidebar-active-width);
+	min-width: 0;
+	padding: 14px 10px 10px;
+	display: flex;
+	flex-direction: column;
+	background: var(--rs-sidebar);
+	border-right: 1px solid var(--rs-border-subtle);
+	transform: translateX(-100%);
+	transition: transform .16s ease, width .16s ease;
 }
 
-.sidebar.open { transform: none; }
-
-.product-identity {
-    display: grid;
-    grid-template-columns: 42px 1fr;
-    column-gap: 10px;
-    margin: 0 6px 24px;
-    align-items: center;
+.sidebar.open,
+.sidebar.rail {
+	transform: none;
 }
 
-.product-identity img {
-    grid-row: 1 / 3;
-    width: 42px;
-    align-self: center;
+.sidebar.overlay {
+	width: var(--rs-sidebar-width);
 }
 
-.product-identity strong { font-size: 18px; }
-.product-identity span { font-size: 12px; color: var(--rs-text-2); }
-
-/* Sidebar header — product identity + collapse control (all widths) */
-.sidebar-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
+.sidebar.rail {
+	padding: 14px 6px 10px;
 }
 
-.sidebar-header .product-identity {
-    flex: 1;
-    min-width: 0;
+nav {
+	display: grid;
+	gap: 6px;
 }
-
-nav { display: grid; gap: 6px; }
 
 nav ::deep a,
 nav a {
-    min-height: 44px;
-    padding: 0 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    border-radius: var(--rs-radius-sm);
-    color: var(--rs-text-2);
-    text-decoration: none;
+	min-height: 44px;
+	padding: 0 12px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border-radius: var(--rs-radius-sm);
+	color: var(--rs-text-2);
+	text-decoration: none;
 }
 
-nav ::deep a.active {
-    color: var(--rs-text);
-    background: var(--rs-purple-surface);
-    box-shadow: inset 3px 0 var(--rs-purple);
+.sidebar.rail nav a {
+	justify-content: center;
+	padding: 0;
+	gap: 0;
+}
+
+.sidebar.rail nav a span {
+	display: none;
 }
 
 nav ::deep a:hover,
 nav a:hover {
-    background: var(--rs-surface-2);
-    color: var(--rs-text);
+	background: var(--rs-surface-2);
+	color: var(--rs-text);
 }
 
-.sidebar-spacer { flex: 1; }
-
-.game-mode {
-    display: grid;
-    gap: 6px;
-    padding: 0 6px 10px;
-    color: var(--rs-muted);
-    font-size: 12px;
-}
-
-.game-mode ::deep .mud-toggle-group {
-    width: 100%;
-}
-
-.game-mode ::deep .mud-toggle-item {
-    flex: 1;
-}
-
-.game-mode ::deep .tracker-attention {
-    color: var(--rs-warning);
-    font-size: 11px;
-    line-height: 1.35;
-    text-decoration: none;
-}
-
-.game-mode ::deep .tracker-attention:hover {
-    text-decoration: underline;
-}
-
-/* Shared icon-button base for sidebar collapse + floating expand controls. */
-.icon-button {
-    flex: none;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--rs-text);
-}
-
-.icon-button:hover {
-    background: var(--rs-surface-2);
-}
-
-.icon-button:focus-visible {
-    outline: 2px solid var(--rs-purple);
-    outline-offset: 2px;
-}
-
-/* Collapse button lives in the sidebar header at all widths. */
-.sidebar-close {
-    margin-top: -4px;
-}
-
-/* Floating expand button — top-left of main content, shown only when collapsed. */
-.sidebar-expand {
-    position: fixed;
-    top: 8px;
-    left: 8px;
-    z-index: 15;
-    background: var(--rs-surface-2);
-}
-
-.sidebar-expand:hover {
-    background: var(--rs-surface);
+nav ::deep a.active {
+	color: var(--rs-text);
+	background: var(--rs-purple-surface);
+	box-shadow: inset 3px 0 var(--rs-purple);
 }
 
 .main-content {
-    margin-left: 0;
-    height: 100vh;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-    transition: margin-left .16s ease;
+	margin-left: 0;
+	height: 100vh;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	transition: margin-left .16s ease;
 }
 
-/* Docked sidebar at full width reserves space for the sidebar. */
 .main-content.sidebar-docked {
-    margin-left: var(--rs-sidebar-width);
+	margin-left: var(--rs-sidebar-active-width);
 }
 
-.scrim { display: none; }
+.scrim {
+	display: none;
+}
 
-@media (max-width: 759px) {
-    /* Overlay drawer: scrim blocks main while the sidebar is open on narrow viewports. */
-    .scrim {
-        display: block;
-        position: fixed;
-        inset: 0;
-        z-index: 10;
-        border: 0;
-        background: rgba(0, 0, 0, .62);
-    }
+@media (max-width: 680px) {
+	.scrim {
+		display: block;
+		position: fixed;
+		inset: 0;
+		z-index: 10;
+		border: 0;
+		background: rgba(0, 0, 0, .62);
+	}
 
-    /* Sidebar never reserves layout space on narrow viewports; it overlays. */
-    .main-content,
-    .main-content.sidebar-docked {
-        margin-left: 0;
-    }
+	.main-content,
+	.main-content.sidebar-docked {
+		margin-left: 0;
+	}
+
+	.main-content[aria-hidden="true"] {
+		pointer-events: none;
+		user-select: none;
+	}
 }

@@ -163,3 +163,16 @@
         animation: none;
     }
 }
+
+@media (max-width: 680px) {
+    .scanner-status-control.expanded {
+        min-width: 32px;
+        width: 32px;
+        padding: 0;
+        border-radius: 50%;
+    }
+
+    .scanner-status-control.expanded .scanner-status-label {
+        display: none;
+    }
+}

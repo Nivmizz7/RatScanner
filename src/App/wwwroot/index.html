@@ -33,35 +33,77 @@
 
 		// Sidebar viewport tracking + dialog-offset sync.
 		// Toggles `rs-narrow` on <html> and keeps --rs-sidebar-active-width in
-		// step with the sidebar's open/closed state so MudBlazor dialogs center
+		// step with the sidebar's open/closed/rail state so MudBlazor dialogs center
 		// in the actual main content pane (see theme.css).
 		window.RatScanner = window.RatScanner || {};
 		(function () {
 			const root = document.documentElement;
-			const mq = matchMedia("(max-width: 759px)");
+			const mq = matchMedia("(max-width: 680px)");
 			let sidebarOpen = !mq.matches;
 			let narrowRef = null;
+
 			const render = () => {
 				root.classList.toggle("rs-narrow", mq.matches);
-				const active = sidebarOpen && !mq.matches;
-				root.style.setProperty(
-					"--rs-sidebar-active-width",
-					active ? "var(--rs-sidebar-width)" : "0px"
-				);
+				let activeWidth;
+				if (mq.matches) {
+					activeWidth = "0px";
+				} else {
+					activeWidth = sidebarOpen
+						? "var(--rs-sidebar-width)"
+						: "var(--rs-sidebar-rail-width)";
+				}
+				root.style.setProperty("--rs-sidebar-active-width", activeWidth);
 			};
+
 			mq.addEventListener("change", () => {
 				render();
 				if (narrowRef) {
 					narrowRef.invokeMethodAsync("OnViewportNarrow", mq.matches);
 				}
 			});
+
 			window.RatScanner.isNarrow = () => mq.matches;
-			window.RatScanner.setSidebarOpen = (open) => {
+			window.RatScanner.setSidebarState = (open, narrow) => {
 				sidebarOpen = !!open;
 				render();
 			};
 			window.RatScanner.registerViewportRef = (ref) => { narrowRef = ref; };
 			window.RatScanner.disposeViewportRef = () => { narrowRef = null; };
+
+			// Trap focus inside the open overlay drawer and close it on Escape.
+			document.addEventListener("keydown", (e) => {
+				const sidebar = document.getElementById("primary-sidebar");
+				if (!sidebar || !sidebar.classList.contains("overlay") || !sidebar.classList.contains("open"))
+					return;
+
+				if (e.key === "Escape") {
+					e.preventDefault();
+					if (narrowRef) {
+						narrowRef.invokeMethodAsync("CloseDrawerFromJs");
+					}
+					return;
+				}
+
+				if (e.key !== "Tab")
+					return;
+
+				const focusable = Array.from(sidebar.querySelectorAll(
+					"a, button, input, select, textarea, [tabindex]:not([tabindex='-1'])"
+				)).filter(el => el.offsetParent !== null);
+				if (focusable.length === 0)
+					return;
+
+				const first = focusable[0];
+				const last = focusable[focusable.length - 1];
+				if (e.shiftKey && document.activeElement === first) {
+					e.preventDefault();
+					last.focus();
+				} else if (!e.shiftKey && document.activeElement === last) {
+					e.preventDefault();
+					first.focus();
+				}
+			});
+
 			render();
 		})();
 	</script>

@@ -40,6 +40,7 @@
 			        Width="40"
 			        Height="40"
 			        Margin="4,0,0,0"
+			        VerticalAlignment="Center"
 			        Click="OnToggleSidebar"
 			        FocusVisualStyle="{StaticResource FocusVisual}"
 			        IsTabStop="True"

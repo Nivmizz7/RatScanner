@@ -1,4 +1,4 @@
-{
+﻿{
   "OpenNavigation": "Open navigation",
   "CloseNavigation": "Close navigation",
   "PrimaryNavigation": "Primary navigation",
@@ -379,5 +379,9 @@
   "FirRequiredLabel": "Must be found in raid",
   "FirNonRequiredLabel": "Non-FIR is OK",
   "ExactDateFormat": "g",
-  "Unknown": "Unknown"
+  "Unknown": "Unknown",
+  "MinimizeWindow": "Minimize",
+  "MaximizeWindow": "Maximize",
+  "RestoreWindow": "Restore",
+  "CloseWindow": "Close"
 }

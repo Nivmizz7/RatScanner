@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -60,6 +61,7 @@ public partial class PageSwitcher : Window
             _appStateService.SidebarOpenChanged += OnSidebarOpenChanged;
             _appStateService.FocusNavigationToggleRequested += OnFocusNavigationToggleRequested;
             UpdateNavigationToggle(_appStateService.SidebarOpen);
+            UpdateCaptionButtonAccessibility();
 
             AddJumpList();
             AddTrayIcon();
@@ -346,7 +348,9 @@ public partial class PageSwitcher : Window
             return;
 
         string tooltipKey = open ? "CloseNavigation" : "OpenNavigation";
-        NavToggleButton.ToolTip = Presentation.PresentationText.T(tooltipKey, tooltipKey);
+        string tooltip = Presentation.PresentationText.T(tooltipKey, tooltipKey);
+        NavToggleButton.ToolTip = tooltip;
+        AutomationProperties.SetName(NavToggleButton, tooltip);
         NavToggleIcon.Data = open ? GetPanelLeftCloseGeometry() : GetPanelLeftOpenGeometry();
     }
 
@@ -383,7 +387,35 @@ public partial class PageSwitcher : Window
         const string maximizePath = "M 3,3 H 21 V 21 H 3 Z";
         const string restorePath = "M 4,10 H 18 V 20 H 4 Z M 8,4 H 20 V 14 H 18 V 6 H 8 Z";
 
-        MaximizeRestoreIcon.Data = Geometry.Parse(WindowState == WindowState.Maximized ? restorePath : maximizePath);
+        bool isMaximized = WindowState == WindowState.Maximized;
+        MaximizeRestoreIcon.Data = Geometry.Parse(isMaximized ? restorePath : maximizePath);
+
+        if (MaximizeRestoreButton != null)
+        {
+            string key = isMaximized ? "RestoreWindow" : "MaximizeWindow";
+            string text = Presentation.PresentationText.T(key, isMaximized ? "Restore" : "Maximize");
+            MaximizeRestoreButton.ToolTip = text;
+            AutomationProperties.SetName(MaximizeRestoreButton, text);
+        }
+    }
+
+    private void UpdateCaptionButtonAccessibility()
+    {
+        if (MinimizeButton != null)
+        {
+            string text = Presentation.PresentationText.T("MinimizeWindow", "Minimize");
+            MinimizeButton.ToolTip = text;
+            AutomationProperties.SetName(MinimizeButton, text);
+        }
+
+        if (CloseButton != null)
+        {
+            string text = Presentation.PresentationText.T("CloseWindow", "Close");
+            CloseButton.ToolTip = text;
+            AutomationProperties.SetName(CloseButton, text);
+        }
+
+        UpdateMaximizeRestoreIcon();
     }
 
     internal void CollapseTitleBar()

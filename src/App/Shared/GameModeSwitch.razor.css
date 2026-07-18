@@ -1,0 +1,19 @@
+﻿.game-mode-switch {
+	display: flex;
+	align-items: center;
+	height: 100%;
+}
+
+.game-mode-narrow {
+	display: none;
+}
+
+@media (max-width: 680px) {
+	.game-mode-desktop {
+		display: none;
+	}
+
+	.game-mode-narrow {
+		display: flex;
+	}
+}

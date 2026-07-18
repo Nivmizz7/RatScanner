@@ -1,256 +1,189 @@
-@using System.Collections.Generic
-@using GameMode = RatScanner.TarkovDev.GameMode
-@inherits LayoutComponentBase
+﻿@inherits LayoutComponentBase
 @layout MainLayout
-@inject MenuVM MenuVM
 @inject LocalizationService Localizer
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject AppStateService AppState
 @implements IDisposable
 
 <div class="app-shell">
-    <aside id="primary-sidebar"
-           @ref="_sidebar"
-           class="sidebar @(_sidebarOpen ? "open" : "closed")"
-           @onkeydown="HandleKey"
-           tabindex="-1">
-        <div class="sidebar-header">
-            <div class="product-identity">
-                <img src="RatLogoMedium.png" alt="" />
-                <strong>@Constants.Branding.Name</strong>
-                <span>@MenuVM.VersionDisplay</span>
-            </div>
-            <button class="icon-button sidebar-close"
-                    aria-label="@Localizer["CloseNavigation"]"
-                    aria-controls="primary-sidebar"
-                    aria-expanded="@_sidebarOpen"
-                    @onclick="CloseDrawerAsync">
-                <MudIcon Icon="@Icons.Material.Filled.ChevronLeft" />
-            </button>
-        </div>
-        <nav aria-label="@Localizer["PrimaryNavigation"]">
-            <NavLink href="/app" Match="NavLinkMatch.All" @onclick="CloseDrawerAfterNavAsync">
-                <MudIcon Icon="@Icons.Material.Filled.DocumentScanner" /> <span>@Localizer["ScanNav"]</span>
-            </NavLink>
-            <NavLink href="/app/history" @onclick="CloseDrawerAfterNavAsync">
-                <MudIcon Icon="@Icons.Material.Filled.History" /> <span>@Localizer["HistoryNav"]</span>
-            </NavLink>
-            <NavLink href="/app/settings/general" @onclick="CloseDrawerAfterNavAsync">
-                <MudIcon Icon="@Icons.Material.Filled.Settings" /> <span>@Localizer["SettingsNavGroup"]</span>
-            </NavLink>
-            <NavLink href="/app/credits" @onclick="CloseDrawerAfterNavAsync">
-                <MudIcon Icon="@Icons.Material.Filled.Info" /> <span>@Localizer["CreditsNav"]</span>
-            </NavLink>
-        </nav>
-        <div class="sidebar-spacer"></div>
-        <section class="game-mode" aria-label="@Localizer["GameMode"]">
-            <span>@Localizer["GameMode"]</span>
-            <MudToggleGroup T="GameMode"
-                            Value="@RatConfig.GameMode"
-                            ValueChanged="SetGameModeAsync"
-                            Disabled="_changingGameMode"
-                            Size="Size.Small"
-                            Color="Color.Primary"
-                            CheckMark="true"
-                            FixedContent="true">
-                <MudToggleItem T="GameMode" Value="GameMode.Regular" Text="@Localizer["PvpMode"]" />
-                <MudToggleItem T="GameMode" Value="GameMode.Pve" Text="@Localizer["PveMode"]" />
-            </MudToggleGroup>
-            @if (TrackerNeedsAttention)
-            {
-                <NavLink href="/app/settings/tracking" class="tracker-attention" @onclick="CloseDrawerAfterNavAsync">
-                    @TrackerAttentionMessage
-                </NavLink>
-            }
-        </section>
-    </aside>
-    @if (_sidebarOpen && _isNarrow)
-    {
-        <button class="scrim" aria-label="@Localizer["CloseNavigation"]" @onclick="CloseDrawerAsync"></button>
-    }
-    @if (!_sidebarOpen)
-    {
-        <button class="icon-button sidebar-expand"
-                @ref="_toggleButton"
-                aria-label="@Localizer["OpenNavigation"]"
-                aria-controls="primary-sidebar"
-                aria-expanded="@_sidebarOpen"
-                @onclick="OpenDrawerAsync">
-            <MudIcon Icon="@Icons.Material.Filled.Menu" />
-        </button>
-    }
-    @* inert + aria-hidden keep Tab out of main content while the mobile drawer is open.
-       At full width the sidebar is docked (not modal), so main stays interactive. *@
-    <main class="main-content @(_sidebarOpen && !_isNarrow ? "sidebar-docked" : null)"
-          aria-hidden="@(_sidebarOpen && _isNarrow ? "true" : null)"
-          @attributes="_mainAttributes">@Body</main>
+	<aside id="primary-sidebar"
+	       @ref="_sidebar"
+	       class="sidebar @SidebarClasses"
+	       @onkeydown="HandleKey"
+	       tabindex="-1"
+	       aria-label="@Localizer["PrimaryNavigation"]">
+		<nav aria-label="@Localizer["PrimaryNavigation"]">
+			<NavLink href="/app"
+			         Match="NavLinkMatch.All"
+			         @onclick="CloseDrawerAfterNavAsync"
+			         title="@Localizer["ScanNav"]">
+				<MudIcon Icon="@Icons.Material.Filled.DocumentScanner" />
+				<span>@Localizer["ScanNav"]</span>
+			</NavLink>
+
+			<NavLink href="/app/history"
+			         @onclick="CloseDrawerAfterNavAsync"
+			         title="@Localizer["HistoryNav"]">
+				<MudIcon Icon="@Icons.Material.Filled.History" />
+				<span>@Localizer["HistoryNav"]</span>
+			</NavLink>
+
+			<NavLink href="/app/settings/general"
+			         @onclick="CloseDrawerAfterNavAsync"
+			         title="@Localizer["SettingsNavGroup"]">
+				<MudIcon Icon="@Icons.Material.Filled.Settings" />
+				<span>@Localizer["SettingsNavGroup"]</span>
+			</NavLink>
+
+			<NavLink href="/app/credits"
+			         @onclick="CloseDrawerAfterNavAsync"
+			         title="@Localizer["CreditsNav"]">
+				<MudIcon Icon="@Icons.Material.Filled.Info" />
+				<span>@Localizer["CreditsNav"]</span>
+			</NavLink>
+		</nav>
+	</aside>
+
+	@if (_isNarrow && _sidebarOpen)
+	{
+		<button class="scrim"
+		        type="button"
+		        aria-label="@Localizer["CloseNavigation"]"
+		        @onclick="CloseDrawerAsync"></button>
+	}
+
+	<main class="main-content @(_isNarrow ? null : "sidebar-docked")"
+	      aria-hidden="@(_isNarrow && _sidebarOpen ? "true" : null)"
+	      @attributes="_mainAttributes">
+		@Body
+	</main>
 </div>
 
 @code {
-    private bool _sidebarOpen = true;
-    private bool _isNarrow;
-    private bool _changingGameMode;
-    private bool _subscribed;
-    private bool _viewportRefRegistered;
-    private ElementReference _sidebar;
-    private ElementReference _toggleButton;
-    private DotNetObjectReference<AppLayout>? _dotNetRef;
+	private ElementReference _sidebar;
+	private DotNetObjectReference<AppLayout>? _dotNetRef;
+	private bool _sidebarOpen = true;
+	private bool _isNarrow;
+	private Dictionary<string, object> _mainAttributes = new() { ["tabindex"] = "-1" };
 
-    private bool TrackerNeedsAttention =>
-        RatScannerMain.Instance.TarkovTrackerDB.ConnectionState
-            is TrackerConnectionState.NotConfigured
-                or TrackerConnectionState.InvalidKey
-                or TrackerConnectionState.MissingPermissions
-                or TrackerConnectionState.ConnectionError;
+	private string SidebarClasses =>
+		(_isNarrow, _sidebarOpen) switch
+		{
+			(true, true) => "open overlay",
+			(true, false) => "overlay",
+			(false, true) => "open",
+			(false, false) => "rail",
+		};
 
-    private string TrackerAttentionMessage =>
-        RatConfig.GameMode == GameMode.Pve
-            ? Localizer["TrackerNotConnectedPve"]
-            : Localizer["TrackerNotConnectedPvp"];
+	protected override void OnInitialized()
+	{
+		Navigation.LocationChanged += OnLocationChanged;
+		AppState.SidebarOpenChanged += OnSidebarOpenChanged;
+		base.OnInitialized();
+	}
 
-    private Dictionary<string, object> _mainAttributes =>
-        _sidebarOpen && _isNarrow
-            ? new Dictionary<string, object> { ["inert"] = true }
-            : new Dictionary<string, object>();
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+			return;
 
-    protected override void OnInitialized()
-    {
-        Navigation.LocationChanged += OnLocationChanged;
-        _subscribed = true;
-    }
+		_dotNetRef = DotNetObjectReference.Create(this);
+		await JS.InvokeVoidAsync("RatScanner.registerViewportRef", _dotNetRef);
+		_isNarrow = await JS.InvokeAsync<bool>("RatScanner.isNarrow");
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender)
-            return;
+		_sidebarOpen = !_isNarrow;
+		AppState.SetSidebarOpen(_sidebarOpen);
+		await SyncSidebarStateAsync();
+		StateHasChanged();
+	}
 
-        _dotNetRef = DotNetObjectReference.Create(this);
-        try
-        {
-            await JS.InvokeVoidAsync("RatScanner.registerViewportRef", _dotNetRef);
-            _viewportRefRegistered = true;
-            _isNarrow = await JS.InvokeAsync<bool>("RatScanner.isNarrow");
-            _sidebarOpen = !_isNarrow;
-            await SyncSidebarStateAsync();
-            await InvokeAsync(StateHasChanged);
-        }
-        catch (JSDisconnectedException)
-        {
-            // WebView may tear down interop during shutdown; safe to ignore.
-        }
-    }
+	[JSInvokable]
+	public void OnViewportNarrow(bool isNarrow)
+	{
+		if (_isNarrow == isNarrow)
+			return;
 
-    private async Task OpenDrawerAsync()
-    {
-        _sidebarOpen = true;
-        await SyncSidebarStateAsync();
-        await InvokeAsync(StateHasChanged);
-        await Task.Yield();
-        try
-        {
-            await _sidebar.FocusAsync();
-        }
-        catch
-        {
-            // Focus is best-effort; keep drawer open even if the element is not focusable yet.
-        }
-    }
+		_isNarrow = isNarrow;
+		_ = SyncSidebarStateAsync();
+		StateHasChanged();
+	}
 
-    private Task CloseDrawerAsync()
-    {
-        if (!_sidebarOpen)
-            return Task.CompletedTask;
-        _sidebarOpen = false;
-        return CloseDrawerInternalAsync();
-    }
+	[JSInvokable]
+	public void CloseDrawerFromJs()
+	{
+		if (_isNarrow && _sidebarOpen)
+			_ = CloseDrawerAsync();
+	}
 
-    private async Task CloseDrawerInternalAsync()
-    {
-        await SyncSidebarStateAsync();
-        await InvokeAsync(StateHasChanged);
-        try
-        {
-            await _toggleButton.FocusAsync();
-        }
-        catch
-        {
-            // Same best-effort policy as open.
-        }
-    }
+	private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+	{
+		if (_isNarrow && _sidebarOpen)
+			_ = CloseDrawerAsync();
+	}
 
-    private Task CloseDrawerAfterNavAsync() => _isNarrow ? CloseDrawerAsync() : Task.CompletedTask;
+	private async Task CloseDrawerAfterNavAsync()
+	{
+		if (_isNarrow && _sidebarOpen)
+			await CloseDrawerAsync();
+	}
 
-    private async Task SyncSidebarStateAsync()
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("RatScanner.setSidebarOpen", _sidebarOpen);
-        }
-        catch (JSDisconnectedException)
-        {
-            // Interop may be unavailable during shutdown; CSS fallback keeps the layout sane.
-        }
-    }
+	private async Task CloseDrawerAsync()
+	{
+		_sidebarOpen = false;
+		AppState.SetSidebarOpen(false);
+		await SyncSidebarStateAsync();
+		StateHasChanged();
+		AppState.RequestFocusNavigationToggle();
+	}
 
-    /// <summary>Called from JS when the viewport crosses the 760px breakpoint.</summary>
-    [JSInvokable]
-    public async Task OnViewportNarrow(bool isNarrow)
-    {
-        _isNarrow = isNarrow;
-        await InvokeAsync(StateHasChanged);
-    }
+	private async Task OpenDrawerAsync()
+	{
+		_sidebarOpen = true;
+		AppState.SetSidebarOpen(true);
+		await SyncSidebarStateAsync();
+		StateHasChanged();
+		await _sidebar.FocusAsync();
+	}
 
-    private async Task SetGameModeAsync(GameMode gameMode)
-    {
-        if (_changingGameMode || gameMode == RatConfig.GameMode)
-            return;
+	private async Task HandleKey(KeyboardEventArgs e)
+	{
+		if (e.Key == "Escape" && _isNarrow && _sidebarOpen)
+			await CloseDrawerAsync();
+	}
 
-        _changingGameMode = true;
-        try
-        {
-            await RatConfig.SetGameModeAsync(gameMode);
-        }
-        catch (Exception exception)
-        {
-            Logger.LogWarning("Unable to switch game mode.", exception);
-            Snackbar.Add(Localizer["GameModeSwitchFailed"], Severity.Error);
-        }
-        finally
-        {
-            _changingGameMode = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
+	private async Task SyncSidebarStateAsync()
+	{
+		try
+		{
+			await JS.InvokeVoidAsync("RatScanner.setSidebarState", _sidebarOpen, _isNarrow);
+		}
+		catch (JSDisconnectedException)
+		{
+			// The Blazor circuit can disconnect during app shutdown.
+		}
+	}
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        if (!_isNarrow || !_sidebarOpen)
-            return;
-        _ = InvokeAsync(CloseDrawerAsync);
-    }
+	private async void OnSidebarOpenChanged(object? sender, bool open)
+	{
+		await InvokeAsync(async () =>
+		{
+			if (_sidebarOpen == open)
+				return;
 
-    private void HandleKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-            _ = CloseDrawerAsync();
-    }
+			_sidebarOpen = open;
+			await SyncSidebarStateAsync();
+			StateHasChanged();
 
-    public void Dispose()
-    {
-        if (_subscribed)
-            Navigation.LocationChanged -= OnLocationChanged;
-        if (_viewportRefRegistered)
-        {
-            try
-            {
-                _ = JS.InvokeVoidAsync("RatScanner.disposeViewportRef");
-            }
-            catch (JSDisconnectedException)
-            {
-                // WebView already torn down.
-            }
-        }
-        _dotNetRef?.Dispose();
-    }
+			if (_sidebarOpen && _isNarrow)
+				await _sidebar.FocusAsync();
+		});
+	}
+
+	public void Dispose()
+	{
+		AppState.SidebarOpenChanged -= OnSidebarOpenChanged;
+		Navigation.LocationChanged -= OnLocationChanged;
+		_dotNetRef?.Dispose();
+	}
 }

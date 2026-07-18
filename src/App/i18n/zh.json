@@ -1,4 +1,4 @@
-{
+﻿{
   "OpenNavigation": "打开导航",
   "CloseNavigation": "关闭导航",
   "PrimaryNavigation": "主导航",
@@ -379,5 +379,9 @@
   "FirNonRequiredLabel": "Non-FIR is OK",
   "ExactDateFormat": "g",
   "Unavailable": "不可用",
-  "Unknown": "未知"
+  "Unknown": "未知",
+  "MinimizeWindow": "Minimize",
+  "MaximizeWindow": "Maximize",
+  "RestoreWindow": "Restore",
+  "CloseWindow": "Close"
 }
