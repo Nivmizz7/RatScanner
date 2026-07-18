@@ -99,3 +99,53 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .search .mud-input-control > .mud-input-control-helper-container {
     display: none;
 }
+
+/* Lighter dialog backdrop — subdues the page without hiding it.
+   Offset centering by the sidebar width so the dialog centers within
+   the main content pane, not the full native window. */
+.dialog-backdrop-light {
+    background-color: rgba(0, 0, 0, 0.35) !important;
+    padding-left: var(--rs-sidebar-width);
+    box-sizing: border-box;
+}
+
+/* Dialog container: offset by sidebar so the dialog centers in the main
+   content pane. Height-aware: top-align when viewport is short, center
+   otherwise. Internal scrolling on the dialog content, not the page. */
+.mud-dialog-container.mud-dialog-center {
+    padding-left: var(--rs-sidebar-width);
+    box-sizing: border-box;
+}
+
+.mud-dialog-container .mud-dialog {
+    max-height: calc(100dvh - 32px);
+    display: flex;
+    flex-direction: column;
+}
+
+.mud-dialog-container .mud-dialog .mud-dialog-content {
+    min-height: 0;
+    overflow-y: auto;
+    flex: 1 1 auto;
+}
+
+.mud-dialog-container .mud-dialog .mud-dialog-actions {
+    flex: 0 0 auto;
+}
+
+@media (max-height: 650px) {
+    .mud-dialog-container.mud-dialog-center {
+        align-items: flex-start;
+        padding-top: 16px;
+    }
+}
+
+@media (max-width: 759px) {
+    .dialog-backdrop-light {
+        padding-left: 0;
+    }
+
+    .mud-dialog-container.mud-dialog-center {
+        padding-left: 0;
+    }
+}

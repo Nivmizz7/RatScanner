@@ -1,72 +1,162 @@
 @page "/app/settings/tracking"
-@using System.Diagnostics
 @using System.Threading
+@using RatScanner.Components
 @using GameMode = RatScanner.TarkovDev.GameMode
+@using PvpSource = RatScanner.TarkovDev.PvpSource
 @inject SettingsVM SettingsVM
 @inject LocalizationService Localizer
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
-<div class="settings-page">
-    <div class="settings-column">
-        <section class="settings-section">
-            <header class="section-heading">
-                <div>
-                    <h2>@Localizer["TrackingDisplaySection"]</h2>
-                    <p>@Localizer["TrackingDisplayDescription"]</p>
-                </div>
-            </header>
-            <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowNonFIRNeeds"
-                                    ValueChanged="@(_ => StateHasChanged())"
-                                    Label="@Localizer["ShowNonFirNeeds"]"
-                                    Persist="SettingsVM.SetShowNonFirNeedsAsync" />
-            <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowKappaNeeds"
-                                    ValueChanged="@(_ => StateHasChanged())"
-                                    Label="@Localizer["ShowKappaNeeds"]"
-                                    Persist="SettingsVM.SetShowKappaNeedsAsync" />
-            <ImmediateSettingSwitch Value="@RatConfig.Tracking.TarkovTracker.ShowTeam"
-                                    ValueChanged="@(_ => StateHasChanged())"
-                                    Label="@Localizer["ShowTeammates"]"
-                                    Persist="SettingsVM.SetShowTarkovTrackerTeamAsync" />
-            <p class="section-description">@Localizer["TeamPermissionDescription"]</p>
-        </section>
+<div class="settings-page tracking-settings">
+    <section class="settings-section">
+        <header class="section-heading">
+            <div>
+                <h2>@Localizer["TrackingDisplaySection"]</h2>
+                <p>@Localizer["TrackingDisplayDescription"]</p>
+            </div>
+        </header>
+        <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowNonFIRNeeds"
+                                ValueChanged="@(_ => StateHasChanged())"
+                                Label="@Localizer["ShowNonFirNeeds"]"
+                                Persist="SettingsVM.SetShowNonFirNeedsAsync" />
+        <ImmediateSettingSwitch Value="@RatConfig.Tracking.ShowKappaNeeds"
+                                ValueChanged="@(_ => StateHasChanged())"
+                                Label="@Localizer["ShowKappaNeeds"]"
+                                Persist="SettingsVM.SetShowKappaNeedsAsync" />
+        <ImmediateSettingSwitch Value="@RatConfig.Tracking.TarkovTracker.ShowTeam"
+                                ValueChanged="@(_ => StateHasChanged())"
+                                Label="@Localizer["ShowTeammates"]"
+                                Persist="SettingsVM.SetShowTarkovTrackerTeamAsync" />
+        <p class="section-description">@Localizer["TeamPermissionDescription"]</p>
+    </section>
 
-        <section class="settings-section">
-            <header class="section-heading">
-                <div>
-                    <h2>TarkovTracker.org</h2>
-                    <p>@Localizer["TarkovTrackerOrgDescription"]</p>
-                </div>
-                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew" OnClick="OpenTarkovTrackerOrg">
-                    @Localizer["ManageApiKeys"]
-                </MudButton>
-            </header>
-            <div class="credential-grid">
-                @foreach (GameMode mode in Modes)
-                {
-                    <article class="credential-card">
-                        <div class="credential-heading">
-                            <div>
-                                <h3>@ModeLabel(mode)</h3>
-                                <p>@ModeDescription(mode)</p>
-                            </div>
-                            <span class="@StatusClass(GetOrgState(mode))">@StatusLabel(GetOrgState(mode))</span>
-                        </div>
+    <section class="settings-section">
+        <header class="section-heading">
+            <div>
+                <h2>@Localizer["TarkovTrackerSection"]</h2>
+                <p>@Localizer["TarkovTrackerIntro"]</p>
+            </div>
+        </header>
 
-                        @if (HasOrgKey(mode) && !_orgReplacement[mode])
+        @foreach (GameMode mode in Modes)
+        {
+            <div class="tracker-mode">
+                <div class="tracker-mode-heading">
+                    <div class="tracker-mode-title">
+                        <h3>@ModeLabel(mode)</h3>
+                        @if (IsModeConfigured(mode))
                         {
-                            <div class="configured-secret" aria-label="@Localizer["ConfiguredApiKey"]">••••••••••••••••</div>
-                            <div class="credential-actions">
-                                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="@(() => BeginOrgReplacement(mode))">
-                                    @Localizer["ReplaceKey"]
-                                </MudButton>
-                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="@(() => RemoveOrgKeyAsync(mode))">
-                                    @Localizer["RemoveKey"]
-                                </MudButton>
-                            </div>
+                            <p class="tracker-mode-source">@ModeSourceLabel(mode)</p>
                         }
-                        else
+                        else if (mode == GameMode.Pve)
                         {
+                            <p class="tracker-mode-hint">@Localizer["PveRequiresOrg"]</p>
+                        }
+                    </div>
+                    <span class="@StatusClass(GetCredentialState(mode)) tracker-mode-status">@StatusLabel(GetCredentialState(mode))</span>
+                    @if (IsModeConfigured(mode))
+                    {
+                        <MudTooltip Text="@Localizer.Format("ManageConnection", ModeLabel(mode))" Placement="Placement.Bottom" RootClass="tracker-overflow-tooltip">
+                            <ChildContent>
+                                <MudMenu AriaLabel="@Localizer["TrackerOverflowMenu"]"
+                                         Open="@(_menuOpen[mode])"
+                                         OpenChanged="@(v => _menuOpen[mode] = v)"
+                                         Variant="Variant.Text"
+                                         Size="Size.Small"
+                                         Color="Color.Default"
+                                         Icon="@Icons.Material.Filled.MoreVert"
+                                         Class="tracker-overflow">
+                                    <ChildContent>
+                                        <MudMenuItem OnClick="@(() => HandleMenuActionAsync(mode, "change"))" Icon="@Icons.Material.Filled.SwapHoriz">
+                                            @Localizer["ChangeConnection"]
+                                        </MudMenuItem>
+                                        <MudMenuItem OnClick="@(() => HandleMenuActionAsync(mode, "disconnect"))" Icon="@Icons.Material.Filled.LinkOff" IconColor="Color.Error">
+                                            @Localizer["Disconnect"]
+                                        </MudMenuItem>
+                                    </ChildContent>
+                                </MudMenu>
+                            </ChildContent>
+                        </MudTooltip>
+                    }
+                </div>
+
+                @if (!IsModeConfigured(mode))
+                {
+                    @if (mode == GameMode.Regular)
+                    {
+                        <p class="source-label">@Localizer["ConnectionSource"]</p>
+                        <MudRadioGroup T="PvpSource"
+                                       Value="@_pvpDraftSource"
+                                       ValueChanged="OnPvpDraftSourceChanged"
+                                       Class="source-cards">
+                            <div class="@(_pvpDraftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")">
+                                <MudRadio T="PvpSource" Value="PvpSource.Org" />
+                                <div class="source-card-body">
+                                    <div class="source-card-title">
+                                        @Localizer["SourceOrg"]
+                                        <span class="source-badge source-badge-recommended">@Localizer["SourceOrgRecommended"]</span>
+                                    </div>
+                                    <div class="source-card-detail">@Localizer["SourceOrgSupports"]</div>
+                                </div>
+                            </div>
+                            <div class="@(_pvpDraftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")">
+                                <MudRadio T="PvpSource" Value="PvpSource.Io" />
+                                <div class="source-card-body">
+                                    <div class="source-card-title">
+                                        @Localizer["SourceIo"]
+                                        <span class="source-badge source-badge-legacy">@Localizer["SourceIoPvpOnly"]</span>
+                                    </div>
+                                    <div class="source-card-detail">@Localizer["SourceIoSupports"]</div>
+                                </div>
+                            </div>
+                        </MudRadioGroup>
+                        <p class="source-shared-note">@Localizer["SourceSharedNote"]</p>
+                    }
+
+                    @if (IsEditingIoCredential(mode))
+                    {
+                        <div class="token-row">
+                            <MudTextField T="string"
+                                          @bind-Value="_ioDraft"
+                                          Label="@Localizer["ApiToken"]"
+                                          InputType="@(_ioVisible ? InputType.Text : InputType.Password)"
+                                          Variant="Variant.Outlined"
+                                          Margin="Margin.Dense"
+                                          FullWidth="true"
+                                          Disabled="_ioTesting"
+                                          Adornment="Adornment.End"
+                                          AdornmentIcon="@(_ioVisible ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                          AdornmentAriaLabel="@(_ioVisible ? Localizer["HideApiKey"] : Localizer["ShowApiKey"])"
+                                          OnAdornmentClick="@(() => _ioVisible = !_ioVisible)"
+                                          OnKeyDown="HandleIoKeyDownAsync" />
+                            <div class="credential-actions">
+                                <MudButton Variant="Variant.Filled"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           Disabled="@(!CanConnect(mode))"
+                                           OnClick="ConnectIoAsync">
+                                    @if (_ioTesting)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    }
+                                    @(_ioTesting ? Localizer["Connecting"] : Localizer["Connect"])
+                                </MudButton>
+                            </div>
+                        </div>
+                        @if (_ioError is not null)
+                        {
+                            <p class="inline-error" role="alert">@_ioError</p>
+                        }
+                        <MudLink Href="@Constants.Links.TarkovTrackerIo" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
+                            @Localizer["ManageApiKey"]
+                        </MudLink>
+                    }
+                    else
+                    {
+                        <div class="token-row">
                             <MudTextField T="string"
                                           Value="@_orgDraft[mode]"
                                           ValueChanged="@(value => _orgDraft[mode] = value ?? "")"
@@ -85,100 +175,33 @@
                                 <MudButton Variant="Variant.Filled"
                                            Color="Color.Primary"
                                            Size="Size.Small"
-                                           Disabled="@(_orgTesting[mode] || string.IsNullOrWhiteSpace(_orgDraft[mode]))"
-                                           OnClick="@(() => TestOrgKeyAsync(mode))">
+                                           Disabled="@(!CanConnect(mode))"
+                                           OnClick="@(() => ConnectOrgAsync(mode))">
                                     @if (_orgTesting[mode])
                                     {
                                         <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                                     }
-                                    @Localizer["TestKey"]
+                                    @(_orgTesting[mode] ? Localizer["Connecting"] : Localizer["Connect"])
                                 </MudButton>
-                                @if (HasOrgKey(mode))
-                                {
-                                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => AbortOrgReplacement(mode))">
-                                        @Localizer["CancelButton"]
-                                    </MudButton>
-                                }
                             </div>
-                        }
-
+                        </div>
                         @if (_orgError[mode] is not null)
                         {
                             <p class="inline-error" role="alert">@_orgError[mode]</p>
                         }
-                    </article>
+                        <MudLink Href="@Constants.Links.TarkovTracker" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
+                            @Localizer["ManageApiKey"]
+                        </MudLink>
+                    }
                 }
             </div>
-        </section>
-    </div>
 
-    <aside class="settings-column">
-        <section class="settings-section">
-            <header class="section-heading">
-                <div>
-                    <h2>TarkovTracker.io</h2>
-                    <p>@Localizer["TarkovTrackerIoDescription"]</p>
-                </div>
-            </header>
-            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                @Localizer["TarkovTrackerIoPvpOnly"]
-            </MudAlert>
-            @if (RatConfig.GameMode == GameMode.Pve)
+            @if (mode == GameMode.Regular)
             {
-                <p class="inline-info">@Localizer["TarkovTrackerIoInactivePve"]</p>
+                <hr class="tracker-divider" />
             }
-
-            @if (HasIoKey && !_ioReplacement)
-            {
-                <div class="configured-secret mt-3">••••••••••••••••</div>
-                <div class="credential-actions">
-                    <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="BeginIoReplacement">@Localizer["ReplaceKey"]</MudButton>
-                    <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Error" OnClick="RemoveIoKeyAsync">@Localizer["RemoveKey"]</MudButton>
-                </div>
-            }
-            else
-            {
-                <MudTextField T="string"
-                              @bind-Value="_ioDraft"
-                              Label="@Localizer["ApiToken"]"
-                              InputType="@(_ioVisible ? InputType.Text : InputType.Password)"
-                              Variant="Variant.Outlined"
-                              Margin="Margin.Dense"
-                              FullWidth="true"
-                              Disabled="_ioTesting"
-                              Adornment="Adornment.End"
-                              AdornmentIcon="@(_ioVisible ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
-                              AdornmentAriaLabel="@(_ioVisible ? Localizer["HideApiKey"] : Localizer["ShowApiKey"])"
-                              OnAdornmentClick="@(() => _ioVisible = !_ioVisible)"
-                              OnKeyDown="HandleIoKeyDownAsync"
-                              Class="mt-3" />
-                <div class="credential-actions">
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="@(_ioTesting || string.IsNullOrWhiteSpace(_ioDraft))" OnClick="TestIoKeyAsync">
-                        @if (_ioTesting)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        }
-                        @Localizer["TestKey"]
-                    </MudButton>
-                    @if (HasIoKey)
-                    {
-                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="AbortIoReplacement">@Localizer["CancelButton"]</MudButton>
-                    }
-                </div>
-            }
-            @if (_ioError is not null)
-            {
-                <p class="inline-error" role="alert">@_ioError</p>
-            }
-        </section>
-
-        <section class="settings-section">
-            <header class="section-heading"><div><h2>@Localizer["ActiveTrackingContext"]</h2></div></header>
-            <MudAlert Severity="@ActiveContextSeverity" Variant="Variant.Outlined" Dense="true">
-                @ActiveContextMessage
-            </MudAlert>
-        </section>
-    </aside>
+        }
+    </section>
 </div>
 
 @code {
@@ -187,19 +210,29 @@
     private readonly Dictionary<GameMode, string?> _orgError = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
     private readonly Dictionary<GameMode, bool> _orgTesting = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
     private readonly Dictionary<GameMode, bool> _orgVisible = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
-    private readonly Dictionary<GameMode, bool> _orgReplacement = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
     private readonly Dictionary<GameMode, TrackerConnectionState> _orgState = new()
     {
         [GameMode.Regular] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
         [GameMode.Pve] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PveToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
     };
     private readonly Dictionary<GameMode, CancellationTokenSource?> _orgValidation = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
-    private bool _ioReplacement;
     private bool _ioVisible;
     private bool _ioTesting;
     private string _ioDraft = "";
     private string? _ioError;
     private CancellationTokenSource? _ioValidation;
+    private TrackerConnectionState _ioState =
+        string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken)
+            ? TrackerConnectionState.NotConfigured
+            : TrackerConnectionState.Untested;
+
+    // Draft provider selection for the disconnected PvP inline form. Only
+    // persisted after the candidate token validates successfully.
+    private PvpSource _pvpDraftSource = RatConfig.Tracking.TarkovTracker.PvpSource;
+
+    // Overflow menu open state per mode. Bound to MudMenu.Open so the menu
+    // can be programmatically closed before opening a dialog.
+    private readonly Dictionary<GameMode, bool> _menuOpen = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
 
     private bool HasIoKey => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken);
 
@@ -207,7 +240,12 @@
     {
         GameMode mode = RatConfig.GameMode;
         TarkovTrackerDB database = RatScannerMain.Instance.TarkovTrackerDB;
-        if (
+        if (mode == GameMode.Regular && IsIoCredential(mode))
+        {
+            if (HasIoKey && string.Equals(database.Token, RatConfig.Tracking.TarkovTracker.IoToken, StringComparison.Ordinal))
+                _ioState = database.ConnectionState;
+        }
+        else if (
             HasOrgKey(mode)
             && string.Equals(
                 database.Token,
@@ -220,31 +258,50 @@
         }
     }
 
-    private Severity ActiveContextSeverity => RatScannerMain.Instance.TarkovTrackerDB.ConnectionState switch
-    {
-        TrackerConnectionState.Connected => Severity.Success,
-        TrackerConnectionState.InvalidKey => Severity.Error,
-        TrackerConnectionState.MissingPermissions => Severity.Warning,
-        TrackerConnectionState.ConnectionError => Severity.Warning,
-        _ => Severity.Info,
-    };
+    private static bool HasActivePvpToken =>
+        RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io
+            ? !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken)
+            : !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken);
 
-    private string ActiveContextMessage
+    private static bool HasOrgKey(GameMode mode) => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.TokenForMode(mode));
+
+    // The PvP credential driving the active connection is Io when the persisted
+    // source is Io; PvE is always org.
+    private static bool IsIoCredential(GameMode mode) =>
+        mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io;
+
+    // Inside the disconnected PvP inline form the visible token input follows
+    // the draft source, not the persisted one.
+    private bool IsEditingIoCredential(GameMode mode) =>
+        mode == GameMode.Regular && _pvpDraftSource == PvpSource.Io;
+
+    private bool IsModeConfigured(GameMode mode) => mode == GameMode.Regular ? HasActivePvpToken : HasOrgKey(GameMode.Pve);
+
+    private bool IsTesting(GameMode mode) =>
+        IsEditingIoCredential(mode) ? _ioTesting : _orgTesting[mode];
+
+    private bool CanConnect(GameMode mode)
     {
-        get
-        {
-            if (RatConfig.GameMode == GameMode.Pve && !HasOrgKey(GameMode.Pve))
-                return Localizer["TrackerNotConnectedPve"];
-            if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular) && !HasIoKey)
-                return Localizer["TrackerNotConnectedPvp"];
-            return Localizer.Format("TrackerActiveMode", ModeLabel(RatConfig.GameMode));
-        }
+        if (IsTesting(mode))
+            return false;
+        return IsEditingIoCredential(mode)
+            ? !string.IsNullOrWhiteSpace(_ioDraft)
+            : !string.IsNullOrWhiteSpace(_orgDraft[mode]);
     }
 
-    private bool HasOrgKey(GameMode mode) => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.TokenForMode(mode));
-    private TrackerConnectionState GetOrgState(GameMode mode) => _orgState[mode];
+    private TrackerConnectionState GetCredentialState(GameMode mode)
+    {
+        if (IsIoCredential(mode))
+            return _ioState;
+        return _orgState[mode];
+    }
+
     private string ModeLabel(GameMode mode) => mode == GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"];
-    private string ModeDescription(GameMode mode) => mode == GameMode.Pve ? Localizer["PveKeyDescription"] : Localizer["PvpKeyDescription"];
+
+    private string ModeSourceLabel(GameMode mode) =>
+        mode == GameMode.Pve || RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Org
+            ? Localizer["SourceOrg"]
+            : Localizer["SourceIo"];
 
     private string StatusLabel(TrackerConnectionState state) => state switch
     {
@@ -266,40 +323,20 @@
         _ => "credential-status status-info",
     };
 
-    private void BeginOrgReplacement(GameMode mode)
+    private void OnPvpDraftSourceChanged(PvpSource source)
     {
-        _orgReplacement[mode] = true;
-        _orgDraft[mode] = "";
-        _orgError[mode] = null;
-    }
-
-    private void CancelOrgReplacement(GameMode mode)
-    {
-        _orgReplacement[mode] = false;
-        _orgDraft[mode] = "";
-        _orgVisible[mode] = false;
-        _orgError[mode] = null;
-    }
-
-    // User-facing cancel: also aborts an in-flight validation so a completed
-    // request cannot persist the candidate key after the user backed out.
-    // The success path must keep calling CancelOrgReplacement directly —
-    // it reuses the same token for ActivateTrackerModeAsync afterwards.
-    private void AbortOrgReplacement(GameMode mode)
-    {
-        _orgValidation[mode]?.Cancel();
-        CancelOrgReplacement(mode);
+        _pvpDraftSource = source;
+        _orgError[GameMode.Regular] = null;
+        _ioError = null;
     }
 
     private async Task HandleOrgKeyDownAsync(GameMode mode, KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
-            await TestOrgKeyAsync(mode);
-        else if (args.Key == "Escape" && HasOrgKey(mode))
-            AbortOrgReplacement(mode);
+            await ConnectOrgAsync(mode);
     }
 
-    private async Task TestOrgKeyAsync(GameMode mode)
+    private async Task ConnectOrgAsync(GameMode mode)
     {
         string candidate = _orgDraft[mode].Trim();
         if (string.IsNullOrWhiteSpace(candidate) || _orgTesting[mode])
@@ -316,8 +353,6 @@
         try
         {
             TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(mode, candidate, cancellation.Token);
-            // The user may have aborted while the request was in flight; never
-            // persist a canceled candidate even when validation succeeded.
             cancellation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
@@ -337,10 +372,31 @@
                 _orgState[mode] = HasOrgKey(mode) ? TrackerConnectionState.Connected : TrackerConnectionState.NotConfigured;
                 return;
             }
-            _orgState[mode] = TrackerConnectionState.Connected;
-            CancelOrgReplacement(mode);
-            if (RatConfig.GameMode == mode)
+            if (mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource != PvpSource.Org)
+            {
+                SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Org);
+                if (!sourceResult.Succeeded)
+                {
+                    // Roll back the token so config stays consistent with the
+                    // unchanged source. Fail closed: leave error visible, do
+                    // not mark Connected, let the finally block recover state.
+                    _ = await SettingsVM.SetTarkovTrackerOrgTokenAsync(mode, previousToken);
+                    _orgError[mode] = Localizer["CredentialSaveFailed"];
+                    return;
+                }
+            }
+            if (RatConfig.GameMode == mode && !IsIoCredential(mode))
+            {
                 await RatScannerMain.Instance.ActivateTrackerModeAsync(mode, cancellation.Token);
+                _orgState[mode] = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+            }
+            else
+            {
+                _orgState[mode] = TrackerConnectionState.Connected;
+            }
+            _orgDraft[mode] = "";
+            _orgVisible[mode] = false;
+            _orgError[mode] = null;
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         finally
@@ -366,42 +422,17 @@
         }
 
         _orgState[mode] = TrackerConnectionState.NotConfigured;
-        CancelOrgReplacement(mode);
-        if (RatConfig.GameMode == mode)
+        if (RatConfig.GameMode == mode && !IsIoCredential(mode))
             await RatScannerMain.Instance.ActivateTrackerModeAsync(mode);
-    }
-
-    private void BeginIoReplacement()
-    {
-        _ioReplacement = true;
-        _ioDraft = "";
-        _ioError = null;
-    }
-
-    private void CancelIoReplacement()
-    {
-        _ioReplacement = false;
-        _ioDraft = "";
-        _ioVisible = false;
-        _ioError = null;
-    }
-
-    // See AbortOrgReplacement: user cancel also aborts the in-flight validation.
-    private void AbortIoReplacement()
-    {
-        _ioValidation?.Cancel();
-        CancelIoReplacement();
     }
 
     private async Task HandleIoKeyDownAsync(KeyboardEventArgs args)
     {
         if (args.Key == "Enter")
-            await TestIoKeyAsync();
-        else if (args.Key == "Escape" && HasIoKey)
-            AbortIoReplacement();
+            await ConnectIoAsync();
     }
 
-    private async Task TestIoKeyAsync()
+    private async Task ConnectIoAsync()
     {
         string candidate = _ioDraft.Trim();
         if (string.IsNullOrWhiteSpace(candidate) || _ioTesting)
@@ -413,15 +444,15 @@
         _ioValidation = validation;
         string previousToken = RatConfig.Tracking.TarkovTracker.IoToken;
         _ioTesting = true;
+        _ioState = TrackerConnectionState.Testing;
         _ioError = null;
         try
         {
             TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, validation.Token);
-            // The user may have aborted while the request was in flight; never
-            // persist a canceled candidate even when validation succeeded.
             validation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
+                _ioState = StateFor(result);
                 _ioError = ValidationMessage(result, GameMode.Regular);
                 return;
             }
@@ -434,17 +465,42 @@
             if (!saved.Succeeded)
             {
                 _ioError = Localizer["CredentialSaveFailed"];
+                _ioState = HasIoKey ? TrackerConnectionState.Connected : TrackerConnectionState.NotConfigured;
                 return;
             }
-            CancelIoReplacement();
-            if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
+            if (RatConfig.Tracking.TarkovTracker.PvpSource != PvpSource.Io)
+            {
+                SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Io);
+                if (!sourceResult.Succeeded)
+                {
+                    // Roll back the token so config stays consistent with the
+                    // unchanged source. Fail closed: leave error visible, do
+                    // not mark Connected, let the finally block recover state.
+                    _ = await SettingsVM.SetTarkovTrackerIoTokenAsync(previousToken);
+                    _ioError = Localizer["CredentialSaveFailed"];
+                    return;
+                }
+            }
+            if (RatConfig.GameMode == GameMode.Regular && IsIoCredential(GameMode.Regular))
+            {
                 await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, validation.Token);
+                _ioState = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+            }
+            else
+            {
+                _ioState = TrackerConnectionState.Connected;
+            }
+            _ioDraft = "";
+            _ioVisible = false;
+            _ioError = null;
         }
         catch (OperationCanceledException) when (validation.IsCancellationRequested) { }
         finally
         {
             if (_ioValidation == validation)
             {
+                if (_ioState == TrackerConnectionState.Testing)
+                    _ioState = HasIoKey ? TrackerConnectionState.Untested : TrackerConnectionState.NotConfigured;
                 _ioTesting = false;
                 _ioValidation = null;
                 validation.Dispose();
@@ -461,9 +517,134 @@
             return;
         }
 
-        CancelIoReplacement();
-        if (RatConfig.GameMode == GameMode.Regular && !HasOrgKey(GameMode.Regular))
+        // Normalize the PvP source: if an org PvP token exists, switch to it
+        // so the UI and runtime agree. Without this, PvpSource stays Io while
+        // the runtime silently falls back to org — IsModeConfigured would show
+        // disconnected while tracking keeps working via the org fallback.
+        if (!string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken))
+        {
+            SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Org);
+            if (!sourceResult.Succeeded)
+            {
+                Snackbar.Add(Localizer["CredentialSaveFailed"], Severity.Error);
+                return;
+            }
+        }
+
+        _ioState = TrackerConnectionState.NotConfigured;
+        if (RatConfig.GameMode == GameMode.Regular)
+        {
             await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular);
+            // After activation, sync the state for whatever source is now active.
+            if (IsIoCredential(GameMode.Regular))
+                _ioState = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+            else
+                _orgState[GameMode.Regular] = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+        }
+    }
+
+    // Disconnect the credential currently driving the mode (io for PvP when
+    // selected, org otherwise). PvE is always org. A confirmation dialog
+    // protects against accidental removal.
+    private async Task DisconnectWithConfirmAsync(GameMode mode)
+    {
+        DialogParameters<DisconnectConfirmDialog> disconnectParams = new()
+        {
+            { x => x.ModeLabel, ModeLabel(mode) }
+        };
+        DialogOptions disconnectOptions = new() { MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
+        IDialogReference disconnectDialog = await DialogService.ShowAsync<DisconnectConfirmDialog>(
+            Localizer.Format("DisconnectConfirmTitle", ModeLabel(mode)),
+            disconnectParams,
+            disconnectOptions
+        );
+        DialogResult? disconnectResult = await disconnectDialog.Result;
+        if (disconnectResult is null || disconnectResult.Canceled)
+            return;
+        if (mode == GameMode.Regular && IsIoCredential(mode))
+            await RemoveIoKeyAsync();
+        else
+            await RemoveOrgKeyAsync(mode);
+    }
+
+    // Close the overflow menu before opening a dialog so the menu does not
+    // remain visible behind the modal backdrop.
+    private async Task HandleMenuActionAsync(GameMode mode, string action)
+    {
+        _menuOpen[mode] = false;
+        await Task.Yield(); // let Blazor re-render with the menu closed
+        if (action == "change")
+            await OpenChangeConnectionDialogAsync(mode);
+        else
+            await DisconnectWithConfirmAsync(mode);
+    }
+
+    // Open the change-connection dialog for a configured mode. The dialog
+    // encapsulates the full replace workflow (provider selection, token entry,
+    // validation, persistence). Closing it leaves the current connection
+    // untouched. Background scrolling is locked while the dialog is open so
+    // mouse-wheel input over the backdrop cannot move the settings page.
+    private async Task OpenChangeConnectionDialogAsync(GameMode mode)
+    {
+        bool showProvider = mode == GameMode.Regular;
+        PvpSource currentSource = RatConfig.Tracking.TarkovTracker.PvpSource;
+        string manageLabel = Localizer["ManageApiKey"];
+
+        DialogParameters<ChangeConnectionDialog> changeParams = new()
+        {
+            { x => x.Mode, mode },
+            { x => x.ModeLabel, ModeLabel(mode) },
+            { x => x.CurrentSource, currentSource },
+            { x => x.ShowProviderChoice, showProvider },
+            { x => x.ManageKeyLabel, manageLabel },
+        };
+        DialogOptions changeOptions = new()
+        {
+            MaxWidth = MaxWidth.Small,
+            CloseButton = true,
+            BackgroundClass = "dialog-backdrop-light",
+        };
+        await JSRuntime.InvokeVoidAsync(
+            "eval",
+            "var el=document.querySelector('.main-content');if(el){el.style.overflow='hidden';}"
+        );
+        DialogResult? changeResult;
+        try
+        {
+            IDialogReference changeDialog = await DialogService.ShowAsync<ChangeConnectionDialog>(
+                Localizer.Format("ChangeConnectionTitle", ModeLabel(mode)),
+                changeParams,
+                changeOptions
+            );
+            changeResult = await changeDialog.Result;
+        }
+        finally
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync(
+                    "eval",
+                    "var el=document.querySelector('.main-content');if(el){el.style.overflow='';}"
+                );
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Unable to restore page scroll after the change-connection dialog.", ex);
+            }
+        }
+        if (changeResult is not null && !changeResult.Canceled)
+        {
+            // The dialog activates only when the credential drives the active
+            // game mode. For active modes, read post-activation DB state; for
+            // inactive modes, successful validation is sufficient for Connected.
+            TrackerConnectionState postState = RatConfig.GameMode == mode
+                ? RatScannerMain.Instance.TarkovTrackerDB.ConnectionState
+                : TrackerConnectionState.Connected;
+            if (mode == GameMode.Regular && IsIoCredential(mode))
+                _ioState = postState;
+            else
+                _orgState[mode] = postState;
+        }
     }
 
     private TrackerConnectionState StateFor(TrackerValidationResult result) => result.Failure switch
@@ -485,11 +666,6 @@
         TrackerValidationFailure.Network => Localizer["CredentialNetworkError"],
         _ => Localizer["CredentialUnexpectedResponse"],
     };
-
-    private static void OpenTarkovTrackerOrg()
-    {
-        Process.Start(new ProcessStartInfo { FileName = Constants.Links.TarkovTracker, UseShellExecute = true });
-    }
 
     public void Dispose()
     {

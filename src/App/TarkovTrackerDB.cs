@@ -196,24 +196,71 @@ public class TarkovTrackerDB : IDisposable
         Configuration configuration = GetConfiguration(cancellationToken);
         try
         {
+            return await InitCoreAsync(configuration).ConfigureAwait(false);
+        }
+        finally
+        {
+            configuration.OwnedCancellation?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Steady-state periodic refresh. Skips the redundant <c>/token</c>
+    /// re-validation when the key was already validated and only fetches
+    /// <c>/progress</c> (or <c>/team/progress</c>). Falls back to a full
+    /// <see cref="InitAsync"/> flow when the token was never validated or was
+    /// invalidated since the last refresh, so the connection state always
+    /// reflects the current truth.
+    /// </summary>
+    internal async Task<bool> RefreshProgressAsync(CancellationToken cancellationToken = default)
+    {
+        Configuration configuration = GetConfiguration(cancellationToken);
+        try
+        {
             if (string.IsNullOrWhiteSpace(configuration.Token))
             {
                 ClearRuntimeState(configuration);
                 return false;
             }
 
-            TrackerValidationResult validation = await ValidateConfiguredTokenAsync(configuration)
-                .ConfigureAwait(false);
-            if (!validation.Succeeded)
-                return !IsCurrent(configuration);
+            bool hasValidatedToken;
+            lock (_stateLock)
+                hasValidatedToken = _token is not null && IsCurrentLocked(configuration);
 
-            await UpdateProgressionAsync(configuration).ConfigureAwait(false);
-            return true;
+            if (hasValidatedToken)
+            {
+                // Token already validated: skip /token and only fetch progress.
+                // UpdateProgressionAsync handles auth failures by clearing
+                // _token and flipping state to InvalidKey, so the next refresh
+                // falls through to the full init below.
+                await UpdateProgressionAsync(configuration).ConfigureAwait(false);
+                return true;
+            }
+
+            // Token was never validated or was invalidated since the last
+            // refresh — do a full init so the connection state is corrected.
+            return await InitCoreAsync(configuration).ConfigureAwait(false);
         }
         finally
         {
             configuration.OwnedCancellation?.Dispose();
         }
+    }
+
+    private async Task<bool> InitCoreAsync(Configuration configuration)
+    {
+        if (string.IsNullOrWhiteSpace(configuration.Token))
+        {
+            ClearRuntimeState(configuration);
+            return false;
+        }
+
+        TrackerValidationResult validation = await ValidateConfiguredTokenAsync(configuration).ConfigureAwait(false);
+        if (!validation.Succeeded)
+            return !IsCurrent(configuration);
+
+        await UpdateProgressionAsync(configuration).ConfigureAwait(false);
+        return true;
     }
 
     internal Task<TrackerValidationResult> ValidateCandidateAsync(

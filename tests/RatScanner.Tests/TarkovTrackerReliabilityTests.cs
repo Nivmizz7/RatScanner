@@ -298,6 +298,154 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 }
 
+public class TarkovTrackerRefreshProgressTests
+{
+    private const string PvpTokenResponse = """
+        {"token":"PVP_abc","permissions":["GP"],"gameMode":"pvp"}
+        """;
+
+    private const string PvpProgressResponse = """
+        {
+          "data": {
+            "userId": "pvp-self",
+            "displayName": "PvP",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          },
+          "meta": {"self":"pvp-self","gameMode":"pvp"}
+        }
+        """;
+
+    private const string PvpProgressResponseUpdated = """
+        {
+          "data": {
+            "userId": "pvp-self",
+            "displayName": "PvP-Updated",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          },
+          "meta": {"self":"pvp-self","gameMode":"pvp"}
+        }
+        """;
+
+    [Fact]
+    public async Task Steady_state_refresh_skips_token_endpoint_and_only_fetches_progress()
+    {
+        int tokenCallCount = 0;
+        int progressCallCount = 0;
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+            {
+                if (url.EndsWith("/token", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref tokenCallCount);
+                    return Task.FromResult(PvpTokenResponse);
+                }
+                Interlocked.Increment(ref progressCallCount);
+                return Task.FromResult(progressCallCount == 1 ? PvpProgressResponse : PvpProgressResponseUpdated);
+            }
+        );
+
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, tokenCallCount);
+        Assert.Equal(1, progressCallCount);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+
+        // Steady-state refresh should NOT call /token again.
+        Assert.True(await database.RefreshProgressAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, tokenCallCount);
+        Assert.Equal(2, progressCallCount);
+        Assert.Equal("PvP-Updated", Assert.Single(database.Progress).DisplayName);
+    }
+
+    [Fact]
+    public async Task Refresh_falls_back_to_full_init_when_token_was_never_validated()
+    {
+        int tokenCallCount = 0;
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+            {
+                if (url.EndsWith("/token", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref tokenCallCount);
+                    return Task.FromResult(PvpTokenResponse);
+                }
+                return Task.FromResult(PvpProgressResponse);
+            }
+        );
+
+        // Configure but never call InitAsync — _token stays null.
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.Equal(TrackerConnectionState.Untested, database.ConnectionState);
+
+        // RefreshProgressAsync should detect the unvalidated token and do a full init.
+        Assert.True(await database.RefreshProgressAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(1, tokenCallCount);
+        Assert.Equal(TrackerConnectionState.Connected, database.ConnectionState);
+        Assert.Equal("pvp-self", database.Self);
+    }
+
+    [Fact]
+    public async Task Refresh_falls_back_to_full_init_after_progress_rejects_the_key()
+    {
+        int tokenCallCount = 0;
+        bool rejectProgress = false;
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+            {
+                if (url.EndsWith("/token", StringComparison.Ordinal))
+                {
+                    Interlocked.Increment(ref tokenCallCount);
+                    return Task.FromResult(PvpTokenResponse);
+                }
+                if (rejectProgress)
+                    throw new UnauthorizedTokenException();
+                return Task.FromResult(PvpProgressResponse);
+            }
+        );
+
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(TrackerConnectionState.Connected, database.ConnectionState);
+
+        // First refresh: progress rejects the key → _token cleared, state → InvalidKey.
+        rejectProgress = true;
+        Assert.True(await database.RefreshProgressAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(TrackerConnectionState.InvalidKey, database.ConnectionState);
+        // /token was called once during InitAsync; the rejected refresh did NOT call /token.
+        Assert.Equal(1, tokenCallCount);
+
+        // Second refresh: _token is null → falls back to full init → /token called again.
+        rejectProgress = false;
+        Assert.True(await database.RefreshProgressAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(2, tokenCallCount);
+        Assert.Equal(TrackerConnectionState.Connected, database.ConnectionState);
+    }
+
+    [Fact]
+    public async Task Refresh_with_no_configured_token_clears_state_and_makes_no_calls()
+    {
+        int callCount = 0;
+        using TarkovTrackerDB database = new(
+            (_, _, _) =>
+            {
+                Interlocked.Increment(ref callCount);
+                return Task.FromResult(PvpTokenResponse);
+            }
+        );
+
+        database.Configure("", "https://api.example", GameMode.Regular);
+        Assert.False(await database.RefreshProgressAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, callCount);
+        Assert.Equal(TrackerConnectionState.NotConfigured, database.ConnectionState);
+    }
+}
+
 public class TarkovTrackerResponseContractTests
 {
     [Fact]

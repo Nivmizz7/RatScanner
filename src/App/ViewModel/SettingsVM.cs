@@ -344,6 +344,15 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             token => RatConfig.Tracking.TarkovTracker.IoToken = token
         );
 
+    internal Task<SettingSaveResult> SetTarkovTrackerPvpSourceAsync(PvpSource value) =>
+        SaveAsync(
+            "TarkovTracker.PvpSource",
+            "PvP tracker source",
+            value,
+            () => RatConfig.Tracking.TarkovTracker.PvpSource,
+            source => RatConfig.Tracking.TarkovTracker.PvpSource = source
+        );
+
     internal Task<SettingSaveResult> SetShowTarkovTrackerTeamAsync(bool value) =>
         SaveAsync(
             nameof(RatConfig.Tracking.TarkovTracker.ShowTeam),

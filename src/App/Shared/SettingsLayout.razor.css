@@ -1,7 +1,8 @@
 .settings-shell {
     container-type: inline-size;
-    width: min(100%, 1150px);
-    margin: 0 auto;
+    width: min(calc(100% - 64px), 1040px);
+    margin-left: clamp(48px, 5vw, 88px);
+    margin-right: auto;
     padding: 24px clamp(16px, 3vw, 32px) 48px;
 }
 
@@ -50,6 +51,14 @@
     grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
     gap: 16px;
     align-items: start;
+}
+
+/* Tracking page: two independent cards side by side, TarkovTracker wider. */
+.settings-content ::deep .tracking-settings {
+    grid-template-columns:
+        minmax(360px, 0.9fr)
+        minmax(480px, 1.1fr);
+    gap: 20px;
 }
 
 .settings-content ::deep .settings-column,
@@ -156,7 +165,7 @@
     }
 
     .settings-content ::deep .settings-section {
-        padding: 14px;
+        padding: 16px;
     }
 
     .settings-content ::deep .section-heading,

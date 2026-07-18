@@ -1,74 +1,258 @@
-.credential-grid {
+/* Mode header: title | status | overflow menu.
+   The 3-column grid keeps the overflow on the same row at all widths —
+   the title shrinks via minmax(0, 1fr), status and overflow are auto-sized. */
+.tracker-mode-heading {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
 }
 
-.credential-card {
+.tracker-mode-title {
     min-width: 0;
-    padding: 16px;
-    border: 1px solid var(--rs-border);
-    border-radius: var(--rs-radius-sm);
-    background: var(--rs-surface-2);
 }
 
-.credential-heading {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
-}
-
-.credential-heading h3 {
+.tracker-mode-title h3 {
     margin: 0;
     color: var(--rs-text);
     font-size: 0.95rem;
 }
 
-.credential-heading p {
-    margin: 4px 0 0;
+.tracker-mode-source {
+    margin: 2px 0 0;
     color: var(--rs-text-2);
     font-size: 0.75rem;
     line-height: 1.4;
 }
 
-.credential-status {
+.tracker-mode-hint {
+    margin: 2px 0 0;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.tracker-mode-status {
     flex: 0 0 auto;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: right;
+}
+
+.tracker-mode {
+    padding: 16px 0;
+    container-type: inline-size;
+}
+
+.tracker-mode:first-of-type {
+    padding-top: 8px;
+}
+
+.tracker-divider {
+    margin: 0;
+    border: 0;
+    border-top: 1px solid var(--rs-border-subtle);
+}
+
+.credential-status {
     font-size: 0.75rem;
     font-weight: 700;
 }
 
-.configured-secret {
-    padding: 10px 12px;
-    border: 1px solid var(--rs-border);
-    border-radius: var(--rs-radius-sm);
-    color: var(--rs-text-2);
-    background: var(--rs-bg);
-    font-family: Consolas, monospace;
-    letter-spacing: 0.08em;
+/* Token input + primary action share a row on wider cards,
+   stack vertically on narrow cards. */
+.token-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: start;
+}
+
+.token-row .credential-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 0;
 }
 
 .credential-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
-@container (max-width: 799px) {
-    .credential-grid {
-        grid-template-columns: minmax(0, 1fr);
-    }
+/* Overflow menu: visible 32x32 hover target with focus ring.
+   The tooltip wrapper is the grid item — constrain it so it doesn't
+   expand and push the layout. ::deep targets the MudTooltip root which
+   receives RootClass, avoiding !important against library display styles. */
+::deep .tracker-overflow-tooltip {
+    display: inline-flex;
+    width: fit-content;
 }
 
-@container (max-width: 679px) {
-    .credential-heading,
-    .credential-actions {
-        align-items: stretch;
-        flex-direction: column;
+.tracker-overflow {
+    margin-left: 2px;
+}
+
+.tracker-overflow ::deep .mud-button-root {
+    min-width: 32px;
+    min-height: 32px;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--rs-radius-sm);
+    color: var(--rs-text-2);
+    transition: background 0.15s, color 0.15s;
+}
+
+.tracker-overflow ::deep .mud-button-root:hover {
+    background: var(--rs-surface-2);
+    color: var(--rs-text);
+}
+
+.tracker-overflow ::deep .mud-button-root:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 1px;
+}
+
+.tracker-overflow ::deep .mud-icon-root {
+    font-size: 1.25rem;
+}
+
+/* API-key helper link: muted, purple on hover. */
+.tracker-manage-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    text-transform: none;
+    color: var(--rs-text-2);
+    transition: color 0.15s;
+}
+
+.tracker-manage-link:hover,
+.tracker-manage-link:focus {
+    color: var(--rs-purple);
+}
+
+/* Provider selection: compact selectable cards. */
+.source-label {
+    margin: 0 0 6px;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.source-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.source-cards ::deep .mud-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.source-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    background: var(--rs-surface-2);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.source-card:hover {
+    border-color: var(--rs-text-2);
+}
+
+.source-card-selected {
+    border-color: var(--rs-purple);
+    background: var(--rs-purple-surface);
+}
+
+.source-card ::deep .mud-radio {
+    margin: 0;
+    padding: 0;
+}
+
+.source-card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.source-card-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--rs-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+
+.source-card-detail {
+    color: var(--rs-text);
+    opacity: 0.72;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+/* Shared note beneath both provider choices. */
+.source-shared-note {
+    margin: 0 0 12px;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.source-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: none;
+}
+
+.source-badge-recommended {
+    color: var(--rs-success);
+    background: color-mix(in srgb, var(--rs-success) 16%, transparent);
+}
+
+.source-badge-legacy {
+    color: var(--rs-text-2);
+    background: var(--rs-surface);
+}
+
+/* Sentence-case buttons — MudBlazor defaults to uppercase. */
+.tracking-settings ::deep .mud-button-label {
+    text-transform: none;
+}
+
+/* Disabled buttons should be identifiable, not illegible. */
+.tracking-settings ::deep .mud-button-root:disabled {
+    opacity: 1;
+    color: rgba(255, 255, 255, 0.42);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+/* Token row stacks only when the mode card itself is very narrow,
+   not when the viewport height changes and adds a scrollbar. */
+@container (max-width: 380px) {
+    .token-row {
+        grid-template-columns: 1fr;
     }
 
-    .credential-actions ::deep .mud-button-root {
-        width: 100%;
+    .token-row .credential-actions {
+        flex-direction: row;
+        margin-top: 8px;
     }
 }
