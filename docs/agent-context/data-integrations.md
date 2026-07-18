@@ -11,7 +11,7 @@
 | Progress tracking | `TarkovTrackerDB` + `APIClient` | Quests/hideout/team |
 | App updates | `GitHubUpdateService` | Fork releases only |
 
-User-Agent for fork APIs: `RatScanner-TT/{version}` (and GitHub-specific UA).
+User-Agent for APIs: `RatScanner/{version}` (and GitHub-specific UA).
 
 **Important correction vs older prose:** bulk catalog is **not** GraphQL-first. Maps intentionally use a slim GraphQL query with JSON fallback. Do not reintroduce GraphQL schema generation for items/tasks/hideout.
 
@@ -63,6 +63,7 @@ Intentional dual path (documented on `TarkovDevAPI`):
 - Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP and PvE keys plus a legacy TarkovTracker.io key. The `.io` key is PvP-only and is inactive in PvE mode.
 - `TarkovTrackerDB` holds only the active mode's progress while retaining separate in-memory last-good snapshots by mode. Configuration generation and cancellation prevent stale PvP/PvE responses from crossing modes.
 - API keys are validated explicitly against `/token`: RatScanner requires `GP` (progress read), uses `TP` only when team display is enabled and available, and does not require `WP` because the app does not write progress.
+- Periodic refresh (`RefreshProgressAsync`, every 30 min) skips the redundant `/token` call and only fetches `/progress` (or `/team/progress`). If the progress call rejects the key, `_token` is cleared and the next refresh falls back to a full `/token` + `/progress` cycle to correct the connection state. Explicit user actions (mode switch, settings save, key validation) always use the full `InitAsync` flow.
 - `.org` token metadata (`gameMode`, with token-prefix fallback for legacy responses) must match the intended PvP/PvE slot before the key is saved.
 - `APIClient` performs bearer GETs with the shared UA, cancellation, and distinct unauthorized / forbidden permission / rate-limit / service failure mapping.
 - Models: `FetchModels/TarkovTracker/*`.

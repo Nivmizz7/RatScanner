@@ -72,12 +72,12 @@ public static class TarkovDevAPI
         client.Timeout = TimeSpan.FromSeconds(60);
         try
         {
-            client.DefaultRequestHeaders.UserAgent.ParseAdd($"RatScanner-TT/{RatConfig.Version}");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd($"RatScanner/{RatConfig.Version}");
         }
         catch (Exception e)
         {
-            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner-TT user-agent.", e);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("RatScanner-TT");
+            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner user-agent.", e);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("RatScanner");
         }
         return client;
     }

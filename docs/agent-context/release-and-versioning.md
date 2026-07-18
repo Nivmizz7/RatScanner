@@ -1,32 +1,32 @@
 # Release and versioning
 
-## Product versioning (TarkovTracker Edition)
+## Product versioning
 
-| | Upstream history | This fork |
+| | Historical upstream | This project |
 | --- | --- | --- |
 | Line | 3.x | **4.x** starting at 4.0.0 |
-| Tag form | `v3.x.x` | `v4.x.x` |
-| UI token | — | `v4.x.x · TT` (`MenuVM.VersionDisplay`) |
+| Tag form | `v3.x.x` | `v4.x.x` (pre-release suffixes supported, e.g. `v4.0.0-beta.1`) |
+| UI token | — | `v4.x.x` (`MenuVM.VersionDisplay`) |
 | Log label | — | `RatConfig.FullVersionLabel` / `Constants.Branding` |
 
-**Bump only** `<Version>` in `src/App/RatScanner.csproj`. Do not mirror upstream patch numbers.
+**Bump only** `<Version>` in `src/App/RatScanner.csproj`. Do not mirror historical upstream patch numbers.
 
-ScanEngine’s own `<Version>` is historical engine packaging metadata; product releases are App-driven.
+ScanEngine's own `<Version>` is historical engine packaging metadata; product releases are App-driven.
 
 ### Semver guidance
 
 | Bump | When |
 | --- | --- |
-| Major | Breaking change for end users of **this** fork |
+| Major | Breaking change for end users |
 | Minor | Feature / significant behavior change |
 | Patch | Bug fix or config-only user impact |
+| Pre-release suffix | Beta/RC phases (e.g. `-beta.1`, `-rc.1`) |
 | None | Documentation-only |
 
 ### Prevention of accidental upstream reuse
 
-- Do not tag or ship `3.x` on this fork.
-- Keep TT branding in UA, About/Credits, release titles, and README version callout.
-- Issues that cite only `3.9.x` are almost certainly not this edition.
+- Do not tag or ship `3.x` on this project.
+- Issues that cite only `3.9.x` are almost certainly not this build.
 
 ## Local publish
 
@@ -60,8 +60,6 @@ A separate tag-only release job has `contents: write`. It downloads the validate
 
 `softprops/action-gh-release` must stay pinned to a commit SHA on the TarkovTracker org **selected actions** allowlist. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not listed. Process for bumps: (1) review the new softprops release, (2) add the SHA via org Actions selected-actions policy (`admin:org`), (3) update this workflow pin, (4) only then remove older softprops SHAs from the allowlist once no org workflow still references them.
 
-Release naming marks TarkovTracker Edition explicitly.
-
 ## Update channel in-app
 
 `GitHubUpdateService` checks `tarkovtracker-org/RatScanner` releases and applies zip swap. It does **not** use upstream `api.ratscanner.com` updater endpoints.
@@ -73,9 +71,9 @@ Release naming marks TarkovTracker Edition explicitly.
 3. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 4. Publish smoke or trust CI.
 5. Changelog/notes ready for draft release body if needed.
-6. Tag `vMAJOR.MINOR.PATCH` on the intended commit; push to **origin** (fork).
+6. Tag `vMAJOR.MINOR.PATCH[-prerelease]` on the intended commit; push to **origin**.
 7. Promote draft release when verified.
 
-## Branding requirements
+## Branding
 
-Shipped UI, logs, and release titles must remain distinguishable from upstream 3.x. Keep modification notices (README attribution, Credits/About) intact for license compliance.
+Product name is `RatScanner` (`Constants.Branding.Name`). User-agent strings use `RatScanner/<version>`. Keep modification notices (README attribution, Credits/About) intact for license compliance.

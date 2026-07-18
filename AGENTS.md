@@ -4,7 +4,7 @@
 
 ## Product (one paragraph)
 
-Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed an in-repo scan engine (vendored RatEye sources under `src/ScanEngine/`). Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. This is the **TarkovTracker Edition** fork (`tarkovtracker-org/RatScanner`), semver **4.x** (`v4.x.x · TT`).
+Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed an in-repo scan engine (vendored RatEye sources under `src/ScanEngine/`). Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. Maintained at `tarkovtracker-org/RatScanner`, semver **4.x** (`v4.x.x`).
 
 **Stack snapshot:** `net10.0-windows10.0.22621.0` · WPF + WinForms · Blazor WebView · MudBlazor · RatStash · OpenCvSharp · Tesseract · Newtonsoft.Json. Package versions live in `.csproj` files — do not copy versions into docs.
 
@@ -13,7 +13,7 @@ Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor U
 1. **Windows x64 only** — the OpenCvSharp native runtime is x64-only. Do not design, build, test, or document x86, Linux/WSL, or macOS runs.
 2. **Scan engine is in-tree** — edit `src/ScanEngine/`. Never re-add a NuGet `PackageReference` for `RatEye`. App references it via `ProjectReference`. Namespaces remain `RatEye`; assembly remains RatEye.
 3. **Bulk catalog via json.tarkov.dev** — use `TarkovDevAPI` (rate limit, dedup, offline cache, backoff). Do not bypass with ad-hoc HTTP for items/tasks/hideout/crafts/barters. Do not reintroduce a GraphQL schema generator for bulk catalog. Slim maps GraphQL is intentional; keep maps off cold-start critical path.
-4. **Product version only in** `src/App/RatScanner.csproj` `<Version>`. Independent 4.x line; do not mirror upstream 3.x tags.
+4. **Product version only in** `src/App/RatScanner.csproj` `<Version>`. Independent 4.x line; do not mirror historical upstream 3.x tags.
 5. **No secrets in git** — tokens live in user `config.cfg` (DPAPI-protected fields where used).
 6. **Do not perform dependency upgrades** unless the task explicitly asks for them.
 7. **Code is source of truth** — project files, scripts, and behavior beat stale prose.
@@ -21,7 +21,9 @@ Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor U
 ## Default commands
 
 ```bat
-dev.bat                          :: preferred local loop (data setup + restore + watch restart)
+dev.bat                          :: preferred local loop (debounced watch: 15s quiet period before rebuild)
+dev.bat -NoDebounce              :: original dotnet watch (rebuild on every save)
+dev.bat -Debounce N              :: set quiet period to N seconds (default 15)
 dev.bat -Once                    :: build + run once
 dev.bat -ForceSetup              :: re-download icons/OCR into src\App\Data\
 dotnet restore RatScanner.sln
@@ -37,7 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -F
 publish.bat                      :: release package only (not day-to-day)
 ```
 
-Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (`dotnet watch` **restart-on-save**, not full WPF hot reload). CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package, draft release on `v*` tags).
+Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package, draft release on `v*` tags).
 
 ## Fork / remotes / branches / PRs
 

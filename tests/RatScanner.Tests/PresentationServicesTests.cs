@@ -385,7 +385,7 @@ public class TarkovDevApiTests
 public class GitHubUpdateServiceTests
 {
     [Theory]
-    // TarkovTracker Edition uses its own 4.x line; comparisons stay pure semver.
+    // This project uses its own 4.x line; comparisons stay pure semver.
     [InlineData("4.0.0", "v4.0.1", true)]
     [InlineData("4.0.0+build.1", "4.0.0", false)]
     [InlineData("4.1.0-beta.1", "4.0.9", false)]

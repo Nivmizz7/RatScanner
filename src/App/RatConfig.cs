@@ -21,16 +21,16 @@ internal static class RatConfig
 
     /// <summary>
     /// Numeric / informational product version from assembly metadata (csproj <c>Version</c>).
-    /// TarkovTracker Edition uses its own major line (4.x+) — never matches upstream 3.x tags.
+    /// Uses its own major line (4.x+) — never matches historical upstream 3.x tags.
     /// </summary>
     public static string Version =>
         Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion?.Trim() ?? "Unknown";
 
-    /// <summary>Compact display form, e.g. <c>v4.0.0</c>.</summary>
+    /// <summary>Compact display form, e.g. <c>v4.0.0-beta.1</c>.</summary>
     public static string VersionDisplay => Version.StartsWith('v') || Version.StartsWith('V') ? Version : "v" + Version;
 
-    /// <summary>Full branded label for logs/dialogs, e.g. <c>RatScanner TarkovTracker Edition v4.0.0</c>.</summary>
-    public static string FullVersionLabel => $"{Constants.Branding.ProductName} {VersionDisplay}";
+    /// <summary>Full branded label for logs/dialogs, e.g. <c>RatScanner v4.0.0-beta.1</c>.</summary>
+    public static string FullVersionLabel => $"{Constants.Branding.Name} {VersionDisplay}";
 
     public const string SINGLE_INSTANCE_GUID = "{a057bb64-c126-4ef4-a4ed-3037c2e7bc89}";
 
@@ -124,13 +124,14 @@ internal static class RatConfig
             internal static string PvpToken = "";
             internal static string PveToken = "";
             internal static string IoToken = "";
+            internal static PvpSource PvpSource = PvpSource.Org;
             internal static bool ShowTeam = true;
-            internal static int RefreshTime = 5 * 60 * 1000; // 5 minutes
+            internal static int RefreshTime = 30 * 60 * 1000; // 30 minutes
 
             internal static string ActiveOrgToken => TokenForMode(GameMode);
             internal static bool OrgEnabledForActiveMode => !string.IsNullOrWhiteSpace(ActiveOrgToken);
             internal static bool IoEnabledForActiveMode =>
-                GameMode == GameMode.Regular && !string.IsNullOrWhiteSpace(IoToken);
+                GameMode == GameMode.Regular && PvpSource == PvpSource.Io && !string.IsNullOrWhiteSpace(IoToken);
 
             internal static string TokenForMode(GameMode mode) => mode == GameMode.Pve ? PveToken : PvpToken;
 
@@ -342,6 +343,20 @@ internal static class RatConfig
             Tracking.TarkovTracker.IoToken = legacyToken;
             Tracking.TarkovTracker.PvpToken = "";
         }
+        // PvpSource is additive (introduced after the Io split). Existing configs
+        // have no key, so derive the initial value from whichever token was
+        // winning the silent fallback before: org PvP wins, else Io if present.
+        int storedPvpSource = config.ReadInt(nameof(Tracking.TarkovTracker.PvpSource), -1);
+        if (storedPvpSource >= 0 && storedPvpSource <= (int)PvpSource.Io)
+        {
+            Tracking.TarkovTracker.PvpSource = (PvpSource)storedPvpSource;
+        }
+        else
+        {
+            Tracking.TarkovTracker.PvpSource = string.IsNullOrWhiteSpace(Tracking.TarkovTracker.PvpToken)
+                ? (string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken) ? PvpSource.Org : PvpSource.Io)
+                : PvpSource.Org;
+        }
         Tracking.TarkovTracker.ShowTeam = config.ReadBool(
             nameof(Tracking.TarkovTracker.ShowTeam),
             Tracking.TarkovTracker.ShowTeam
@@ -476,6 +491,7 @@ internal static class RatConfig
             config.WriteSecureString(nameof(Tracking.TarkovTracker.PvpToken), Tracking.TarkovTracker.PvpToken);
             config.WriteSecureString(nameof(Tracking.TarkovTracker.PveToken), Tracking.TarkovTracker.PveToken);
             config.WriteSecureString(nameof(Tracking.TarkovTracker.IoToken), Tracking.TarkovTracker.IoToken);
+            config.WriteInt(nameof(Tracking.TarkovTracker.PvpSource), (int)Tracking.TarkovTracker.PvpSource);
             config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
             config.Section = nameof(Overlay);

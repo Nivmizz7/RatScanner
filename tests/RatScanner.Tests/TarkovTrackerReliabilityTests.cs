@@ -599,7 +599,7 @@ public class TarkovTrackerApiContractTests
         Assert.Equal("https://api.example/progress", requestUri);
         Assert.Equal("Bearer", authorizationScheme);
         Assert.Equal("PVP_super-secret", authorizationParameter);
-        Assert.Contains("RatScanner-TT/", userAgent, StringComparison.Ordinal);
+        Assert.Contains("RatScanner/", userAgent, StringComparison.Ordinal);
     }
 
     private sealed class CaptureHandler(Action<HttpRequestMessage> capture) : HttpMessageHandler

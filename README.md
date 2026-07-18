@@ -2,11 +2,11 @@
 
 ![RatScanner logo](media/RatLogo.png)
 
-**TarkovTracker Edition** — actively maintained by [TarkovTracker.org][tarkovtracker].
+Actively maintained by [TarkovTracker.org][tarkovtracker].
 
-This is a **modified** community fork of RatScanner (see [Attribution & license](#attribution--license) at the bottom).
+This is a **modified** community build of RatScanner (see [Attribution & license](#attribution--license) at the bottom).
 
-**Versioning:** this build uses an independent semver line starting at **`v4.0.0`** (UI: `v4.x.x · TT`). Upstream / original RatScanner used `3.x` — if a report says `3.9.x`, it is **not** this edition.
+**Versioning:** this build uses an independent semver line starting at **`v4.0.0`**. Historical / original RatScanner used `3.x` — if a report says `3.9.x`, it is **not** this build.
 
 [![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
 [![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/M8nBgA2sT6)

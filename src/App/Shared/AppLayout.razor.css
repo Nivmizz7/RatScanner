@@ -84,18 +84,11 @@ nav a:hover {
     text-decoration: underline;
 }
 
-footer {
-    display: grid;
-    gap: 4px;
-    padding: 12px 6px 2px;
-    color: var(--rs-muted);
-    font-size: 12px;
-}
-
 .main-content {
     margin-left: var(--rs-sidebar-width);
     height: 100vh;
-    overflow: auto;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 .compact-bar { display: none; }

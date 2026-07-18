@@ -40,11 +40,11 @@ internal class MenuVM : INotifyPropertyChanged
 
     public Item LastItem => LastItemScan.Item;
 
-    /// <summary>Numeric product version (TarkovTracker Edition line from csproj).</summary>
+    /// <summary>Numeric product version from csproj.</summary>
     public string Version => RatConfig.Version;
 
-    /// <summary>Sidebar/about display, e.g. <c>v4.0.0 · TT</c>.</summary>
-    public string VersionDisplay => $"{RatConfig.VersionDisplay} · {Constants.Branding.EditionToken}";
+    /// <summary>Sidebar/about display, e.g. <c>v4.0.0-beta.1</c>.</summary>
+    public string VersionDisplay => RatConfig.VersionDisplay;
 
     public string Updated =>
         DateTime.TryParse(

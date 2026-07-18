@@ -2,7 +2,7 @@
 
 ## Purpose
 
-RatScanner (TarkovTracker Edition) is an **external** Escape from Tarkov companion: it screenshots the game client, identifies items via image processing / OCR, and shows flea / trader prices plus quest and hideout relevance when tracking data is available.
+RatScanner is an **external** Escape from Tarkov companion: it screenshots the game client, identifies items via image processing / OCR, and shows flea / trader prices plus quest and hideout relevance when tracking data is available.
 
 It does **not** read game memory or inject into the client.
 
@@ -39,14 +39,14 @@ It does **not** read game memory or inject into the client.
 
 Exact package versions: project files only.
 
-## Fork identity
+## Project identity
 
-| | Upstream (historical) | This product |
+| | Historical upstream | This project |
 | --- | --- | --- |
 | Org/repo | `RatScanner/RatScanner` | `tarkovtracker-org/RatScanner` |
-| Semver | 3.x line | **4.x** TarkovTracker Edition |
-| Support | Original project | TarkovTracker Discord + this repo |
-| Branding | RatScanner | UI/logs: `v4.x.x · TT`, product name constants in `Constants.Branding` |
+| Semver | 3.x line | **4.x** |
+| Support | Historical | TarkovTracker Discord + this repo |
+| Branding | RatScanner | Product name `RatScanner` (`Constants.Branding`); UA `RatScanner/…` |
 
 License: root `LICENSE` (Elastic License 2.0–based). Redistribution must include LICENSE and modification notice (About / README attribution).
 
@@ -55,7 +55,7 @@ License: root `LICENSE` (Elastic License 2.0–based). Redistribution must inclu
 - External screenshots only; Borderless/Windowed game mode may be required for overlays.
 - Name/icon scan have known accuracy limits (shared icons, lighting, base item only for weapons, etc.) — see root `README.md` / `FAQ.md`.
 - Cold start should remain usable from offline API cache; maps and optional crafts/barters must not block readiness unnecessarily.
-- User-Agent and product strings identify the **TT fork** (`RatScanner-TT/…`).
+- User-Agent and product strings identify this build (`RatScanner/…`).
 
 ## Established non-goals
 
@@ -64,4 +64,4 @@ License: root `LICENSE` (Elastic License 2.0–based). Redistribution must inclu
 - Not a re-publish of the scan engine as a separate NuGet from this monorepo (`IsPackable=false` on ScanEngine).
 - Not GraphQL-first bulk catalog (json documents are primary; maps are the intentional slim GraphQL exception).
 - Not day-to-day use of `publish.bat` for iteration.
-- Not tracking upstream version numbers for this fork’s releases.
+- Not tracking historical upstream version numbers for this project's releases.

@@ -9,17 +9,19 @@
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<StartupObject>RatScanner.Program</StartupObject>
 		<!--
-		  TarkovTracker Edition version line (independent of upstream RatScanner).
-		  Upstream historically used 3.x (e.g. 3.9.3). This fork starts at 4.0.0 so
-		  GitHub issues, logs, UA strings, and release tags are immediately distinguishable.
-		  Bump Version here for every release; tags should match as vMAJOR.MINOR.PATCH.
+		  Product version line (independent of historical upstream RatScanner).
+		  Upstream historically used 3.x (e.g. 3.9.3). This project starts at 4.0.0
+		  so GitHub issues, logs, UA strings, and release tags are immediately
+		  distinguishable. Pre-release suffixes (e.g. -beta.1) are supported; the
+		  release tag must exactly match v + this value.
+		  Bump Version here for every release; tags should match as vMAJOR.MINOR.PATCH[-prerelease].
 		-->
-		<Version>4.0.0</Version>
-		<Product>RatScanner TarkovTracker Edition</Product>
-		<AssemblyTitle>RatScanner TarkovTracker Edition</AssemblyTitle>
+		<Version>4.0.0-beta.1</Version>
+		<Product>RatScanner</Product>
+		<AssemblyTitle>RatScanner</AssemblyTitle>
 		<Company>TarkovTracker.org</Company>
 		<Authors>TarkovTracker.org</Authors>
-		<Description>TarkovTracker Edition of RatScanner — Escape from Tarkov item scanner maintained by TarkovTracker.org</Description>
+		<Description>Escape from Tarkov item scanner</Description>
 		<Copyright>Copyright © TarkovTracker.org; original work by Moritz / Blightbuster</Copyright>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>

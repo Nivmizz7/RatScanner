@@ -15,6 +15,7 @@ using RatStash;
 using GameMode = RatScanner.TarkovDev.GameMode;
 using MessageBox = System.Windows.MessageBox;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
+using PvpSource = RatScanner.TarkovDev.PvpSource;
 using Size = System.Drawing.Size;
 using TarkovItem = RatScanner.TarkovDev.Item;
 using Timer = System.Threading.Timer;
@@ -135,6 +136,11 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
         Logger.LogInfo("Initializing tarkov tracker database");
         TarkovTrackerDB = new TarkovTrackerDB();
+        // Configure synchronously so the UI's first render sees Untested (token
+        // present) or NotConfigured (no token) instead of the constructor default
+        // NotConfigured — preventing a false "not connected" banner flash before
+        // InitializeRuntimeAsync validates the key ~1s later.
+        ConfigureActiveTracker(RatConfig.GameMode);
 
         Logger.LogInfo("Initializing hotkey manager...");
         HotkeyManager = new HotkeyManager(this);
@@ -216,7 +222,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         MessageBoxResult result = await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             MessageBox.Show(
                 message,
-                Constants.Branding.ProductName + " update",
+                Constants.Branding.Name + " update",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Information
             )
@@ -279,11 +285,17 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private static (string Token, string Endpoint) GetActiveTrackerConfiguration(GameMode mode)
     {
+        if (mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io)
+        {
+            string ioToken = RatConfig.Tracking.TarkovTracker.IoToken;
+            if (!string.IsNullOrWhiteSpace(ioToken))
+                return (ioToken, RatConfig.Tracking.TarkovTracker.IoEndpoint);
+            // Configured for Io but no Io token: fall back to org PvP if present
+            // so a misconfigured source never silently disables tracking.
+        }
         string orgToken = RatConfig.Tracking.TarkovTracker.TokenForMode(mode);
         if (!string.IsNullOrWhiteSpace(orgToken))
             return (orgToken, RatConfig.Tracking.TarkovTracker.OrgEndpoint);
-        if (mode == GameMode.Regular && !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken))
-            return (RatConfig.Tracking.TarkovTracker.IoToken, RatConfig.Tracking.TarkovTracker.IoEndpoint);
         return ("", RatConfig.Tracking.TarkovTracker.OrgEndpoint);
     }
 
@@ -613,7 +625,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 return;
 
             Logger.LogInfo("Refreshing TarkovTracker DB...");
-            await TarkovTrackerDB.InitAsync(_lifetimeCancellation.Token).ConfigureAwait(false);
+            await TarkovTrackerDB.RefreshProgressAsync(_lifetimeCancellation.Token).ConfigureAwait(false);
             OnPropertyChanged(nameof(TarkovTrackerDB));
         }
         catch (OperationCanceledException) { }

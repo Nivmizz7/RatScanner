@@ -142,7 +142,7 @@ public class ApiClientUserAgentTests
 
         Assert.Equal("ok", APIClient.Get(client, "https://example.test/resource", "token"));
         Assert.NotNull(userAgent);
-        Assert.StartsWith("RatScanner-TT/", userAgent, StringComparison.Ordinal);
+        Assert.StartsWith("RatScanner/", userAgent, StringComparison.Ordinal);
     }
 
     private sealed class DelegateHandler(Func<HttpRequestMessage, HttpResponseMessage> send) : HttpMessageHandler

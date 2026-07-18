@@ -1,6 +1,6 @@
 # Rat Scanner FAQ
 
-**TarkovTracker Edition** — maintained by [TarkovTracker.org](https://tarkovtracker.org)
+Maintained by [TarkovTracker.org](https://tarkovtracker.org)
 
 [![GitHub](https://img.shields.io/badge/GitHub-tarkovtracker--org%2FRatScanner-181717?style=for-the-badge&logo=github)](https://github.com/tarkovtracker-org/RatScanner)
 [![Discord](https://img.shields.io/badge/Discord-TarkovTracker-7389D8?style=for-the-badge&logo=discord&logoColor=ffffff&labelColor=6A7EC2)](https://discord.gg/M8nBgA2sT6)

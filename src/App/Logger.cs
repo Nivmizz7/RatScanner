@@ -251,7 +251,7 @@ internal static class Logger
         body += "\n```\n</details>";
 
         // Cap the title so the URL-encoded issue link stays within browser/GitHub limits.
-        string title = LimitLength($"[{Constants.Branding.EditionToken} {RatConfig.VersionDisplay}] {message}", 120);
+        string title = LimitLength($"[{RatConfig.VersionDisplay}] {message}", 120);
 
         string labels = "bug";
 

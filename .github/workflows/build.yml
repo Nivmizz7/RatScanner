@@ -168,12 +168,10 @@ jobs:
         with:
           files: release-artifact/RatScanner.zip
           draft: true
-          # Tag stays v4.x.x (semver). Name marks TarkovTracker Edition vs upstream.
-          name: RatScanner TarkovTracker Edition ${{ github.ref_name }}
+          name: RatScanner ${{ github.ref_name }}
           body: |
-            **RatScanner TarkovTracker Edition** `${{ github.ref_name }}`
+            **RatScanner** `${{ github.ref_name }}`
 
-            Maintained by [TarkovTracker.org](https://tarkovtracker.org) — **not** the original/upstream RatScanner `3.x` line.
             Support: [this repo](https://github.com/tarkovtracker-org/RatScanner) · [Discord](https://discord.gg/M8nBgA2sT6)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

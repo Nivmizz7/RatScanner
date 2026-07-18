@@ -25,15 +25,15 @@ internal static class APIClient
     private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? bearerToken = null)
     {
         HttpRequestMessage request = new(method, url);
-        // Identify the TarkovTracker Edition fork (matches TarkovDevAPI / GitHubUpdateService UA).
+        // Identify the product (matches TarkovDevAPI / GitHubUpdateService UA).
         try
         {
-            request.Headers.UserAgent.ParseAdd($"RatScanner-TT/{RatConfig.Version}");
+            request.Headers.UserAgent.ParseAdd($"RatScanner/{RatConfig.Version}");
         }
         catch (Exception e)
         {
-            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner-TT user-agent.", e);
-            request.Headers.UserAgent.ParseAdd("RatScanner-TT");
+            Logger.LogWarning("Failed to set user-agent header; falling back to default RatScanner user-agent.", e);
+            request.Headers.UserAgent.ParseAdd("RatScanner");
         }
         if (!string.IsNullOrEmpty(bearerToken))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);

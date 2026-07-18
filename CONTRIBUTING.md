@@ -2,9 +2,9 @@
 
 ## Where to contribute
 
-This is the **TarkovTracker Edition** fork: [tarkovtracker-org/RatScanner](https://github.com/tarkovtracker-org/RatScanner).
+This project is maintained at [tarkovtracker-org/RatScanner](https://github.com/tarkovtracker-org/RatScanner).
 
-Open PRs and issues on **this** repository. Upstream [RatScanner/RatScanner](https://github.com/RatScanner/RatScanner) is historical / inactive for day-to-day work.
+Open PRs and issues on **this** repository. Historical upstream [RatScanner/RatScanner](https://github.com/RatScanner/RatScanner) is inactive for day-to-day work.
 
 ## Branch workflow
 
@@ -57,26 +57,26 @@ Agent and architecture guidance: root `AGENTS.md` + `docs/agent-context/`.
 
 If your change alters architecture, commands, packages, CI, config paths, or product behavior, update the matching agent context under `docs/agent-context/` and any nested `AGENTS.md`. Implementation and project files always override stale docs. Run `scripts\check-agent-docs.ps1` after structural documentation changes.
 
-## Versioning (TarkovTracker Edition)
+## Versioning
 
-This fork uses its **own** [semver](https://semver.org/) line so releases and bug reports are never confused with upstream RatScanner.
+This project uses its **own** [semver](https://semver.org/) line so releases and bug reports are never confused with historical upstream RatScanner.
 
-| | Upstream (original) | This fork |
+| | Historical upstream | This project |
 | --- | --- | --- |
-| Product | RatScanner | RatScanner **TarkovTracker Edition** |
+| Product | RatScanner | RatScanner |
 | Major line | `3.x` (e.g. `3.9.3`) | **`4.x`** (starts at `4.0.0`) |
-| UI / logs | `v3.9.3` | `v4.0.0 · TT` / full label in logs |
-| Tags | `v3.9.3` | `v4.0.0` |
+| UI / logs | `v3.9.3` | `v4.0.0` / full label in logs |
+| Tags | `v3.9.3` | `v4.0.0` (pre-release suffixes supported, e.g. `v4.0.0-beta.1`) |
 
-Do **not** reuse or “continue” upstream patch numbers. After a breaking change to this fork, bump major; otherwise minor/patch as usual.
+Do **not** reuse or "continue" historical upstream patch numbers. After a breaking change, bump major; otherwise minor/patch as usual.
 
 **Where to bump:** only `<Version>` in `src/App/RatScanner.csproj`.
 
 ```xml
-<Version>4.0.0</Version>
+<Version>4.0.0-beta.1</Version>
 ```
 
-**Release tags:** `vMAJOR.MINOR.PATCH` (e.g. `v4.0.1`). CI drafts a GitHub release when a `v*` tag is pushed.
+**Release tags:** `vMAJOR.MINOR.PATCH[-prerelease]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). CI drafts a GitHub release when a `v*` tag is pushed.
 
 | Bump | When |
 | --- | --- |

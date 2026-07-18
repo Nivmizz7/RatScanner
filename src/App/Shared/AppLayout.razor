@@ -31,7 +31,7 @@
         <div class="product-identity">
             <img src="RatLogoMedium.png" alt="" />
             <strong>@Constants.Branding.Name</strong>
-            <span>@Localizer["TarkovTrackerEdition"]</span>
+            <span>@MenuVM.VersionDisplay</span>
         </div>
         <nav aria-label="@Localizer["PrimaryNavigation"]">
             <NavLink href="/app" Match="NavLinkMatch.All" @onclick="CloseDrawerAfterNavAsync">
@@ -68,9 +68,6 @@
                 </NavLink>
             }
         </section>
-        <footer aria-label="@Localizer["ApplicationVersion"]">
-            <span>@MenuVM.VersionDisplay</span>
-        </footer>
     </aside>
     @if (_drawerOpen)
     {
