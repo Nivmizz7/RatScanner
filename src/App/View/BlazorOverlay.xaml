@@ -8,6 +8,8 @@
         mc:Ignorable="d"
         Focusable="False"
         IsTabStop="False"
+        IsHitTestVisible="False"
+        ShowActivated="False"
         ResizeMode="NoResize"
         ScrollViewer.VerticalScrollBarVisibility="Disabled"
         ShowInTaskbar="False"

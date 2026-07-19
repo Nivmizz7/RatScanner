@@ -5,10 +5,11 @@
 	<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
 	                Value="@RatConfig.GameMode"
 	                ValueChanged="SetGameModeAsync"
+	                Disabled="@_switching"
 	                Size="Size.Small"
 	                Color="Color.Primary"
-	                CheckMark="true"
-	                FixedContent="true">
+	                CheckMark="false"
+	                FixedContent="false">
 		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
 		               Value="RatScanner.TarkovDev.GameMode.Regular"
 		               Text="@Localizer["PvpMode"]" />
@@ -19,11 +20,14 @@
 </div>
 
 @code {
+	private bool _switching;
+
 	private async System.Threading.Tasks.Task SetGameModeAsync(RatScanner.TarkovDev.GameMode gameMode)
 	{
-		if (gameMode == RatConfig.GameMode)
+		if (gameMode == RatConfig.GameMode || _switching)
 			return;
 
+		_switching = true;
 		try
 		{
 			await RatConfig.SetGameModeAsync(gameMode);
@@ -33,6 +37,11 @@
 		{
 			Logger.LogWarning("Unable to switch game mode.", exception);
 			Snackbar.Add(Localizer["GameModeSwitchFailed"], Severity.Error);
+		}
+		finally
+		{
+			_switching = false;
+			await InvokeAsync(StateHasChanged);
 		}
 	}
 }

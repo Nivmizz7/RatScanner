@@ -7,7 +7,7 @@
 <div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown" aria-live="polite">
     <button type="button"
             @ref="_control"
-            class="scanner-status-control @_stateClass @(Compact ? "compact" : "expanded")"
+            class="scanner-status-control @_stateClass expanded"
             title="@_hoverTitle"
             aria-label="@_ariaLabel"
             aria-expanded="@_open"
@@ -15,10 +15,7 @@
             @onclick="ToggleAsync"
             @onclick:stopPropagation="true">
         <span class="scanner-status-dot" aria-hidden="true"></span>
-        @if (!Compact)
-        {
-            <span class="scanner-status-label">@_label</span>
-        }
+        <span class="scanner-status-label">@_label</span>
     </button>
 
     @if (_open)
@@ -27,7 +24,7 @@
                 class="scanner-status-scrim"
                 aria-label="@Localizer["ScannerStatusClose"]"
                 @onclick="CloseAsync"></button>
-        <div class="scanner-status-popover @(Compact ? "from-header" : "from-toolbar")"
+        <div class="scanner-status-popover from-toolbar"
              @ref="_popover"
              role="dialog"
              aria-label="@_title"
@@ -44,10 +41,6 @@
 </div>
 
 @code {
-    /// <summary>Dot-only control for the compact mobile header.</summary>
-    [Parameter]
-    public bool Compact { get; set; }
-
     private bool _open;
     private bool _subscribed;
     private ScannerState _state = ScannerState.Paused;
@@ -103,8 +96,7 @@
 
     private string _hoverTitle => $"{_title}. {_detail}";
 
-    private string _ariaLabel =>
-        Compact ? $"{_title}. {Localizer["ActivateForDetails"]}" : $"{_title}. {_detail}";
+    private string _ariaLabel => $"{_title}. {_detail}";
 
     protected override void OnInitialized()
     {

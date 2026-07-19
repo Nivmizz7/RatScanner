@@ -75,6 +75,11 @@ internal static class RatConfig
     {
         internal static bool Enable = true;
         internal static float ConfWarnThreshold = 0.8f;
+
+        // Below this, template matches are noise: equipment-slot panels (gear screen)
+        // render items scaled to fit fixed boxes and produce arbitrary same-size
+        // matches around ~0.5, while genuine stash-grid matches score ~0.7+.
+        internal static float MinAcceptConfidence = 0.55f;
         internal static bool ScanRotatedIcons = true;
         internal static int ScanWidth => (int)(GameScale * 896);
         internal static int ScanHeight => (int)(GameScale * 896);
@@ -127,11 +132,6 @@ internal static class RatConfig
             internal static PvpSource PvpSource = PvpSource.Org;
             internal static bool ShowTeam = true;
             internal static int RefreshTime = 30 * 60 * 1000; // 30 minutes
-
-            internal static string ActiveOrgToken => TokenForMode(GameMode);
-            internal static bool OrgEnabledForActiveMode => !string.IsNullOrWhiteSpace(ActiveOrgToken);
-            internal static bool IoEnabledForActiveMode =>
-                GameMode == GameMode.Regular && PvpSource == PvpSource.Io && !string.IsNullOrWhiteSpace(IoToken);
 
             internal static string TokenForMode(GameMode mode) => mode == GameMode.Pve ? PveToken : PvpToken;
 

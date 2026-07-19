@@ -62,7 +62,7 @@ internal static class Logger
                 MessageBox.Show(faqBoxMessage, title, MessageBoxButton.YesNo, MessageBoxImage.Error)
                 == MessageBoxResult.Yes
             )
-                TryRunSupportAction(() => OpenURL(Constants.Links.FAQ), "Unable to open the FAQ.");
+                TryRunSupportAction(() => OpenURL(Constants.Links.SupportFAQ), "Unable to open the FAQ.");
 
             if (
                 MessageBox.Show(
@@ -241,7 +241,7 @@ internal static class Logger
         // Lead with version so the issue is easy to triage in the issue list.
         string body = "**Build**\n";
         body += RatConfig.FullVersionLabel + "\n";
-        body += "Repo: " + Constants.Links.GitHub + "\n\n";
+        body += "Repo: " + Constants.Links.SupportGitHub + "\n\n";
         body += "**Error**\n" + message + "\n";
         if (e != null)
             body += "```\n" + LimitLength(e.ToString(), 1000) + "\n```\n";
@@ -255,7 +255,7 @@ internal static class Logger
 
         string labels = "bug";
 
-        string url = Constants.Links.GitHub;
+        string url = Constants.Links.SupportGitHub;
         url += "/issues/new";
         url += "?body=" + WebUtility.UrlEncode(body);
         url += "&title=" + WebUtility.UrlEncode(title);
@@ -271,7 +271,7 @@ internal static class Logger
             {
                 body = LimitLength(body, bodyLimit);
                 url =
-                    Constants.Links.GitHub
+                    Constants.Links.SupportGitHub
                     + "/issues/new"
                     + "?body="
                     + WebUtility.UrlEncode(body)

@@ -86,12 +86,12 @@ Do not use `!important` to paper over conflicting selectors. Recent search-field
 
 ## Sidebar collapse behavior
 
-`AppLayout` exposes a single collapsible sidebar that works at every viewport width; the native WPF title bar (`PageSwitcher.xaml`) supplies app identity, window drag, and caption buttons at all widths, so the Blazor shell no longer renders a duplicate compact header.
+`AppLayout` exposes a single collapsible sidebar that works at every viewport width; the native WPF title bar (`PageSwitcher.xaml`) supplies app identity, window drag, and caption buttons at all widths, so the Blazor shell no longer renders a duplicate compact header. The only toggle is the WPF title-bar `NavToggleButton`, which routes through `AppStateService` (`SidebarToggleRequested`) — there is no sidebar-header collapse button and no floating expand button in the Blazor shell.
 
-- At full width (≥760px) the sidebar is docked: `main-content` reserves `--rs-sidebar-width` via the `sidebar-docked` class and the sidebar is non-modal (main stays interactive).
-- Below 760px the sidebar is an overlay drawer: a scrim renders and `main` gets `inert` / `aria-hidden` while open.
-- A collapse button in the sidebar header and a floating expand button (top-left of main content, rendered only when collapsed) share the `icon-button` base style and reuse the `OpenNavigation` / `CloseNavigation` i18n keys.
-- `--rs-sidebar-active-width` on `:root` is kept in sync by `wwwroot/index.html` (`RatScanner.setSidebarOpen` + the `(max-width: 759px)` matchMedia listener) so MudBlazor dialogs center in the actual content pane. `AppLayout` registers a `DotNetObjectReference` to receive breakpoint crossings via `OnViewportNarrow`.
+- The narrow/docked breakpoint is **680px**, applied consistently by `wwwroot/index.html` (`matchMedia("(max-width: 680px)")`), `AppLayout.razor.css`, `Index.razor.css`, `History.razor.css`, and `theme.css`.
+- Sidebar state is one of four discrete names reported to JS via `RatScanner.setSidebarState` (see `AppLayout.GetSidebarStateName`): `expanded` (desktop, docked full width), `rail` (desktop, collapsed icon rail), `narrow-open` (overlay drawer), `narrow-closed` (overlay hidden). At desktop widths `main-content` reserves `--rs-sidebar-width` via the `sidebar-docked` class and the sidebar is non-modal; below 680px the sidebar is an overlay drawer with a scrim.
+- `--rs-sidebar-active-width` on `:root` is kept in sync by `wwwroot/index.html` from the current state name so MudBlazor dialogs center in the actual content pane. `AppLayout` registers a `DotNetObjectReference` to receive breakpoint crossings via `OnViewportNarrow` and drawer-close requests via `CloseDrawerFromJs`.
+- While the narrow drawer is open, `<main>` gets `aria-hidden="true"`, CSS `pointer-events: none`, and `inert` (splat via `AppLayout.MainAttributes`, recomputed each render); a JS Tab-trap (plus Escape-to-close) in `index.html` keeps focus inside the sidebar.
 
 ## Visual smoke-test surfaces
 

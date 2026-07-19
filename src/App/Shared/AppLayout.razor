@@ -55,7 +55,7 @@
 
 	<main class="main-content @(_isNarrow ? null : "sidebar-docked")"
 	      aria-hidden="@(_isNarrow && AppState.DrawerOpen ? "true" : null)"
-	      @attributes="_mainAttributes">
+	      @attributes="MainAttributes">
 		@Body
 	</main>
 </div>
@@ -64,7 +64,17 @@
 	private ElementReference _sidebar;
 	private DotNetObjectReference<AppLayout>? _dotNetRef;
 	private bool _isNarrow;
-	private Dictionary<string, object> _mainAttributes = new() { ["tabindex"] = "-1" };
+
+	private Dictionary<string, object> MainAttributes
+	{
+		get
+		{
+			Dictionary<string, object> attrs = new() { ["tabindex"] = "-1" };
+			if (_isNarrow && AppState.DrawerOpen)
+				attrs["inert"] = true;
+			return attrs;
+		}
+	}
 
 	private string SidebarClasses =>
 		(_isNarrow, AppState.DrawerOpen, AppState.DesktopSidebarOpen) switch

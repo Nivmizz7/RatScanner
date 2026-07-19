@@ -21,7 +21,7 @@ public partial class PageSwitcher : Window
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
-    public const int MinimumWidth = 680;
+    public const int MinimumWidth = 450;
     public const int MinimumHeight = 520;
 
     private NotifyIcon _notifyIcon = null!;
@@ -135,7 +135,6 @@ public partial class PageSwitcher : Window
         if (RatConfig.MinimizeToTray && WindowState == WindowState.Minimized)
             Hide();
 
-        UpdateMaximizeRestoreIcon();
         base.OnStateChanged(e);
     }
 
@@ -576,37 +575,9 @@ public partial class PageSwitcher : Window
         WindowState = WindowState.Minimized;
     }
 
-    private void OnTitleBarMaximizeRestore(object? sender, RoutedEventArgs e)
-    {
-        if (WindowState == WindowState.Maximized)
-            WindowState = WindowState.Normal;
-        else
-            WindowState = WindowState.Maximized;
-    }
-
     private void OnTitleBarClose(object? sender, RoutedEventArgs e)
     {
         Close();
-    }
-
-    private void UpdateMaximizeRestoreIcon()
-    {
-        if (MaximizeRestoreIcon == null)
-            return;
-
-        const string maximizePath = "M 3,3 H 21 V 21 H 3 Z";
-        const string restorePath = "M 4,10 H 18 V 20 H 4 Z M 8,4 H 20 V 14 H 18 V 6 H 8 Z";
-
-        bool isMaximized = WindowState == WindowState.Maximized;
-        MaximizeRestoreIcon.Data = Geometry.Parse(isMaximized ? restorePath : maximizePath);
-
-        if (MaximizeRestoreButton != null)
-        {
-            string key = isMaximized ? "RestoreWindow" : "MaximizeWindow";
-            string text = Presentation.PresentationText.T(key, isMaximized ? "Restore" : "Maximize");
-            MaximizeRestoreButton.ToolTip = text;
-            AutomationProperties.SetName(MaximizeRestoreButton, text);
-        }
     }
 
     private void UpdateCaptionButtonAccessibility()
@@ -624,8 +595,6 @@ public partial class PageSwitcher : Window
             CloseButton.ToolTip = text;
             AutomationProperties.SetName(CloseButton, text);
         }
-
-        UpdateMaximizeRestoreIcon();
     }
 
     private void UpdateMinimalUIButton()

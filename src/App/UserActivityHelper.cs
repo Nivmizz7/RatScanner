@@ -28,6 +28,8 @@ internal static class UserActivityHelper
 
     public static bool IsVKeyDown(int vKey)
     {
+        // GetAsyncKeyState still reports the key as down while the low-level
+        // hook dispatches its key-up event, which ActiveHotkey.IsPressed relies on.
         return (GetAsyncKeyState(vKey) & 0x8000) != 0;
     }
 

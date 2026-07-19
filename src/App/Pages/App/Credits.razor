@@ -25,7 +25,7 @@
         @* Actions: buttons *@
         <div class="about-actions">
             <div class="about-btn-grid">
-                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.GitHub))">
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.SupportGitHub))">
                     <MudIcon Icon="@Icons.Custom.Brands.GitHub" Size="Size.Small" />
                     <span>@Localizer["CreditsGitHubRepo"]</span>
                 </button>
@@ -37,7 +37,7 @@
                     <MudIcon Icon="@Icons.Material.Filled.Public" Size="Size.Small" />
                     <span>@Localizer["CreditsOfficialWebsite"]</span>
                 </button>
-                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.FAQ))">
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.SupportFAQ))">
                     <MudIcon Icon="@Icons.Material.Filled.Help" Size="Size.Small" />
                     <span>FAQ</span>
                 </button>

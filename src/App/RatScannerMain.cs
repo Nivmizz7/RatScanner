@@ -575,8 +575,19 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             using RatEye.Processing.Inventory inventory = RatEyeEngine.NewInventory(screenshot);
             RatEye.Processing.Icon? icon = inventory.LocateIcon();
 
-            if (icon?.DetectionConfidence <= 0 || icon?.Item == null)
+            if (icon?.Item == null || icon.DetectionConfidence < RatConfig.IconScan.MinAcceptConfidence)
+            {
+                if (icon?.Item != null)
+                {
+                    Logger.LogDebug(
+                        $"Icon scan rejected: best match {icon.Item.Name} at "
+                            + $"{icon.DetectionConfidence:F3} is below the acceptance threshold. "
+                            + "Equipment-slot panels render items scaled to fit fixed boxes and "
+                            + "produce low-confidence garbage matches."
+                    );
+                }
                 return;
+            }
 
             Vector2 toolTipPosition = position;
             toolTipPosition += icon.Position + icon.ItemPosition;

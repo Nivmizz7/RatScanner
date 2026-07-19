@@ -37,9 +37,10 @@ namespace RatEye
                 public (int hue, int saturation, int value) MinHighlightingColor = (0, 0, 80);
 
                 /// <summary>
-                /// Maximum color for thresholding the highlighting background of an item
+                /// Maximum color for thresholding the highlighting background of an item.
+                /// EFT 1.0.6 brightened the hover highlight to roughly value 109-112.
                 /// </summary>
-                public (int hue, int saturation, int value) MaxHighlightingColor = (255, 3, 100);
+                public (int hue, int saturation, int value) MaxHighlightingColor = (255, 3, 120);
 
                 /// <summary>
                 /// If <see langword="true"/>, all processing will be optimized for highlighted items

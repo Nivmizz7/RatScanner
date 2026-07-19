@@ -137,22 +137,6 @@
 					      Data="M 4,17 H 20" />
 				</Button>
 
-				<Button x:Name="MaximizeRestoreButton"
-				        Width="46"
-				        Click="OnTitleBarMaximizeRestore"
-				        FocusVisualStyle="{StaticResource FocusVisual}"
-				        IsTabStop="True"
-				        Style="{DynamicResource TitleBarButtonStyle}"
-				        WindowChrome.IsHitTestVisibleInChrome="True">
-					<Path x:Name="MaximizeRestoreIcon"
-					      Width="10"
-					      Height="10"
-					      Stretch="Uniform"
-					      SnapsToDevicePixels="True"
-					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-					      StrokeThickness="1" />
-				</Button>
-
 				<Button x:Name="CloseButton"
 				        Width="46"
 				        Click="OnTitleBarClose"

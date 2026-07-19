@@ -25,6 +25,14 @@ public partial class BlazorOverlay : Window
         InitializeComponent();
     }
 
+    protected override void OnSourceInitialized(System.EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        // Apply click-through styles as soon as the native window exists so there is
+        // no window of time where the all-screens overlay can swallow mouse input.
+        SetWindowStyle();
+    }
+
     private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
         if (_initializedWebView is not null)
@@ -75,12 +83,21 @@ public partial class BlazorOverlay : Window
     {
         const int gwlExStyle = -20; // GWL_EXSTYLE
         const uint wsExToolWindow = 0x00000080; // WS_EX_TOOLWINDOW
+        // The passive overlay spans every screen; without WS_EX_TRANSPARENT it
+        // swallows all mouse input the moment a scan tooltip renders.
+        const uint wsExTransparent = 0x00000020; // WS_EX_TRANSPARENT (click-through)
+        const uint wsExLayered = 0x00080000; // WS_EX_LAYERED (required by WS_EX_TRANSPARENT)
+        const uint wsExNoActivate = 0x08000000; // WS_EX_NOACTIVATE (never steal focus from the game)
 
         nint handle = new WindowInteropHelper(this).Handle;
+        if (handle == 0)
+            return;
+
         NativeMethods.SetWindowLongPtr(
             handle,
             gwlExStyle,
-            NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | (nint)wsExToolWindow
+            NativeMethods.GetWindowLongPtr(handle, gwlExStyle)
+                | (nint)(wsExToolWindow | wsExTransparent | wsExLayered | wsExNoActivate)
         );
     }
 
