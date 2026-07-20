@@ -12,7 +12,11 @@ public sealed class SupportLinksTests
         // repo would silently lose every 4.x crash report.
         Assert.Contains("tarkovtracker-org", Constants.Links.SupportGitHub);
         Assert.Contains("tarkovtracker-org", Constants.Links.SupportFAQ);
+        Assert.Contains("tarkovtracker-org", Constants.Links.Contributors);
+        Assert.Contains("tarkovtracker-org", Constants.Links.License);
         Assert.DoesNotContain("RatScanner/RatScanner/issues", Constants.Links.SupportGitHub);
+        Assert.DoesNotContain("github.com/RatScanner/RatScanner", Constants.Links.Contributors);
+        Assert.DoesNotContain("github.com/RatScanner/RatScanner", Constants.Links.License);
     }
 
     [Fact]

@@ -369,7 +369,7 @@
   "ActiveQuestRequirementSummary": "Nadal potrzeba {0} do aktywnych zadań.",
   "HideoutRequirementSummary": "Nadal potrzeba {0} do ulepszeń kryjówki.",
   "FirMixed": "{0} FIR · {1} non-FIR OK",
-  "FirRequiredLabel": "Musi być znalezione w rajdzie",
+  "FirRequiredLabel": "Musi być znaleziony w rajdzie",
   "FirNonRequiredLabel": "Przedmiot non-FIR jest dozwolony",
   "ExactDateFormat": "g",
   "Unavailable": "Niedostępne",

@@ -53,6 +53,42 @@ public sealed class SettingsPersistenceTests
     }
 
     [Fact]
+    public async Task Failed_persistence_restores_a_null_reference_value()
+    {
+        string? runtime = null;
+        using SettingsPersistenceService service = new(_ => throw new InvalidOperationException("disk full"));
+
+        SettingSaveResult result = await service.SaveImmediateAsync<string?>(
+            "nullable",
+            "nullable setting",
+            "candidate",
+            () => runtime,
+            value => runtime = value
+        );
+
+        Assert.False(result.Succeeded);
+        Assert.Null(runtime);
+    }
+
+    [Fact]
+    public async Task Failed_persistence_restores_a_null_nullable_value()
+    {
+        int? runtime = null;
+        using SettingsPersistenceService service = new(_ => throw new InvalidOperationException("disk full"));
+
+        SettingSaveResult result = await service.SaveImmediateAsync<int?>(
+            "nullable-number",
+            "nullable numeric setting",
+            42,
+            () => runtime,
+            value => runtime = value
+        );
+
+        Assert.False(result.Succeeded);
+        Assert.Null(runtime);
+    }
+
+    [Fact]
     public async Task Rapid_changes_keep_the_final_value_when_an_older_save_fails()
     {
         bool runtime = false;

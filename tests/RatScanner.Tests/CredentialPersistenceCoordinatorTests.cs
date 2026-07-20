@@ -35,6 +35,24 @@ public sealed class CredentialPersistenceCoordinatorTests
     }
 
     [Fact]
+    public async Task Cancellation_still_propagates_when_restore_throws()
+    {
+        using CancellationTokenSource cancellation = new();
+
+        Task<SettingSaveResult> operation = CredentialPersistenceCoordinator.PersistCandidateAsync(
+            () =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(new SettingSaveResult(true));
+            },
+            () => throw new InvalidOperationException("restore failed"),
+            cancellation.Token
+        );
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => operation);
+    }
+
+    [Fact]
     public async Task Failed_candidate_save_does_not_restore_or_throw()
     {
         bool previousRestored = false;

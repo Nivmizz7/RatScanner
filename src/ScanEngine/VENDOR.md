@@ -13,7 +13,12 @@ Test assets from upstream `RatEyeTest` are intentionally not included (large bin
 
 ## License note
 
-Upstream `RatScanner/RatEye` did **not** ship a `LICENSE` file at the time of vendoring
-(GitHub license metadata was empty). This product's root `LICENSE` (Elastic License 2.0–based)
-applies to **this repository as distributed by this fork**, but does **not** automatically
-rewrite upstream copyright. Keep provenance here until the original author confirms terms.
+The vendored `v4.0.1` tag did not contain a `LICENSE` file. The original author subsequently
+published the RatEye terms in commit [`98f562f`](https://github.com/RatScanner/RatEye/commit/98f562f38b4a9c9d330ef700971d6adf5183595d)
+("Add License"). Those terms permit copying, distribution, and derivative works subject to
+their limitations and notice requirements. They are byte-for-byte identical to this
+repository's root [`LICENSE`](../../LICENSE), which is included in published packages.
+
+This fork has modified the vendored sources after `v4.0.1`; this file and the repository
+attribution are the prominent modification and provenance notices. Preserve them when
+redistributing the scan engine.
