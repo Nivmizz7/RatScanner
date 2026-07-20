@@ -421,6 +421,25 @@
             return;
         }
 
+        // Normalize the PvP source: if the PvP org token was removed while an io
+        // token still exists, switch to io so the UI and runtime agree. Without
+        // this, PvpSource stays Org with an empty token — HasActivePvpToken would
+        // report disconnected even though a valid io credential is present
+        // (mirrors the normalization in RemoveIoKeyAsync).
+        if (
+            mode == GameMode.Regular
+            && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Org
+            && !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken)
+        )
+        {
+            SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Io);
+            if (!sourceResult.Succeeded)
+            {
+                Snackbar.Add(Localizer["CredentialSaveFailed"], Severity.Error);
+                return;
+            }
+        }
+
         _orgState[mode] = TrackerConnectionState.NotConfigured;
         if (RatConfig.GameMode == mode && !IsIoCredential(mode))
             await RatScannerMain.Instance.ActivateTrackerModeAsync(mode);

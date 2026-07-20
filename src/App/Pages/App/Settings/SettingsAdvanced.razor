@@ -130,10 +130,11 @@
     private bool _savingDisplay;
     private int _displaySaveOperations;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         SettingsVM.PropertyChanged += PropertyChangeHandler;
-        SettingsVM.RefreshGameDisplays();
+        // Use the async path so display detection stays off the render thread.
+        await SettingsVM.RefreshGameDisplaysAsync();
     }
 
     private async Task<SettingSaveResult> PersistCustomResolutionToggleAsync(bool value) => await PersistDisplayAsync();
@@ -162,7 +163,7 @@
         if (args.Key == "Enter")
             await PersistDisplayAsync();
         else if (args.Key == "Escape")
-            SettingsVM.RefreshGameDisplays();
+            await SettingsVM.RefreshGameDisplaysAsync();
     }
 
     private async Task SetCustomResolutionAsync(int width, int height)

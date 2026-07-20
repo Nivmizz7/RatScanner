@@ -12,8 +12,8 @@ public static class Constants
         public const string SupportGitHub = "https://github.com/tarkovtracker-org/RatScanner";
         public const string SupportFAQ = "https://github.com/tarkovtracker-org/RatScanner/blob/master/FAQ.md";
 
-        public const string Contributors = "https://github.com/RatScanner/RatScanner/graphs/contributors";
-        public const string License = "https://github.com/RatScanner/RatScanner/blob/master/LICENSE";
+        public const string Contributors = "https://github.com/tarkovtracker-org/RatScanner/graphs/contributors";
+        public const string License = "https://github.com/tarkovtracker-org/RatScanner/blob/master/LICENSE";
         public const string DysektAI = "https://github.com/DysektAI";
         public const string Blightbuster = "https://github.com/Blightbuster";
         public const string Discord = "https://discord.gg/aHZf7aP";

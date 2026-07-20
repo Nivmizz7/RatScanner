@@ -5,6 +5,7 @@ using Xunit;
 
 namespace RatScanner.Tests;
 
+[Collection(RatConfigCollection.Name)]
 public sealed class ConfigurationMigrationTests
 {
     [Fact]

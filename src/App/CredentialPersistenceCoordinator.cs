@@ -26,9 +26,18 @@ internal static class CredentialPersistenceCoordinator
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            SettingSaveResult restored = await restorePrevious().ConfigureAwait(false);
-            if (!restored.Succeeded)
-                Logger.LogWarning("Unable to restore a credential after the replacement was canceled.");
+            try
+            {
+                SettingSaveResult restored = await restorePrevious().ConfigureAwait(false);
+                if (!restored.Succeeded)
+                    Logger.LogWarning("Unable to restore a credential after the replacement was canceled.");
+            }
+            catch (Exception exception)
+            {
+                // The original cancellation must still propagate; log rollback
+                // failures instead of masking the OperationCanceledException.
+                Logger.LogWarning("Unable to restore a credential after the replacement was canceled.", exception);
+            }
             throw;
         }
     }

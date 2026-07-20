@@ -65,9 +65,9 @@
 				       RenderOptions.BitmapScalingMode="HighQuality"
 				       Source="/Resources/RatLogoMedium.png" />
 
-				<TextBlock VerticalAlignment="Center"
-				           FontSize="12"
-				           Text="Rat Scanner">
+				<TextBlock x:Name="BrandTextBlock"
+				           VerticalAlignment="Center"
+				           FontSize="12">
 					<TextBlock.Style>
 						<Style TargetType="{x:Type TextBlock}">
 							<Style.Triggers>

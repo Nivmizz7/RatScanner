@@ -483,6 +483,7 @@ public class TarkovTrackerResponseContractTests
     }
 }
 
+[Collection(RatConfigCollection.Name)]
 public class TarkovTrackerMalformedResponseReliabilityTests
 {
     private const string PvpTokenResponse = "{\"token\":\"PVP_abc\",\"permissions\":[\"GP\"],\"gameMode\":\"pvp\"}";

@@ -19,12 +19,21 @@ internal static class RatConfig
     private static readonly TimeSpan GameDisplayRefreshInterval = TimeSpan.FromSeconds(5);
     private static DateTimeOffset _lastGameDisplayRefresh = DateTimeOffset.MinValue;
 
+    private static readonly string CachedVersion = ReadProductVersion();
+
     /// <summary>
     /// Numeric / informational product version from assembly metadata (csproj <c>Version</c>).
     /// Uses its own major line (4.x+) — never matches historical upstream 3.x tags.
+    /// Computed once: the value cannot change at runtime, and reading it via
+    /// <see cref="Process.MainModule"/> keeps a native handle alive on each access.
     /// </summary>
-    public static string Version =>
-        Process.GetCurrentProcess().MainModule?.FileVersionInfo.ProductVersion?.Trim() ?? "Unknown";
+    public static string Version => CachedVersion;
+
+    private static string ReadProductVersion()
+    {
+        using Process process = Process.GetCurrentProcess();
+        return process.MainModule?.FileVersionInfo.ProductVersion?.Trim() ?? "Unknown";
+    }
 
     /// <summary>Compact display form, e.g. <c>v4.0.0-beta.1</c>.</summary>
     public static string VersionDisplay => Version.StartsWith('v') || Version.StartsWith('V') ? Version : "v" + Version;

@@ -350,8 +350,26 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             "PvP tracker source",
             value,
             () => RatConfig.Tracking.TarkovTracker.PvpSource,
-            source => RatConfig.Tracking.TarkovTracker.PvpSource = source
+            source => RatConfig.Tracking.TarkovTracker.PvpSource = source,
+            _ => RefreshTrackerAfterSourceChange()
         );
+
+    private static void RefreshTrackerAfterSourceChange()
+    {
+        // The tracker database only re-reads the active token/endpoint on
+        // activation, so apply the source change immediately instead of
+        // waiting for the periodic refresh.
+        _ = RatScannerMain
+            .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
+            .ContinueWith(
+                t =>
+                    Logger.LogWarning(
+                        "Unable to refresh tracker progress after changing the PvP tracker source.",
+                        t.Exception
+                    ),
+                TaskContinuationOptions.OnlyOnFaulted
+            );
+    }
 
     internal Task<SettingSaveResult> SetShowTarkovTrackerTeamAsync(bool value) =>
         SaveAsync(

@@ -218,11 +218,22 @@ internal sealed class SettingsPersistenceService : IDisposable
                 (allowDuringDispose || !_disposed)
                 && _states.TryGetValue(key, out SettingState? state)
                 && state.Generation == generation
-                && state.LastPersisted is T value
             )
             {
-                persisted = value;
-                restore = true;
+                // `is T` misses persisted nulls (e.g. a string? saved as null): a
+                // failed save would then leave the new runtime value applied
+                // instead of restoring the persisted null. Restore whenever the
+                // stored value is a T, or is null and T permits it.
+                if (state.LastPersisted is T value)
+                {
+                    persisted = value;
+                    restore = true;
+                }
+                else if (state.LastPersisted is null && (default(T) is null || !typeof(T).IsValueType))
+                {
+                    persisted = default;
+                    restore = true;
+                }
             }
         }
 

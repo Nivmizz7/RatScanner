@@ -62,6 +62,8 @@ public partial class PageSwitcher : Window
 
             InitializeComponent();
             _normalChrome = WindowChrome.GetWindowChrome(this) ?? new WindowChrome();
+            Title = Constants.Branding.Name;
+            BrandTextBlock.Text = Constants.Branding.Name;
             VersionTextBlock.Text = GetProductVersionDisplay();
             ApplyWindowsTheme();
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
