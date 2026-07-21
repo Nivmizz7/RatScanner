@@ -16,7 +16,7 @@
 		  release tag must exactly match v + this value.
 		  Bump Version here for every release; tags should match as vMAJOR.MINOR.PATCH[-prerelease].
 		-->
-		<Version>4.0.0-beta.1</Version>
+		<Version>4.0.0-beta</Version>
 		<Product>RatScanner</Product>
 		<AssemblyTitle>RatScanner</AssemblyTitle>
 		<Company>TarkovTracker.org</Company>

@@ -39,7 +39,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -F
 publish.bat                      :: release package only (not day-to-day)
 ```
 
-Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package, draft release on `v*` tags).
+Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package, auto-published Latest release on a `v*` tag or manual `deploy` dispatch).
 
 ## Fork / remotes / branches / PRs
 

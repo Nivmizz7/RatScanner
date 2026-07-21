@@ -56,13 +56,25 @@ Triggers:
 
 The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/integrity checks → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + Data → upload `publish/` and `RatScanner.zip`.
 
-A separate tag-only release job has `contents: write`. It downloads the validated artifact, rejects a tag that is not exactly `v` + the App project `<Version>`, and creates the **draft** GitHub release. PR and branch-push builds never receive release permissions.
+The release job has `contents: write` and runs only on a deploy — either a `v*` tag push or a manual **Run workflow** with the `deploy` box checked. It resolves the version from the App project `<Version>`, refuses to overwrite an existing tag/release on manual deploys, auto-creates the tag when needed, and publishes the GitHub release **directly as Latest** (`draft: false`, `prerelease: false`, `make_latest: true`) with `RatScanner.zip` attached. Publishing as a non-prerelease Latest release is mandatory: the in-app updater reads `/releases/latest`, which skips drafts and pre-releases. PR and branch-push builds never receive release permissions.
+
+### How to cut a release
+
+Preferred (one click, no local git):
+
+1. Bump `<Version>` in `src/App/RatScanner.csproj` (e.g. `4.0.1-beta`) and land it on `master`.
+2. GitHub → **Actions** → **Build** → **Run workflow** on `master`, tick **deploy**, then **Run workflow**.
+3. CI builds/tests, tags `v<Version>`, and publishes it as the Latest release. Running installs pick it up on next launch.
+
+Alternative (tag push): bump `<Version>`, then `git tag v<Version>` and `git push origin v<Version>`.
+
+`GitHubUpdateService` compares the numeric version part, so bump the numeric version every release (`4.0.0-beta` → `4.0.1-beta`); never ship two releases sharing the same numeric base (e.g. `4.0.0-beta` then `4.0.0-beta.2`), or the second will not be offered as an update.
 
 `softprops/action-gh-release` must stay pinned to a commit SHA on the TarkovTracker org **selected actions** allowlist. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not listed. Process for bumps: (1) review the new softprops release, (2) add the SHA via org Actions selected-actions policy (`admin:org`), (3) update this workflow pin, (4) only then remove older softprops SHAs from the allowlist once no org workflow still references them.
 
 ## Update channel in-app
 
-`GitHubUpdateService` checks `tarkovtracker-org/RatScanner` releases and applies zip swap. It does **not** use upstream `api.ratscanner.com` updater endpoints.
+`GitHubUpdateService` checks `tarkovtracker-org/RatScanner` releases and applies zip swap. It does **not** use upstream `api.ratscanner.com` updater endpoints. It reads `/releases/latest`, so a release is only offered when published as a non-prerelease Latest release, and only when its numeric version is higher (or it is the matching stable of an installed pre-release).
 
 ## Checklist before tagging
 
@@ -71,8 +83,8 @@ A separate tag-only release job has `contents: write`. It downloads the validate
 3. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 4. Publish smoke or trust CI.
 5. Changelog/notes ready for draft release body if needed.
-6. Tag `vMAJOR.MINOR.PATCH[-prerelease]` on the intended commit; push to **origin**.
-7. Promote draft release when verified.
+6. Deploy: **Actions → Build → Run workflow → deploy** on `master` (or push a matching `v*` tag).
+7. Confirm the auto-published release is marked **Latest** (not pre-release) and has `RatScanner.zip` attached.
 
 ## Branding
 
