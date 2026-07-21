@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "打开导航",
   "CloseNavigation": "关闭导航",
   "PrimaryNavigation": "主导航",
@@ -254,8 +254,6 @@
   "IconScanningSection": "图标扫描",
   "IconScanningDescription": "通过图标识别库存物品。",
   "HotkeyCaptureDescription": "选择按钮，然后按下所需的键盘和鼠标组合。Escape 取消。",
-  "ScanningStatusSection": "扫描器状态",
-  "ScanningStatusDescription": "必须至少启用一种扫描方法才能进行自动检测。",
   "MinimalUiContentSection": "可见信息",
   "MinimalUiContentDescription": "选择在紧凑窗口中显示的详细信息。",
   "MinimalUiAppearanceSection": "外观",

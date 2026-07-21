@@ -167,7 +167,7 @@ $onFileChanged = {
     $path = $e.FullPath
     if (-not $path) { return }
     $ext = [System.IO.Path]::GetExtension($path)
-    if (@('.cs', '.razor', '.razor.css', '.css', '.xaml', '.csproj', '.json', '.props', '.targets') -notcontains $ext) { return }
+    if (@('.cs', '.razor', '.razor.css', '.css', '.xaml', '.csproj', '.json', '.props', '.targets', '.html', '.js') -notcontains $ext) { return }
     if ($path -match '\\(bin|obj)\\') { return }
     $state.LastChange = [DateTime]::Now
 }

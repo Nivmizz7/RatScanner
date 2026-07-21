@@ -536,11 +536,24 @@
             return;
         }
 
-        // Normalize the PvP source: if an org PvP token exists, switch to it
-        // so the UI and runtime agree. Without this, PvpSource stays Io while
-        // the runtime silently falls back to org — IsModeConfigured would show
-        // disconnected while tracking keeps working via the org fallback.
+        // Normalize the PvP source so the UI and runtime agree.
+        // - If an org PvP token exists, switch to it. Without this, PvpSource
+        //   stays Io while the runtime silently falls back to org —
+        //   IsModeConfigured would show disconnected while tracking keeps
+        //   working via the org fallback.
+        // - If both PvP tokens are now empty, reset to the Org default so the
+        //   disconnected PvP form does not show Io pre-selected with no token
+        //   (mirrors the default derivation in RatConfig.LoadConfig).
         if (!string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken))
+        {
+            SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Org);
+            if (!sourceResult.Succeeded)
+            {
+                Snackbar.Add(Localizer["CredentialSaveFailed"], Severity.Error);
+                return;
+            }
+        }
+        else if (RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io)
         {
             SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Org);
             if (!sourceResult.Succeeded)

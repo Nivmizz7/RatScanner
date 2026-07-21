@@ -288,6 +288,16 @@ internal static class UserActivityHelper
         // Read structure KeyboardHookStruct at lParam
         KBDLLHOOKSTRUCT keyboardHookStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT))!;
 
+        // Debug: log Shift/Ctrl/Alt key events (VK_SHIFT=0x10, VK_LSHIFT=0xA0, VK_RSHIFT=0xA1,
+        // VK_CONTROL=0x11, VK_LCONTROL=0xA2, VK_RCONTROL=0xA3, VK_MENU=0x12, VK_LMENU=0xA4, VK_RMENU=0xA5)
+        // These are the modifier keys used by scan hotkeys; tracking their up/down state is
+        // critical for understanding why IsPressed returns false during mouse button-up events.
+        uint vk = keyboardHookStruct.vkCode;
+        if (vk is 0x10 or 0xA0 or 0xA1 or 0x11 or 0xA2 or 0xA3 or 0x12 or 0xA4 or 0xA5)
+        {
+            Logger.LogDebug($"KeyboardHook: WM={((WM)wParam)} VK=0x{vk:X2} flags={keyboardHookStruct.flags}");
+        }
+
         // Raise OnKeyboardKeyUp or OnKeyboardKeyDown event
         if (OnKeyboardKeyUp != null && ((WM)wParam == WM.KEYUP || (WM)wParam == WM.SYSKEYUP))
         {
@@ -369,6 +379,13 @@ internal static class UserActivityHelper
                 return CallNextHookEx(hMouseHook, nCode, wParam, lParam);
         }
 
+        // Debug: log every button up/down event with its WM code and keycode so
+        // we can trace whether LBUTTONUP is reaching the hook and whether it is
+        // being swallowed (handled=true → return 1) or passed through.
+        Logger.LogDebug(
+            $"MouseHook: WM={((WM)wParam)} VK=0x{virtualKeycode:X2} up={up} upSubs={(OnMouseButtonUp?.GetInvocationList().Length ?? 0)} downSubs={(OnMouseButtonDown?.GetInvocationList().Length ?? 0)}"
+        );
+
         if (up && OnMouseButtonUp != null)
         {
             KeyUpEventArgs eventArgs = new(virtualKeycode, Device.Mouse);
@@ -381,6 +398,9 @@ internal static class UserActivityHelper
                 Logger.LogWarning("A mouse hook subscriber threw during button-up dispatch.", ex);
             }
             handled |= eventArgs.Handled;
+
+            if (eventArgs.Handled)
+                Logger.LogDebug($"MouseHook: LBUTTON UP was SWALLOWED (Handled=true) for VK=0x{virtualKeycode:X2}");
         }
         else if (!up && OnMouseButtonDown != null)
         {
@@ -394,10 +414,16 @@ internal static class UserActivityHelper
                 Logger.LogWarning("A mouse hook subscriber threw during button-down dispatch.", ex);
             }
             handled |= eventArgs.Handled;
+
+            if (eventArgs.Handled)
+                Logger.LogDebug($"MouseHook: LBUTTON DOWN was SWALLOWED (Handled=true) for VK=0x{virtualKeycode:X2}");
         }
 
         // If event is marked as handled, do not forward to other listeners
-        return handled ? 1 : CallNextHookEx(hMouseHook, nCode, wParam, lParam);
+        nint result = handled ? 1 : CallNextHookEx(hMouseHook, nCode, wParam, lParam);
+        if (up)
+            Logger.LogDebug($"MouseHook: {((WM)wParam)} → {(handled ? "SWALLOWED(1)" : "PASSTHROUGH")}");
+        return result;
     }
 
     #endregion

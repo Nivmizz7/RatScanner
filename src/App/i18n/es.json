@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "Abrir navegación",
   "CloseNavigation": "Cerrar navegación",
   "PrimaryNavigation": "Navegación principal",
@@ -254,8 +254,6 @@
   "IconScanningSection": "Escaneo por icono",
   "IconScanningDescription": "Reconoce objetos del inventario por sus iconos.",
   "HotkeyCaptureDescription": "Seleccione el botón y luego presione la combinación deseada de teclado y ratón. Escape cancela.",
-  "ScanningStatusSection": "Estado del escáner",
-  "ScanningStatusDescription": "Al menos un método de escaneo debe estar activado para la detección automática.",
   "MinimalUiContentSection": "Información visible",
   "MinimalUiContentDescription": "Elija los detalles mostrados en la ventana compacta.",
   "MinimalUiAppearanceSection": "Apariencia",

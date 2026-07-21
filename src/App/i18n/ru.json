@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "Открыть навигацию",
   "CloseNavigation": "Закрыть навигацию",
   "PrimaryNavigation": "Основная навигация",
@@ -254,8 +254,6 @@
   "IconScanningSection": "Сканирование по иконке",
   "IconScanningDescription": "Распознаёт предметы инвентаря по их иконкам.",
   "HotkeyCaptureDescription": "Выберите кнопку, затем нажмите нужную комбинацию клавиш и мыши. Escape отменяет.",
-  "ScanningStatusSection": "Статус сканера",
-  "ScanningStatusDescription": "Для автоматического обнаружения должен быть включён хотя бы один метод сканирования.",
   "MinimalUiContentSection": "Видимая информация",
   "MinimalUiContentDescription": "Выберите данные, отображаемые в компактном окне.",
   "MinimalUiAppearanceSection": "Внешний вид",

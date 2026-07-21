@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "Ouvrir la navigation",
   "CloseNavigation": "Fermer la navigation",
   "PrimaryNavigation": "Navigation principale",
@@ -254,8 +254,6 @@
   "IconScanningSection": "Scan par icône",
   "IconScanningDescription": "Reconnaît les objets d'inventaire par leurs icônes.",
   "HotkeyCaptureDescription": "Sélectionnez le bouton, puis appuyez sur la combinaison clavier et souris souhaitée. Échap annule.",
-  "ScanningStatusSection": "État du scanner",
-  "ScanningStatusDescription": "Au moins une méthode de scan doit être activée pour la détection automatique.",
   "MinimalUiContentSection": "Informations visibles",
   "MinimalUiContentDescription": "Choisissez les détails affichés dans la fenêtre compacte.",
   "MinimalUiAppearanceSection": "Apparence",

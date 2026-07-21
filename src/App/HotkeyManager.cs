@@ -51,7 +51,19 @@ internal sealed class HotkeyManager : IDisposable
         // Unregister hotkeys to prevent multiple listeners for the same hotkey
         UnregisterHotkeys();
 
-        IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, IconScan.Enable);
+        // IMPORTANT: pass enabled/suppressHotkey explicitly by name. Without
+        // the named argument, C# resolves to the 3-param constructor
+        // (Hotkey, handler, bool suppressHotkey) instead of the 5-param one
+        // (Hotkey, handler, bool enabled, bool suppressHotkey, Func? canHandle),
+        // silently passing IconScan.Enable as suppressHotkey=true. That causes
+        // the low-level hook to swallow LBUTTONUP and Shift KEYUP events —
+        // the game never sees the button/key release and both appear stuck.
+        IconScanHotkey = new ActiveHotkey(
+            IconScan.Hotkey,
+            OnIconScanHotkey,
+            enabled: IconScan.Enable,
+            suppressHotkey: false
+        );
         Hotkey nameScanHotkey = new(null, new[] { MouseButton.Left });
         NameScanHotkey = new ActiveHotkey(
             nameScanHotkey,
@@ -62,7 +74,8 @@ internal sealed class HotkeyManager : IDisposable
         OpenInteractableOverlayHotkey = new ActiveHotkey(
             OverlayC.Search.Hotkey,
             OnOpenInteractableOverlayHotkey,
-            OverlayC.Search.Enable
+            enabled: OverlayC.Search.Enable,
+            suppressHotkey: false
         );
         CloseInteractableOverlayHotkey = new ActiveHotkey(
             new Hotkey(new[] { Key.Escape }),
@@ -130,22 +143,31 @@ internal sealed class HotkeyManager : IDisposable
     {
         Wrap(() =>
         {
+            Logger.LogDebug("OnNameScanHotkey: ENTER");
             _owner.NameScan(UserActivityHelper.GetMousePosition());
             // Claim the auto-scan window atomically so concurrent Task.Run handlers from a
             // real double-click cannot both pass the debounce and both call NameScanScreen.
             long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
             long previous = Interlocked.Exchange(ref _last_mouse_click, now);
+            Logger.LogDebug($"OnNameScanHotkey: now={now} previous={previous} EnableAuto={NameScan.EnableAuto}");
             if (previous + 500 < now && NameScan.EnableAuto)
             {
+                Logger.LogDebug("OnNameScanHotkey: auto-scan window open, sleeping 200ms then NameScanScreen");
                 Thread.Sleep(200); // wait for double click and ui
                 _owner.NameScanScreen();
             }
+            Logger.LogDebug("OnNameScanHotkey: EXIT");
         });
     }
 
     private void OnIconScanHotkey(object? sender, KeyUpEventArgs e)
     {
-        Wrap(() => _owner.IconScan(UserActivityHelper.GetMousePosition()));
+        Wrap(() =>
+        {
+            Logger.LogDebug("OnIconScanHotkey: ENTER");
+            _owner.IconScan(UserActivityHelper.GetMousePosition());
+            Logger.LogDebug("OnIconScanHotkey: EXIT");
+        });
     }
 
     private void OnOpenInteractableOverlayHotkey(object? sender, KeyUpEventArgs e)

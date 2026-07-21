@@ -359,6 +359,14 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         // The tracker database only re-reads the active token/endpoint on
         // activation, so apply the source change immediately instead of
         // waiting for the periodic refresh.
+        //
+        // Fire-and-forget is safe here: TarkovTrackerDB.Configure assigns a
+        // monotonically increasing generation to each configuration, and
+        // stale async operations check IsCurrent before committing state. If
+        // the save later fails and SettingsPersistenceService rolls back via
+        // applyRuntime(previous), the rollback activation gets a newer
+        // generation and wins — so the runtime always converges on the
+        // persisted source even when the optimistic change and rollback race.
         _ = RatScannerMain
             .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
             .ContinueWith(

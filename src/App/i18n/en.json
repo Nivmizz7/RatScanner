@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "Open navigation",
   "CloseNavigation": "Close navigation",
   "PrimaryNavigation": "Primary navigation",
@@ -254,8 +254,6 @@
   "IconScanningSection": "Icon scanning",
   "IconScanningDescription": "Recognize inventory items from their icons.",
   "HotkeyCaptureDescription": "Select the button, then press the desired keyboard and mouse combination. Escape cancels.",
-  "ScanningStatusSection": "Scanner status",
-  "ScanningStatusDescription": "At least one scanning method must be enabled for automatic detection.",
   "MinimalUiContentSection": "Visible information",
   "MinimalUiContentDescription": "Choose the details shown in the compact window.",
   "MinimalUiAppearanceSection": "Appearance",

@@ -456,11 +456,17 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <param name="position">Position on the screen at which to perform the scan</param>
     internal void NameScan(Vector2 position)
     {
+        Logger.LogDebug($"NameScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
         RefreshGameDisplayForScan();
+        Logger.LogDebug("NameScan: acquiring NameScanLock...");
         lock (NameScanLock)
         {
+            Logger.LogDebug("NameScan: NameScanLock acquired");
             if (_disposed || !_ratEyeReady)
+            {
+                Logger.LogDebug($"NameScan: early return (_disposed={_disposed} _ratEyeReady={_ratEyeReady})");
                 return;
+            }
 
             Logger.LogDebug("Name scanning at: " + position);
             // Wait for game ui to update the click
@@ -479,7 +485,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             RatEye.Processing.Inspection inspection = RatEyeEngine.NewInspection(screenshot);
 
             if (!inspection.ContainsMarker || inspection.Item == null)
+            {
+                Logger.LogDebug(
+                    $"NameScan: no marker or item (ContainsMarker={inspection.ContainsMarker} Item={inspection.Item != null})"
+                );
                 return;
+            }
 
             float scale = RatEyeEngine.Config.ProcessingConfig.Scale;
             Bitmap marker = RatEyeEngine.Config.ProcessingConfig.InspectionConfig.Marker;
@@ -494,7 +505,9 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration);
 
             ItemScans.Enqueue(tempNameScan);
+            Logger.LogDebug($"NameScan: enqueued scan for item={inspection.Item?.Name}");
         }
+        Logger.LogDebug("NameScan: EXIT (lock released)");
     }
 
     /// <summary>
@@ -557,11 +570,17 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <returns><see langword="true"/> if a item was scanned successfully</returns>
     internal void IconScan(Vector2 position)
     {
+        Logger.LogDebug($"IconScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
         RefreshGameDisplayForScan();
+        Logger.LogDebug("IconScan: acquiring IconScanLock...");
         lock (IconScanLock)
         {
+            Logger.LogDebug("IconScan: IconScanLock acquired");
             if (_disposed || !_ratEyeReady)
+            {
+                Logger.LogDebug($"IconScan: early return (_disposed={_disposed} _ratEyeReady={_ratEyeReady})");
                 return;
+            }
 
             Logger.LogDebug("Icon scanning at: " + position);
             int x = position.X - RatConfig.IconScan.ScanWidth / 2;
@@ -586,6 +605,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                             + "produce low-confidence garbage matches."
                     );
                 }
+                else
+                {
+                    Logger.LogDebug(
+                        $"IconScan: no icon found (icon={icon != null} confidence={icon?.DetectionConfidence:F3})"
+                    );
+                }
                 return;
             }
 
@@ -596,7 +621,11 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             ItemIconScan tempIconScan = new(icon, toolTipPosition, RatConfig.ToolTip.Duration);
 
             ItemScans.Enqueue(tempIconScan);
+            Logger.LogDebug(
+                $"IconScan: enqueued scan for item={icon.Item?.Name} confidence={icon.DetectionConfidence:F3}"
+            );
         }
+        Logger.LogDebug("IconScan: EXIT (lock released)");
     }
 
     // Returns the ruff screenshot
@@ -619,8 +648,14 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private void RefreshGameDisplayForScan()
     {
-        if (RatConfig.RefreshGameDisplayConfiguration())
+        bool viewportChanged = RatConfig.RefreshGameDisplayConfiguration();
+        Logger.LogDebug($"RefreshGameDisplayForScan: viewportChanged={viewportChanged}");
+        if (viewportChanged)
+        {
+            Logger.LogDebug("RefreshGameDisplayForScan: calling SetupRatEye (may block on locks)...");
             SetupRatEye();
+            Logger.LogDebug("RefreshGameDisplayForScan: SetupRatEye complete");
+        }
     }
 
     private void RefreshTarkovTrackerDB(object? o = null) => _ = RefreshTarkovTrackerDBAsync();

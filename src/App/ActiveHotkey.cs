@@ -120,14 +120,35 @@ internal class ActiveHotkey : Hotkey, IDisposable
     private void OnKeyUp(object? sender, KeyUpEventArgs e)
     {
         if (!Enabled)
+        {
+            Logger.LogDebug(
+                $"ActiveHotkey.OnKeyUp: SKIPPED (disabled) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
+            );
             return;
+        }
         if (_canHandle != null && !_canHandle(e))
+        {
+            Logger.LogDebug(
+                $"ActiveHotkey.OnKeyUp: canHandle=false (rejected) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
+            );
             return;
-        if (IsPressed(e) && HotkeyPressedEventHandler != null)
+        }
+        bool pressed = IsPressed(e);
+        Logger.LogDebug(
+            $"ActiveHotkey.OnKeyUp: hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2} IsPressed={pressed} SuppressHotkey={SuppressHotkey}"
+        );
+        if (pressed && HotkeyPressedEventHandler != null)
         {
             Logger.LogDebug("Pressed: " + ToString());
             e.Handled |= SuppressHotkey;
+            Logger.LogDebug($"ActiveHotkey.OnKeyUp: firing handler via Task.Run, Handled={e.Handled}");
             Task.Run(() => HotkeyPressedEventHandler(sender, e));
+        }
+        else
+        {
+            Logger.LogDebug(
+                $"ActiveHotkey.OnKeyUp: NOT firing (pressed={pressed} hasHandler={HotkeyPressedEventHandler != null})"
+            );
         }
     }
 
@@ -142,8 +163,12 @@ internal class ActiveHotkey : Hotkey, IDisposable
         {
             foreach (Key keyboardKey in KeyboardKeys)
             {
-                if (!UserActivityHelper.IsKeyDown(keyboardKey))
+                bool isDown = UserActivityHelper.IsKeyDown(keyboardKey);
+                if (!isDown)
+                {
+                    Logger.LogDebug($"IsPressed: keyboard key {keyboardKey} is NOT down → returning false");
                     return false;
+                }
                 if (e.Device == Device.Keyboard)
                     keyInHotkey |= e.Key == keyboardKey;
             }
@@ -153,13 +178,20 @@ internal class ActiveHotkey : Hotkey, IDisposable
         {
             foreach (MouseButton mouseButton in MouseButtons)
             {
-                if (!UserActivityHelper.IsMouseButtonDown(mouseButton))
+                bool isDown = UserActivityHelper.IsMouseButtonDown(mouseButton);
+                if (!isDown)
+                {
+                    Logger.LogDebug($"IsPressed: mouse button {mouseButton} is NOT down → returning false");
                     return false;
+                }
                 if (e.Device == Device.Mouse)
                     keyInHotkey |= e.MouseButton == mouseButton;
             }
         }
 
+        Logger.LogDebug(
+            $"IsPressed: returning {keyInHotkey} (RequiresKeyboard={RequiresKeyboard} RequiresMouse={RequiresMouse} device={e.Device})"
+        );
         return keyInHotkey;
     }
 

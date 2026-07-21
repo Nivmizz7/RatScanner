@@ -218,8 +218,11 @@
             }
 
             // Activate only when this credential drives the active game mode.
-            bool drivesActiveMode = RatConfig.GameMode == Mode
-                && !((Mode == GameMode.Regular) && RatConfig.Tracking.TarkovTracker.PvpSource != _draftSource);
+            // At this point PvpSource always equals _draftSource: the source
+            // change above either succeeded (setting PvpSource = _draftSource)
+            // or was skipped because they already matched, so the PvP-source
+            // mismatch guard is redundant and only the game-mode check matters.
+            bool drivesActiveMode = RatConfig.GameMode == Mode;
             if (drivesActiveMode)
                 await RatScannerMain.Instance.ActivateTrackerModeAsync(Mode, cancellation.Token);
 

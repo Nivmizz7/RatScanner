@@ -73,21 +73,6 @@
             </div>
         </section>
     </div>
-
-    <aside class="settings-column">
-        <section class="settings-section">
-            <header class="section-heading">
-                <div><h2>@Localizer["ScanningStatusSection"]</h2></div>
-            </header>
-            <p class="section-description">@Localizer["ScanningStatusDescription"]</p>
-            <MudAlert Severity="@(RatConfig.NameScan.Enable || RatConfig.IconScan.Enable ? Severity.Success : Severity.Warning)"
-                      Variant="Variant.Outlined"
-                      Dense="true"
-                      Class="mt-3">
-                @(RatConfig.NameScan.Enable || RatConfig.IconScan.Enable ? Localizer["ScannerReady"] : Localizer["ScannerPaused"])
-            </MudAlert>
-        </section>
-    </aside>
 </div>
 
 @code {

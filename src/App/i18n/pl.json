@@ -1,4 +1,4 @@
-﻿{
+{
   "OpenNavigation": "Otwórz nawigację",
   "CloseNavigation": "Zamknij nawigację",
   "PrimaryNavigation": "Nawigacja główna",
@@ -254,8 +254,6 @@
   "IconScanningSection": "Skanowanie po ikonie",
   "IconScanningDescription": "Rozpoznaje przedmioty ekwipunku po ich ikonach.",
   "HotkeyCaptureDescription": "Wybierz przycisk, a następnie naciśnij żądaną kombinację klawiatury i myszy. Escape anuluje.",
-  "ScanningStatusSection": "Status skanera",
-  "ScanningStatusDescription": "Co najmniej jedna metoda skanowania musi być włączona do automatycznego wykrywania.",
   "MinimalUiContentSection": "Widoczne informacje",
   "MinimalUiContentDescription": "Wybierz szczegóły wyświetlane w kompaktowym oknie.",
   "MinimalUiAppearanceSection": "Wygląd",
