@@ -1,0 +1,259 @@
+@using RatScanner.Display
+@inject NavigationManager Navigation
+@inject LocalizationService Localizer
+@implements IDisposable
+@using Task = System.Threading.Tasks.Task
+
+<div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown" aria-live="polite">
+    <button type="button"
+            @ref="_control"
+            class="scanner-status-control @_stateClass expanded"
+            title="@_hoverTitle"
+            aria-label="@_ariaLabel"
+            aria-expanded="@_open"
+            aria-haspopup="dialog"
+            @onclick="ToggleAsync"
+            @onclick:stopPropagation="true">
+        <span class="scanner-status-dot" aria-hidden="true"></span>
+        <span class="scanner-status-label">@_label</span>
+    </button>
+
+    @if (_open)
+    {
+        <button type="button"
+                class="scanner-status-scrim"
+                aria-label="@Localizer["ScannerStatusClose"]"
+                @onclick="CloseAsync"></button>
+        <div class="scanner-status-popover from-toolbar"
+             @ref="_popover"
+             role="dialog"
+             aria-label="@_title"
+             tabindex="-1"
+             @onclick:stopPropagation="true"
+             @onkeydown="OnPopoverKeyDown">
+            <strong>@_title</strong>
+            <p>@_detail</p>
+            <button type="button" class="scanner-status-action" @ref="_action" @onclick="OpenSettingsAsync">
+                @_actionLabel
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _open;
+    private bool _subscribed;
+    private ScannerState _state = ScannerState.Paused;
+    private ElementReference _control;
+    private ElementReference _popover;
+    private ElementReference _action;
+
+    private string _stateClass =>
+        _state switch
+        {
+            ScannerState.Ready => "state-ready",
+            ScannerState.Paused => "state-paused",
+            ScannerState.Attention => "state-attention",
+            _ => "state-paused",
+        };
+
+    private string _label =>
+        _state switch
+        {
+            ScannerState.Ready => Localizer["StatusReady"],
+            ScannerState.Paused => Localizer["StatusPaused"],
+            ScannerState.Attention => Localizer["StatusAttention"],
+            _ => Localizer["StatusPaused"],
+        };
+
+    private string _title =>
+        _state switch
+        {
+            ScannerState.Ready => Localizer["ScannerReady"],
+            ScannerState.Paused => Localizer["ScannerPaused"],
+            ScannerState.Attention => Localizer["ScannerUnavailable"],
+            _ => Localizer["ScannerStatusTitle"],
+        };
+
+    private string _detail =>
+        _state switch
+        {
+            ScannerState.Ready =>
+                Localizer["ScannerReadyDetail"],
+            ScannerState.Paused =>
+                Localizer["ScannerPausedDetail"],
+            ScannerState.Attention => FormatDisplayProblem(),
+            _ => string.Empty,
+        };
+
+    private string _actionLabel =>
+        _state == ScannerState.Attention
+            ? Localizer["ReviewDisplaySettings"]
+            : Localizer["OpenScannerSettings"];
+
+    private string _settingsPath =>
+        _state == ScannerState.Attention ? "/app/settings/general" : "/app/settings/scanning";
+
+    private string _hoverTitle => $"{_title}. {_detail}";
+
+    private string _ariaLabel => $"{_title}. {_detail}";
+
+    protected override void OnInitialized()
+    {
+        RefreshState();
+        RatConfig.GameDisplayConfigurationChanged += OnDisplayChanged;
+        RatConfig.SettingsChanged += OnSettingsChanged;
+        _subscribed = true;
+    }
+
+    private void OnDisplayChanged(GameDisplayConfiguration configuration) => QueueRefresh();
+
+    private void OnSettingsChanged() => QueueRefresh();
+
+    private void QueueRefresh()
+    {
+        _ = InvokeAsync(() =>
+        {
+            RefreshState();
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
+    }
+
+    private void RefreshState()
+    {
+        bool scanningEnabled = RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
+        bool displayBroken =
+            RatConfig.GameDisplayConfiguration.RequiresAttention
+            && RatConfig.GameDisplayConfiguration.StatusKind
+                is GameDisplayStatusKind.Error
+                    or GameDisplayStatusKind.Warning;
+
+        if (!scanningEnabled)
+            _state = ScannerState.Paused;
+        else if (displayBroken)
+            _state = ScannerState.Attention;
+        else
+            _state = ScannerState.Ready;
+    }
+
+    private string FormatDisplayProblem()
+    {
+        GameDisplayConfiguration config = RatConfig.GameDisplayConfiguration;
+        return config.StatusCode switch
+        {
+            GameDisplayStatusCode.SavedDisplayUnavailable =>
+                Localizer["DisplayMissing"],
+            GameDisplayStatusCode.NoDisplays => Localizer["NoDisplaysDetected"],
+            GameDisplayStatusCode.InvalidCustomConfiguration =>
+                Localizer["InvalidDisplayConfig"],
+            GameDisplayStatusCode.GameWindowOnDifferentDisplay =>
+                Localizer["GameOnDifferentDisplay"],
+            GameDisplayStatusCode.GameWindowSpansDisplays =>
+                Localizer["GameSpansDisplays"],
+            GameDisplayStatusCode.DpiUnavailable =>
+                Localizer["DisplayScaleUnknown"],
+            _ => Localizer["DisplayUnavailable"],
+        };
+    }
+
+    private async Task ToggleAsync()
+    {
+        RefreshState();
+        _open = !_open;
+        await InvokeAsync(StateHasChanged);
+        if (!_open)
+            return;
+        await Task.Yield();
+        try
+        {
+            await _action.FocusAsync();
+        }
+        catch
+        {
+            try
+            {
+                await _popover.FocusAsync();
+            }
+            catch
+            {
+                // Focus is best-effort when the popover is opening.
+            }
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (!_open)
+            return;
+        _open = false;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await _control.FocusAsync();
+        }
+        catch
+        {
+            // Same best-effort policy as open.
+        }
+    }
+
+    private void Close() => _ = CloseAsync();
+
+    private async Task OpenSettingsAsync()
+    {
+        await CloseAsync();
+        Navigation.NavigateTo(_settingsPath);
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _open)
+            Close();
+    }
+
+    private void OnPopoverKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+            return;
+        }
+
+        // Keep Tab inside the open popover (control + action).
+        if (e.Key != "Tab")
+            return;
+
+        if (e.ShiftKey)
+            _ = FocusAsync(_control);
+        else
+            _ = FocusAsync(_action);
+    }
+
+    private async Task FocusAsync(ElementReference reference)
+    {
+        try
+        {
+            await reference.FocusAsync();
+        }
+        catch
+        {
+            // Best-effort trap.
+        }
+    }
+
+    public void Dispose()
+    {
+        if (!_subscribed)
+            return;
+        RatConfig.GameDisplayConfigurationChanged -= OnDisplayChanged;
+        RatConfig.SettingsChanged -= OnSettingsChanged;
+    }
+
+    private enum ScannerState
+    {
+        Ready,
+        Paused,
+        Attention,
+    }
+}

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<title>Blazor WPF app</title>
+	<base href="/" />
+	<link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+	<link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+	<link href="css/theme.css" rel="stylesheet" />
+	<script src="_content/MudBlazor/MudBlazor.min.js"></script>
+	<link href="RatScanner.styles.css" rel="stylesheet" />
+</head>
+
+<body>
+	<div id="app">Loading...</div>
+
+	<div id="blazor-error-ui">
+		An unhandled error has occurred.
+		<a href="" class="reload">Reload</a>
+		<a class="dismiss">🗙</a>
+	</div>
+
+	<script src="_framework/blazor.webview.js"></script>
+	<script>
+		document.addEventListener("keydown", event => {
+			if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+				event.preventDefault();
+				document.querySelector(".search input")?.focus();
+			}
+		});
+
+		// Sidebar viewport tracking + dialog-offset sync.
+		// Toggles `rs-narrow` on <html> and keeps --rs-sidebar-active-width in
+		// step with the sidebar's open/closed/rail state so MudBlazor dialogs center
+		// in the actual main content pane (see theme.css).
+		window.RatScanner = window.RatScanner || {};
+		(function () {
+			const root = document.documentElement;
+			const mq = matchMedia("(max-width: 680px)");
+			let sidebarState = mq.matches ? "narrow-closed" : "expanded";
+			let narrowRef = null;
+
+			const getActiveWidth = (state) => {
+				switch (state) {
+					case "expanded":
+						return "var(--rs-sidebar-width)";
+					case "rail":
+						return "var(--rs-sidebar-rail-width)";
+					case "narrow-open":
+					case "narrow-closed":
+					default:
+						return "0px";
+				}
+			};
+
+			const render = () => {
+				root.classList.toggle("rs-narrow", mq.matches);
+				root.style.setProperty(
+					"--rs-sidebar-active-width",
+					getActiveWidth(sidebarState)
+				);
+			};
+
+			mq.addEventListener("change", () => {
+				render();
+				if (narrowRef) {
+					narrowRef.invokeMethodAsync("OnViewportNarrow", mq.matches);
+				}
+			});
+
+			window.RatScanner.isNarrow = () => mq.matches;
+			window.RatScanner.setSidebarState = (state) => {
+				sidebarState = state;
+				render();
+			};
+			window.RatScanner.registerViewportRef = (ref) => { narrowRef = ref; };
+			window.RatScanner.disposeViewportRef = () => { narrowRef = null; };
+
+			// Trap focus inside the open overlay drawer and close it on Escape.
+			document.addEventListener("keydown", (e) => {
+				const sidebar = document.getElementById("primary-sidebar");
+				if (!sidebar || !sidebar.classList.contains("overlay") || !sidebar.classList.contains("open"))
+					return;
+
+				if (e.key === "Escape") {
+					e.preventDefault();
+					if (narrowRef) {
+						narrowRef.invokeMethodAsync("CloseDrawerFromJs");
+					}
+					return;
+				}
+
+				if (e.key !== "Tab")
+					return;
+
+				const focusable = Array.from(sidebar.querySelectorAll(
+					"a, button, input, select, textarea, [tabindex]:not([tabindex='-1'])"
+				)).filter(el => el.offsetParent !== null);
+				if (focusable.length === 0)
+					return;
+
+				const first = focusable[0];
+				const last = focusable[focusable.length - 1];
+				if (e.shiftKey && document.activeElement === first) {
+					e.preventDefault();
+					last.focus();
+				} else if (!e.shiftKey && document.activeElement === last) {
+					e.preventDefault();
+					first.focus();
+				}
+			});
+
+			render();
+		})();
+	</script>
+</body>
+
+</html>

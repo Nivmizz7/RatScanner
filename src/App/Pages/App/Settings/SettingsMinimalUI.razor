@@ -1,0 +1,62 @@
+@page "/app/settings/minimal"
+@inherits SettingsPageBase
+@inject SettingsVM SettingsVM
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["MinimalUiContentSection"]</h2>
+                    <p>@Localizer["MinimalUiContentDescription"]</p>
+                </div>
+            </header>
+            @foreach (MinimalOption option in Options)
+            {
+                <ImmediateSettingSwitch Value="@option.Value"
+                                        ValueChanged="@(_ => StateHasChanged())"
+                                        Label="@option.Label"
+                                        Persist="@(value => SettingsVM.SetMinimalUiAsync(option.Key, value))" />
+            }
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["MinimalUiAppearanceSection"]</h2>
+                    <p>@Localizer["MinimalUiAppearanceDescription"]</p>
+                </div>
+            </header>
+            <MudSlider T="int"
+                       Value="@RatConfig.MinimalUi.Opacity"
+                       ValueChanged="SetOpacityAsync"
+                       Min="0"
+                       Max="100"
+                       Step="10"
+                       Color="Color.Primary">
+                <MudText Typo="Typo.subtitle2">@Localizer.Format("OpacityLabel", RatConfig.MinimalUi.Opacity)</MudText>
+            </MudSlider>
+        </section>
+    </aside>
+</div>
+
+@code {
+    private sealed record MinimalOption(string Key, string Label, bool Value);
+
+    private IReadOnlyList<MinimalOption> Options =>
+    [
+        new(nameof(RatConfig.MinimalUi.ShowName), Localizer["NameLabel"], RatConfig.MinimalUi.ShowName),
+        new(nameof(RatConfig.MinimalUi.ShowAvgDayPrice), Localizer["AvgDailyPrice"], RatConfig.MinimalUi.ShowAvgDayPrice),
+        new(nameof(RatConfig.MinimalUi.ShowPricePerSlot), Localizer["PricePerSlot"], RatConfig.MinimalUi.ShowPricePerSlot),
+        new(nameof(RatConfig.MinimalUi.ShowTraderPrice), Localizer["TraderPrice"], RatConfig.MinimalUi.ShowTraderPrice),
+        new(nameof(RatConfig.MinimalUi.ShowKappa), Localizer["KappaNeeded"], RatConfig.MinimalUi.ShowKappa),
+        new(nameof(RatConfig.MinimalUi.ShowQuestHideoutTracker), Localizer["NeededQuestHideout"], RatConfig.MinimalUi.ShowQuestHideoutTracker),
+        new(nameof(RatConfig.MinimalUi.ShowQuestHideoutTeamTracker), Localizer["NeededQuestHideoutTeam"], RatConfig.MinimalUi.ShowQuestHideoutTeamTracker),
+        new(nameof(RatConfig.MinimalUi.ShowUpdated), Localizer["UpdatedTimestamp"], RatConfig.MinimalUi.ShowUpdated),
+    ];
+
+    private async Task SetOpacityAsync(int value) =>
+        await ReportAsync(await SettingsVM.SetOpacityAsync(value));
+}

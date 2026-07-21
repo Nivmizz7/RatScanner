@@ -1,0 +1,88 @@
+@page "/app/settings/scanning"
+@inherits SettingsPageBase
+@using RatScanner.Components
+@using RatStash
+@using System.Linq
+@inject SettingsVM SettingsVM
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["NameScanningSection"]</h2>
+                    <p>@Localizer["NameScanningDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.NameScan.Enable"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["EnableNameScan"]"
+                                    Persist="SettingsVM.SetEnableNameScanAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.NameScan.EnableAuto"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["AutomaticScanning"]"
+                                    Persist="SettingsVM.SetEnableAutoNameScanAsync" />
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["NameScanLanguage"]</div>
+                    <p class="setting-description">@Localizer["NameScanLanguageDescription"]</p>
+                </div>
+                <div class="setting-control">
+                    <MudSelect T="int"
+                               Value="@((int)RatConfig.NameScan.Language)"
+                               ValueChanged="SetNameScanLanguageAsync"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true">
+                        @foreach (var language in GetLanguages())
+                        {
+                            <MudSelectItem T="int" Value="@language.ordinal">@language.name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </div>
+        </section>
+
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["IconScanningSection"]</h2>
+                    <p>@Localizer["IconScanningDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.IconScan.Enable"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["EnableIconScan"]"
+                                    Persist="SettingsVM.SetEnableIconScanAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.IconScan.ScanRotatedIcons"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["ScanRotatedIcons"]"
+                                    Persist="SettingsVM.SetScanRotatedIconsAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.IconScan.UseCachedIcons"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["UseCachedIcons"]"
+                                    Persist="SettingsVM.SetUseCachedIconsAsync" />
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["IconScanHotkey"]</div>
+                    <p class="setting-description">@Localizer["HotkeyCaptureDescription"]</p>
+                </div>
+                <div class="setting-control hotkey-control">
+                    <HotkeySelector Hotkey="@RatConfig.IconScan.Hotkey" HotkeyChanged="SetIconHotkeyAsync" />
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+@code {
+    private (string name, int ordinal)[] GetLanguages()
+    {
+        var values = Enum.GetValues(typeof(Language)).Cast<Language>();
+        return values.Select(language => (language.ToString(), (int)language)).OrderBy(language => language.Item1).ToArray();
+    }
+
+    private async Task SetNameScanLanguageAsync(int value) => await ReportAsync(await SettingsVM.SetNameScanLanguageAsync(value));
+    private async Task SetIconHotkeyAsync(Hotkey value) => await ReportAsync(await SettingsVM.SetIconScanHotkeyAsync(value));
+
+}

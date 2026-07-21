@@ -1,0 +1,590 @@
+@page "/"
+@page "/app"
+@using RatScanner.Presentation
+@using RatScanner.Scan
+@using RatScanner.TarkovDev
+@using System.Diagnostics
+@using System.ComponentModel
+@using System.Threading
+@using System.Globalization
+@inject MenuVM MenuVM
+@inject SessionHistoryService History
+@inject LocalizationService Localizer
+@implements IDisposable
+
+<div class="scan-page">
+    <div class="utility-bar">
+        <div class="search">
+            <MudAutocomplete @ref="_search"
+                             T="Item"
+                             Class="rs-search-field"
+                             Placeholder="@Localizer["SearchItemsPlaceholder"]"
+                             SearchFunc="SearchItems"
+                             ValueChanged="SelectItem"
+                             ToStringFunc="@(item => item?.Name ?? string.Empty)"
+                             MaxItems="8"
+                             Clearable="true"
+                             ResetValueOnEmptyText="true"
+                             Underline="false"
+                             FullWidth="true"
+                             Margin="Margin.None"
+                             Variant="Variant.Text"
+                             AdornmentIcon="@Icons.Material.Filled.Search">
+                <ItemTemplate Context="item">
+                    <div class="search-result">
+                        <img src="@item.IconLink" alt="" />
+                        <span>@item.Name<small>@item.ShortName</small></span>
+                    </div>
+                </ItemTemplate>
+                <NoItemsTemplate>
+                    <div class="search-empty">@Localizer["NoMatchingItems"]</div>
+                </NoItemsTemplate>
+            </MudAutocomplete>
+        </div>
+        <GameModeSwitch />
+        <ScannerStatus />
+    </div>
+
+    @if (_recent.Count > 0)
+    {
+        <section class="recent" aria-label="@Localizer["RecentScans"]">
+            <span class="recent-label">@Localizer["RecentScans"]</span>
+            @foreach (ItemScan scan in _recent)
+            {
+                <button type="button"
+                        class="thumb @(_result?.Item.Id == scan.Item.Id ? "selected" : null)"
+                        title="@scan.Item.Name"
+                        @onclick="() => SelectRecent(scan)">
+                    <img src="@scan.Item.IconLink" alt="" />
+                    <span>@ShortLabel(scan.Item.ShortName, scan.Item.Name)</span>
+                </button>
+            }
+        </section>
+    }
+
+    @if (_result is null)
+    {
+        <section class="empty-state" aria-live="polite">
+            <MudIcon Icon="@Icons.Material.Filled.CenterFocusWeak" />
+            <div>
+                <strong>@Localizer["ReadyToScan"]</strong>
+                <span>@Localizer["ReadyToScanDescription"]</span>
+            </div>
+        </section>
+    }
+    else
+    {
+        @if (!IsScannerActive)
+        {
+            <section class="state-banner">
+                <strong>@Localizer["ScannerPaused"]</strong>
+                <span>@Localizer["EnableScannerInSettings"]</span>
+            </section>
+        }
+
+        @if (IsLowConfidence)
+        {
+            <section class="state-banner warning" aria-label="@Localizer["LowConfidenceMatch"]">
+                <div class="banner-copy">
+                    <strong>@Localizer.Format("LowConfidenceMatchWithPercent", ConfidencePercent)</strong>
+                    <span>@Localizer["LowConfidenceDescription"]</span>
+                </div>
+                <div class="banner-actions">
+                    <button type="button" class="banner-btn" @onclick="FocusSearch">@Localizer["ChooseAnotherMatch"]</button>
+                </div>
+            </section>
+        }
+
+        <article class="result-card" aria-live="polite" aria-label="@Localizer["CurrentScanResult"]">
+            <header class="result-header">
+                <div class="item-art-wrap">
+                    <div class="item-art">
+                        <img src="@_result.Item.ImageUrl" alt="@_result.Item.Name" />
+                        @if (_result.Item.Quantity > 1)
+                        {
+                            <small>x@_result.Item.Quantity</small>
+                        }
+                    </div>
+                </div>
+
+                <div class="identity">
+                    <h1>@DisplayName</h1>
+                    <p class="identity-meta">
+                        <span>@FriendlyItemType</span>
+                        <span class="sep" aria-hidden="true"></span>
+                        <span>@_result.Item.SlotCount @(_result.Item.SlotCount == 1 ? Localizer["Slot"] : Localizer["Slots"])</span>
+                    </p>
+                    <p class="identity-source">@SelectionMethodLabel</p>
+                </div>
+
+                <div class="recommendation @RecommendationTone">
+                    <h2>@_result.Recommendation.Title</h2>
+                    <p>@RecommendationSummary</p>
+                </div>
+            </header>
+
+            <section class="market" aria-label="@Localizer["MarketComparison"]">
+                <div class="market-columns">
+                    <div class="market-column">
+                        <label>@Localizer["FleaMarket"]</label>
+                        @if (_result.Pricing.BannedOnFlea)
+                        {
+                            <strong class="price banned">@Localizer["BannedOnFlea"]</strong>
+                        }
+                        else
+                        {
+                            <strong class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</strong>
+                            @if (ShowPerSlot)
+                            {
+                                <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Pricing.FleaPricePerSlot))</span>
+                            }
+                            <span class="supporting">
+                                @if (!string.IsNullOrWhiteSpace(FreshnessText))
+                                {
+                                    @FreshnessText
+                                }
+                                else
+                                {
+                                    <text>@Localizer["PricesMayVary"]</text>
+                                }
+                            </span>
+                        }
+                    </div>
+
+                    <div class="market-column">
+                        <label>@Localizer["BestTrader"]</label>
+                        @if (_result.Trader is null)
+                        {
+                            <strong class="price">@Localizer["Unavailable"]</strong>
+                        }
+                        else
+                        {
+                            <strong class="trader-name">@(_result.Trader.Name ?? Localizer["Trader"])</strong>
+                            <span class="price supporting-price">@PriceFormatter.Format(_result.Trader.TotalPrice)</span>
+                            @if (ShowPerSlot && _result.Trader.PricePerSlot is not null)
+                            {
+                                <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Trader.PricePerSlot))</span>
+                            }
+                        }
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(MarketDifferenceText))
+                {
+                    <p class="market-difference @DifferenceClass">@MarketDifferenceText</p>
+                }
+            </section>
+
+            <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="@Localizer["Requirements"]">
+                @if (HasAnyRequirement)
+                {
+                    <div class="requirement-chip @(IsRequired(_result.Quests) ? "required" : "muted") @(_result.Quests.HasFirNeed ? "fir" : null)">
+                        <label>@Localizer["QuestRequirements"]</label>
+                        <strong>@RequirementSummary(_result.Quests)</strong>
+                        @if (IsRequired(_result.Quests))
+                        {
+                            <span class="req-meta">@FirLabel(_result.Quests)</span>
+                        }
+                    </div>
+                    <div class="requirement-chip @(IsRequired(_result.Hideout) ? "required" : "muted") @(_result.Hideout.HasFirNeed ? "fir" : null)">
+                        <label>@Localizer["HideoutRequirements"]</label>
+                        <strong>@RequirementSummary(_result.Hideout)</strong>
+                        @if (IsRequired(_result.Hideout))
+                        {
+                            <span class="req-meta">@FirLabel(_result.Hideout)</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <p class="requirements-inline">
+                        <span>@Localizer.Format("RequirementNotRequired", Localizer["QuestLabel"])</span>
+                        <span class="sep" aria-hidden="true"></span>
+                        <span>@Localizer.Format("RequirementNotRequired", Localizer["HideoutLabel"])</span>
+                    </p>
+                }
+            </section>
+
+            @if (_result.Acquisition.Any || HasFirNeedAnywhere)
+            {
+                <section class="acquisition" aria-label="@Localizer["AcquisitionAndFir"]">
+                    @if (HasFirNeedAnywhere)
+                    {
+                        <div class="acq-chip fir" title="@Localizer["FirRequiredTooltip"]">
+                            <strong>@Localizer["FirRequired"]</strong>
+                            <span>@Localizer["ConfirmFir"]</span>
+                        </div>
+                    }
+                    @if (_result.Acquisition.CanCraft)
+                    {
+                        <div class="acq-chip craft" title="@Localizer["CraftableTooltip"]">
+                            <strong>@Localizer["Craftable"]</strong>
+                            <span>@Localizer.Format("CraftableDescription", _result.Acquisition.CraftRecipeCount)</span>
+                        </div>
+                    }
+                    @if (_result.Acquisition.CanBarter)
+                    {
+                        <div class="acq-chip barter" title="@Localizer["BarterableTooltip"]">
+                            <strong>@Localizer["Barterable"]</strong>
+                            <span>@Localizer.Format("BarterableDescription", _result.Acquisition.BarterOfferCount)</span>
+                        </div>
+                    }
+                </section>
+            }
+
+            <div class="actions">
+                <div class="action-links">
+                    <button type="button"
+                            class="link-btn"
+                            @onclick="OpenMarket"
+                            disabled="@string.IsNullOrWhiteSpace(_result.Item.MarketUrl)">
+                        @Localizer["ViewOnTarkovDev"]
+                        <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
+                    </button>
+                    <button type="button"
+                            class="link-btn"
+                            @onclick="OpenWiki"
+                            disabled="@string.IsNullOrWhiteSpace(_result.Item.WikiUrl)">
+                        @Localizer["OpenWiki"]
+                        <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
+                    </button>
+                </div>
+                <button type="button"
+                        class="details-toggle"
+                        aria-expanded="@_detailsOpen"
+                        @onclick="ToggleDetails">
+                    @(_detailsOpen ? Localizer["HideDetails"] : Localizer["ShowDetails"])
+                    <MudIcon Icon="@(_detailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                </button>
+            </div>
+
+            @if (_detailsOpen)
+            {
+                <section class="details" aria-label="@Localizer["ScanDetails"]">
+                    <div class="details-group">
+                        <h3>@Localizer["ScanInformation"]</h3>
+                        <div class="details-rows">
+                            <div>
+                                <label>@Localizer["SelectionMethod"]</label>
+                                <strong>@SelectionMethodDetail</strong>
+                            </div>
+                            <div>
+                                <label>@Localizer["ScanConfidence"]</label>
+                                <strong>@ScanConfidenceDetail</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-group">
+                        <h3>@Localizer["ItemInformation"]</h3>
+                        <div class="details-rows">
+                            <div>
+                                <label>@Localizer["ItemType"]</label>
+                                <strong>@FriendlyItemType</strong>
+                            </div>
+                            <div>
+                                <label>@Localizer["InventorySize"]</label>
+                                <strong>@_result.Item.Width × @_result.Item.Height</strong>
+                            </div>
+                            <div class="item-id-row">
+                                <label>@Localizer["ItemId"]</label>
+                                <div class="item-id-value">
+                                    <strong class="mono">@(_result.Item.Id ?? Localizer["Unavailable"])</strong>
+                                    @if (!string.IsNullOrWhiteSpace(_result.Item.Id))
+                                    {
+                                        <button type="button"
+                                                class="copy-btn"
+                                                title="@Localizer["CopyItemId"]"
+                                                @onclick="CopyItemId">
+                                            @(_copiedId ? Localizer["Copied"] : Localizer["Copy"])
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-group">
+                        <h3>@Localizer["MarketData"]</h3>
+                        <div class="details-rows">
+                            <div>
+                                <label>@Localizer["MarketDataSource"]</label>
+                                <strong>@_result.Pricing.SourceName</strong>
+                            </div>
+                            <div>
+                                <label>@Localizer["LastUpdated"]</label>
+                                <strong>@ExactUpdatedText</strong>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            }
+        </article>
+    }
+</div>
+
+@code {
+    private ScanResultViewModel? _result;
+    private List<Item>? _items;
+    private string? _itemsLocale;
+    private TarkovDev.GameMode? _itemsGameMode;
+    private readonly List<ItemScan> _recent = new();
+    private MudAutocomplete<Item>? _search;
+    private bool _detailsOpen;
+    private bool _copiedId;
+
+    private const int RecentLimit = 5;
+    private const float HighConfidence = 0.9f;
+    private const float MediumConfidence = 0.7f;
+
+    private bool IsScannerActive => RatConfig.NameScan.Enable || RatConfig.IconScan.Enable;
+    private bool ShowPerSlot => _result is { Item.SlotCount: > 1 };
+    private bool IsManual => _result?.Recognition.IsManualSelection == true;
+    private bool IsLowConfidence =>
+        !IsManual && _result?.Recognition.Confidence is float confidence && confidence < MediumConfidence;
+    private bool HasAnyRequirement =>
+        IsRequired(_result?.Quests) || IsRequired(_result?.Hideout);
+
+    private bool HasFirNeedAnywhere =>
+        (_result?.Quests.HasFirNeed == true) || (_result?.Hideout.HasFirNeed == true);
+
+    private int? Difference =>
+        _result?.Pricing.FleaPrice is int flea && _result.Trader?.TotalPrice is int trader
+            ? flea - trader
+            : null;
+
+    private string DifferenceClass =>
+        Difference is > 0 ? "positive" : Difference is < 0 ? "negative" : string.Empty;
+
+    private string FreshnessText => FreshnessFormatter.Format(_result?.Pricing.UpdatedAt);
+
+    private string ConfidencePercent =>
+        _result?.Recognition.Confidence is float confidence ? confidence.ToString("P0") : string.Empty;
+
+    private string DisplayName =>
+        _result?.Item.Name
+        ?? _result?.Item.ShortName
+        ?? Localizer["UnknownItem"];
+
+    private string FriendlyItemType => ItemTypeLabel.Format(_result?.Item.ItemType);
+
+    private string SelectionMethodLabel =>
+        IsManual
+            ? Localizer["SelectedManually"]
+            : _result?.Recognition.Confidence is float confidence
+                ? Localizer.Format("AutomaticScanWithConfidence", confidence.ToString("P0"))
+                : Localizer["AutomaticScan"];
+
+    private string SelectionMethodDetail =>
+        IsManual ? Localizer["SelectedManually"] : Localizer["AutomaticScan"];
+
+    private string ScanConfidenceDetail =>
+        IsManual
+            ? Localizer["NotApplicable"]
+            : _result?.Recognition.Confidence is float confidence
+                ? $"{confidence:P0}"
+                : _result?.Recognition.Label ?? Localizer["Unavailable"];
+
+    private string ExactUpdatedText =>
+        _result?.Pricing.UpdatedAt is DateTimeOffset updated
+            ? updated.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+            : Localizer["Unknown"];
+
+    private string RecommendationTone =>
+        _result?.Recommendation.Type switch
+        {
+            RecommendationType.KeepForQuest => "tone-quest",
+            RecommendationType.KeepForHideout => "tone-hideout",
+            RecommendationType.SellOnFlea or RecommendationType.SellToTrader => "tone-sell",
+            RecommendationType.PriceUnavailable => "tone-warning",
+            _ => "tone-neutral",
+        };
+
+    private string RecommendationSummary
+    {
+        get
+        {
+            if (_result is null)
+                return string.Empty;
+
+            return _result.Recommendation.Type switch
+            {
+                RecommendationType.KeepForQuest when _result.Quests.RemainingRequired is int needed =>
+                    Localizer.Format("ActiveQuestRequirementSummary", needed),
+                RecommendationType.KeepForHideout when _result.Hideout.RemainingRequired is int needed =>
+                    Localizer.Format("HideoutRequirementSummary", needed),
+                _ => _result.Recommendation.Explanation,
+            };
+        }
+    }
+
+    private string MarketDifferenceText
+    {
+        get
+        {
+            if (Difference is not int value)
+                return string.Empty;
+            string traderName = _result?.Trader?.Name ?? Localizer["TraderLabel"];
+            if (value > 0)
+                return Localizer.Format("FleaMarketPaysMore", PriceFormatter.Format(value), traderName);
+            if (value < 0)
+                return Localizer.Format("TraderPaysMore", traderName, PriceFormatter.Format(-value));
+            return Localizer["FleaAndTraderMatch"];
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        RefreshResult();
+        if (History.Selected is not null)
+        {
+            _result = History.Selected;
+            History.Selected = null;
+        }
+
+        if (!MenuVM.LastItemScan.IsSeed)
+            AddRecent(MenuVM.LastItemScan);
+
+        MenuVM.PropertyChanged += OnResultChanged;
+    }
+
+    private void RefreshResult()
+    {
+        _result = MenuVM.LastItemScan.IsSeed ? null : ScanResultAdapter.Map(MenuVM);
+        _detailsOpen = false;
+        _copiedId = false;
+    }
+
+    private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) =>
+        await InvokeAsync(() =>
+        {
+            RefreshResult();
+            if (!MenuVM.LastItemScan.IsSeed)
+                AddRecent(MenuVM.LastItemScan);
+            StateHasChanged();
+        });
+
+    private void AddRecent(ItemScan scan)
+    {
+        if (scan.IsSeed)
+            return;
+        _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id);
+        _recent.Insert(0, scan);
+        if (_recent.Count > RecentLimit)
+            _recent.RemoveRange(RecentLimit, _recent.Count - RecentLimit);
+    }
+
+    private void SelectRecent(ItemScan scan)
+    {
+        _result = ScanResultAdapter.Map(scan, MenuVM, true);
+        _detailsOpen = false;
+        _copiedId = false;
+    }
+
+    private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string locale = RatConfig.NameScan.Language.ToTarkovDevLocale();
+        TarkovDev.GameMode gameMode = RatConfig.GameMode;
+        if (
+            _items is null
+            || _items.Count == 0
+            || !string.Equals(_itemsLocale, locale, StringComparison.Ordinal)
+            || _itemsGameMode != gameMode
+        )
+        {
+            List<Item> available = TarkovDevAPI.GetItems().ToList();
+            if (available.Count > 0)
+            {
+                _items = available;
+                _itemsLocale = locale;
+                _itemsGameMode = gameMode;
+            }
+        }
+
+        return System.Threading.Tasks.Task.FromResult(
+            (_items ?? [])
+                .Where(i =>
+                    string.IsNullOrWhiteSpace(value)
+                    || (i.Name?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)
+                    || (i.ShortName?.Contains(value, StringComparison.CurrentCultureIgnoreCase) ?? false)
+                )
+                .Take(8)
+        );
+    }
+
+    private void SelectItem(Item? item)
+    {
+        if (item is not null)
+            MenuVM.ItemScans.Enqueue(new DefaultItemScan(item));
+    }
+
+    private void ToggleDetails()
+    {
+        _detailsOpen = !_detailsOpen;
+        if (!_detailsOpen)
+            _copiedId = false;
+    }
+
+    private async System.Threading.Tasks.Task FocusSearch()
+    {
+        if (_search is not null)
+            await _search.FocusAsync();
+    }
+
+    private void CopyItemId()
+    {
+        if (string.IsNullOrWhiteSpace(_result?.Item.Id))
+            return;
+
+        try
+        {
+            System.Windows.Clipboard.SetText(_result.Item.Id);
+            _copiedId = true;
+        }
+        catch
+        {
+            // Clipboard access can fail if the host window is not focused.
+            _copiedId = false;
+        }
+    }
+
+    private static bool IsRequired(RequirementViewModel? value) =>
+        value?.Status == RequirementStatus.Required;
+
+    private string RequirementSummary(RequirementViewModel value) =>
+        value.Status switch
+        {
+            RequirementStatus.Required => Localizer.Format("RequiredStillNeeded", value.RemainingRequired ?? 0),
+            RequirementStatus.NotRequired => Localizer["NotRequired"],
+            _ => Localizer["Unavailable"],
+        };
+
+    private string FirLabel(RequirementViewModel value)
+    {
+        if (value.HasFirNeed && value.HasNonFirNeed)
+            return Localizer.Format("FirMixed", value.RequiresFoundInRaid, value.NonFoundInRaid);
+        if (value.HasFirNeed)
+            return Localizer["MustBeFoundInRaid"];
+        if (value.HasNonFirNeed)
+            return Localizer["NonFirOkay"];
+        return string.Empty;
+    }
+
+    private static string ShortLabel(string? shortName, string? name)
+    {
+        string label = !string.IsNullOrWhiteSpace(shortName) ? shortName : name ?? string.Empty;
+        return label.Length <= 8 ? label : label[..8];
+    }
+
+    private void OpenMarket() => OpenUrl(_result?.Item.MarketUrl);
+    private void OpenWiki() => OpenUrl(_result?.Item.WikiUrl);
+
+    private static void OpenUrl(string? url)
+    {
+        if (!string.IsNullOrWhiteSpace(url))
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    public void Dispose() => MenuVM.PropertyChanged -= OnResultChanged;
+}

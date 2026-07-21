@@ -1,0 +1,91 @@
+@page "/app/credits"
+@using System.Diagnostics
+@inject MenuVM MenuVM
+@inject LocalizationService Localizer
+
+<div class="about-page">
+    <h1 class="about-sr-only">@Localizer["CreditsNav"] @Constants.Branding.Name</h1>
+    <section class="about-card">
+        @* Intro: identity + description + maintainers as one section *@
+        <div class="about-intro">
+            <div class="about-identity">
+                <MudText Typo="Typo.subtitle2" Class="about-name">@Constants.Branding.Name</MudText>
+                <MudText Typo="Typo.caption" Class="about-version">@MenuVM.VersionDisplay</MudText>
+            </div>
+            <MudText Typo="Typo.body2" Class="about-description">@Localizer["CreditsDescription"]</MudText>
+            <MudText Typo="Typo.body2" Class="about-maintainers">
+                @Localizer["CreditsMaintainedByPrefix"]
+                <a href="@Constants.Links.DysektAI" class="about-link" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.DysektAI))">DysektAI</a>,
+                <a href="@Constants.Links.Blightbuster" class="about-link" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.Blightbuster))">Moritz (@@Blightbuster)</a>,
+                @Localizer["CreditsAnd"]
+                <a href="@Constants.Links.Contributors" class="about-link" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.Contributors))">@Localizer["CreditsContributors"]</a>.
+            </MudText>
+        </div>
+
+        @* Actions: buttons *@
+        <div class="about-actions">
+            <div class="about-btn-grid">
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.SupportGitHub))">
+                    <MudIcon Icon="@Icons.Custom.Brands.GitHub" Size="Size.Small" />
+                    <span>@Localizer["CreditsGitHubRepo"]</span>
+                </button>
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.Discord))">
+                    <MudIcon Icon="@Icons.Custom.Brands.Discord" Size="Size.Small" />
+                    <span>@Localizer["CreditsRatScannerDiscord"]</span>
+                </button>
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.OfficialWebsite))">
+                    <MudIcon Icon="@Icons.Material.Filled.Public" Size="Size.Small" />
+                    <span>@Localizer["CreditsOfficialWebsite"]</span>
+                </button>
+                <button type="button" class="about-btn" @onclick="@(() => OpenURL(Constants.Links.SupportFAQ))">
+                    <MudIcon Icon="@Icons.Material.Filled.Help" Size="Size.Small" />
+                    <span>FAQ</span>
+                </button>
+            </div>
+        </div>
+
+        @* Related projects *@
+        <div class="related-projects">
+            <h2 class="related-projects__title">@Localizer["CreditsRelatedProjects"]</h2>
+            <div class="related-projects__list">
+                <div class="related-project">
+                    <a href="@Constants.Links.TarkovTracker" class="related-project__name" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.TarkovTracker))">TarkovTracker.org</a>
+                    <span class="related-project__separator">&middot;</span>
+                    <span class="related-project__desc">@Localizer["CreditsTarkovTrackerDesc"]</span>
+                </div>
+                <div class="related-project">
+                    <a href="@Constants.Links.TarkovDev" class="related-project__name" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.TarkovDev))">tarkov.dev</a>
+                    <span class="related-project__separator">&middot;</span>
+                    <span class="related-project__desc">@Localizer["CreditsTarkovDevDesc"]</span>
+                </div>
+            </div>
+        </div>
+
+        @* License footer *@
+        <div class="about-license">
+            <h2 class="about-license__title">@Localizer["CreditsLicenseHeading"]</h2>
+            <MudText Typo="Typo.caption" Class="about-license__details">
+                <a href="@Constants.Links.License" class="about-link" @onclick:preventDefault @onclick="@(() => OpenURL(Constants.Links.License))">@Localizer["CreditsLicenseName"]</a>
+                &middot; @Localizer["CreditsLicenseRestriction"]
+            </MudText>
+        </div>
+    </section>
+</div>
+
+@code {
+    private static void OpenURL(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            RatScanner.Logger.LogWarning("Unable to open external URL: " + url, ex);
+        }
+    }
+}

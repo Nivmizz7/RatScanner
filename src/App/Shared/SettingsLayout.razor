@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+@layout AppLayout
+@inject LocalizationService Localizer
+@inject NavigationManager Navigation
+
+<div class="settings-shell">
+    <nav class="settings-tabs" aria-label="@Localizer["SettingsSections"]">
+        @foreach (SettingsCategory category in Categories)
+        {
+            <NavLink href="@category.Path">@category.Label</NavLink>
+        }
+    </nav>
+
+    <div class="settings-select">
+        <MudSelect T="string"
+                   Value="@CurrentPath"
+                   ValueChanged="NavigateToCategory"
+                   Label="@Localizer["SettingsSections"]"
+                   Variant="Variant.Outlined"
+                   Margin="Margin.Dense"
+                   FullWidth="true">
+            @foreach (SettingsCategory category in Categories)
+            {
+                <MudSelectItem T="string" Value="@category.Path">@category.Label</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    <main class="settings-content">@Body</main>
+</div>
+
+@code {
+    private sealed record SettingsCategory(string Path, string Label);
+
+    private IReadOnlyList<SettingsCategory> Categories =>
+    [
+        new("/app/settings/general", Localizer["GeneralNav"]),
+        new("/app/settings/scanning", Localizer["ScanningNav"]),
+        new("/app/settings/tracking", Localizer["TrackingNav"]),
+        new("/app/settings/minimal", Localizer["MinimalNav"]),
+        new("/app/settings/interactableOverlay", Localizer["OverlayNav"]),
+        new("/app/settings/advanced", Localizer["AdvancedNav"]),
+    ];
+
+    private string CurrentPath {
+        get {
+            string relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return "/" + relative.Split('?', '#')[0].TrimEnd('/');
+        }
+    }
+
+    private void NavigateToCategory(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(path))
+            Navigation.NavigateTo(path);
+    }
+}

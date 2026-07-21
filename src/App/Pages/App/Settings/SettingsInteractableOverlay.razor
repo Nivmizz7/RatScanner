@@ -1,0 +1,48 @@
+@page "/app/settings/interactableOverlay"
+@inherits SettingsPageBase
+@using RatScanner.Components
+@inject SettingsVM SettingsVM
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["OverlayBehaviorSection"]</h2>
+                    <p>@Localizer["OverlayBehaviorDescription"]</p>
+                </div>
+            </header>
+            <ImmediateSettingSwitch Value="@RatConfig.Overlay.Search.Enable"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["EnableSearchOverlay"]"
+                                    Persist="SettingsVM.SetOverlayEnabledAsync" />
+            <ImmediateSettingSwitch Value="@RatConfig.Overlay.Search.BlurBehind"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["BlurBehindSearch"]"
+                                    Persist="SettingsVM.SetOverlayBlurAsync"
+                                    Disabled="@(!RatConfig.Overlay.Search.Enable)" />
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["OverlayHotkeySection"]</h2>
+                    <p>@Localizer["HotkeyCaptureDescription"]</p>
+                </div>
+            </header>
+            <div class="setting-row">
+                <div class="setting-copy"><div class="setting-label">@Localizer["OpenSearchOverlay"]</div></div>
+                <div class="setting-control hotkey-control">
+                    <HotkeySelector Hotkey="@RatConfig.Overlay.Search.Hotkey" HotkeyChanged="SetOverlayHotkeyAsync" />
+                </div>
+            </div>
+        </section>
+    </aside>
+</div>
+
+@code {
+    private async Task SetOverlayHotkeyAsync(Hotkey value) =>
+        await ReportAsync(await SettingsVM.SetOverlayHotkeyAsync(value));
+}

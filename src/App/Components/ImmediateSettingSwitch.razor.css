@@ -1,0 +1,11 @@
+.immediate-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+}
+
+.immediate-switch ::deep .mud-switch {
+    min-width: 0;
+}

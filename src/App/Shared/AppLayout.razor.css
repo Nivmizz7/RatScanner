@@ -1,0 +1,107 @@
+﻿.app-shell {
+	min-height: 100%;
+}
+
+.sidebar {
+	position: fixed;
+	inset: 0 auto 0 0;
+	z-index: 20;
+	width: var(--rs-sidebar-active-width);
+	min-width: 0;
+	padding: 14px 10px 10px;
+	display: flex;
+	flex-direction: column;
+	background: var(--rs-sidebar);
+	border-right: 1px solid var(--rs-border-subtle);
+	transform: translateX(-100%);
+	transition: transform .16s ease, width .16s ease;
+}
+
+.sidebar.open,
+.sidebar.rail {
+	transform: none;
+}
+
+.sidebar.overlay {
+	width: var(--rs-sidebar-width);
+}
+
+.sidebar.rail {
+	padding: 14px 6px 10px;
+}
+
+nav {
+	display: grid;
+	gap: 6px;
+}
+
+nav ::deep a,
+nav a {
+	min-height: 44px;
+	padding: 0 12px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	border-radius: var(--rs-radius-sm);
+	color: var(--rs-text-2);
+	text-decoration: none;
+}
+
+.sidebar.rail nav a {
+	justify-content: center;
+	padding: 0;
+	gap: 0;
+}
+
+.sidebar.rail nav a span {
+	display: none;
+}
+
+nav ::deep a:hover,
+nav a:hover {
+	background: var(--rs-surface-2);
+	color: var(--rs-text);
+}
+
+nav ::deep a.active {
+	color: var(--rs-text);
+	background: var(--rs-purple-surface);
+	box-shadow: inset 3px 0 var(--rs-purple);
+}
+
+.main-content {
+	margin-left: 0;
+	height: 100vh;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	transition: margin-left .16s ease;
+}
+
+.main-content.sidebar-docked {
+	margin-left: var(--rs-sidebar-active-width);
+}
+
+.scrim {
+	display: none;
+}
+
+@media (max-width: 680px) {
+	.scrim {
+		display: block;
+		position: fixed;
+		inset: 0;
+		z-index: 10;
+		border: 0;
+		background: rgba(0, 0, 0, .62);
+	}
+
+	.main-content,
+	.main-content.sidebar-docked {
+		margin-left: 0;
+	}
+
+	.main-content[aria-hidden="true"] {
+		pointer-events: none;
+		user-select: none;
+	}
+}

@@ -1,0 +1,34 @@
+{
+	"dotnet.defaultSolution": "RatScanner.sln",
+	"editor.detectIndentation": true,
+	"editor.insertSpaces": true,
+	"editor.tabSize": 4,
+	"files.eol": "\r\n",
+	"files.insertFinalNewline": true,
+	"files.trimTrailingWhitespace": true,
+	"[csharp]": {
+		"editor.defaultFormatter": "csharpier.csharpier-vscode",
+		"editor.formatOnSave": true,
+		"editor.insertSpaces": true,
+		"editor.tabSize": 4
+	},
+	"[razor]": {
+		"editor.insertSpaces": true,
+		"editor.tabSize": 4
+	},
+	"[xml]": {
+		"editor.insertSpaces": true,
+		"editor.tabSize": 2
+	},
+	"[csproj]": {
+		"editor.insertSpaces": true,
+		"editor.tabSize": 2
+	},
+	"[markdown]": {
+		"editor.defaultFormatter": "DavidAnson.vscode-markdownlint",
+		"editor.formatOnSave": true,
+		"editor.wordWrap": "on"
+	},
+	"markdownlint.run": "onType",
+	"markdownlint.fixOnSave": true
+}

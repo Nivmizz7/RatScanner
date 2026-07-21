@@ -1,0 +1,80 @@
+@inherits LayoutComponentBase
+@using RatScanner.Display
+@inject NavigationManager Navigation
+@inject LocalizationService Localizer
+@inject ISnackbar Snackbar
+@implements IDisposable
+<MudThemeProvider Theme="_theme" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+@Body
+@code {
+    private bool _receivesDisplayNotifications;
+    private string? _lastDisplayNotification;
+
+    private readonly MudTheme _theme = new() {
+        Typography = new Typography {
+            Default = new DefaultTypography { FontFamily = new[] { "Segoe UI", "system-ui", "sans-serif" } },
+        },
+        PaletteDark = new PaletteDark {
+            Primary = "#9272F8", Success = "#58D17B", Warning = "#E7AD55", Error = "#EB6C73", Info = "#68A7F4",
+            // MainLayout is shared by the full-screen transparent scan overlay.
+            // The normal application shell supplies its own opaque background.
+            Background = "rgba(255,255,255,0)", BackgroundGray = "#101620", Surface = "#141B25", DrawerBackground = "#101620",
+            TextPrimary = "#F4F7FA", TextSecondary = "#A8B0BC", DrawerText = "#A8B0BC", DrawerIcon = "#778291",
+            Divider = "#26303C", LinesDefault = "#293341", LinesInputs = "#293341", AppbarBackground = "#101620",
+        },
+    };
+
+    protected override void OnInitialized() {
+        string route = Navigation.ToBaseRelativePath(Navigation.Uri);
+        _receivesDisplayNotifications = route.StartsWith("app", StringComparison.OrdinalIgnoreCase);
+        if (_receivesDisplayNotifications)
+            RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
+    }
+
+    private void OnGameDisplayConfigurationChanged(GameDisplayConfiguration configuration) {
+        if (!configuration.RequiresAttention || configuration.NotificationKey == _lastDisplayNotification)
+            return;
+
+        _lastDisplayNotification = configuration.NotificationKey;
+        _ = InvokeAsync(() => Snackbar.Add(
+            FormatGameDisplayStatus(configuration),
+            configuration.StatusKind switch {
+                GameDisplayStatusKind.Error => Severity.Error,
+                GameDisplayStatusKind.Warning => Severity.Warning,
+                GameDisplayStatusKind.Success => Severity.Success,
+                _ => Severity.Info,
+            }
+        ));
+    }
+
+    private string FormatGameDisplayStatus(GameDisplayConfiguration configuration) {
+        GameDisplayInfo? active = configuration.ActiveDisplay;
+        string display = active is null
+            ? Localizer["UnknownDisplay"]
+            : Localizer.Format(
+                "GameDisplayOption",
+                active.DisplayNumber,
+                active.PhysicalResolution.Width,
+                active.PhysicalResolution.Height,
+                Math.Round(active.DpiScale * 100),
+                active.IsPrimary ? Localizer["PrimaryDisplaySuffix"] : ""
+            );
+        return configuration.StatusCode switch {
+            GameDisplayStatusCode.SavedDisplayUnavailable => Localizer.Format("GameDisplayStatusUnavailable", display),
+            GameDisplayStatusCode.GameWindowOnDifferentDisplay => Localizer.Format("GameDisplayStatusMoved", display),
+            GameDisplayStatusCode.GameWindowSpansDisplays => Localizer.Format("GameDisplayStatusSpanning", display),
+            GameDisplayStatusCode.DpiUnavailable => Localizer.Format("GameDisplayStatusDpi", display),
+            GameDisplayStatusCode.InvalidCustomConfiguration => Localizer["GameDisplayStatusInvalidCustom"],
+            GameDisplayStatusCode.NoDisplays => Localizer["GameDisplayStatusNone"],
+            _ => Localizer.Format("GameDisplayStatusFallback", display),
+        };
+    }
+
+    public void Dispose() {
+        if (_receivesDisplayNotifications)
+            RatConfig.GameDisplayConfigurationChanged -= OnGameDisplayConfigurationChanged;
+    }
+}

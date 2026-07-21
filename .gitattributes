@@ -1,0 +1,41 @@
+# RatScanner is Windows x64 only and CSharpier is configured with endOfLine=crlf
+# (.csharpierrc.json), matching .editorconfig (end_of_line=crlf). Pin line endings
+# in the working tree on every machine so `dotnet csharpier check .` and the CI
+# formatting gate stay stable regardless of a contributor's core.autocrlf setting.
+* text=auto
+
+# Source and text formats CSharpier / editors expect to be CRLF on checkout.
+*.cs        text eol=crlf
+*.razor     text eol=crlf
+*.cshtml    text eol=crlf
+*.xaml      text eol=crlf
+*.csproj    text eol=crlf
+*.sln       text eol=crlf
+*.props     text eol=crlf
+*.targets   text eol=crlf
+*.json      text eol=crlf
+*.jsonc     text eol=crlf
+*.md        text eol=crlf
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.yml       text eol=crlf
+*.yaml      text eol=crlf
+*.css       text eol=crlf
+*.html      text eol=crlf
+*.resx      text eol=crlf
+*.editorconfig text eol=crlf
+
+# Binary assets must never be normalized.
+*.png    binary
+*.ico    binary
+*.gif    binary
+*.jpg    binary
+*.jpeg   binary
+*.otf    binary
+*.ttf    binary
+*.zip    binary
+*.dll    binary
+*.exe    binary
+*.traineddata binary

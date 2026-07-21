@@ -1,0 +1,112 @@
+﻿@using System.Windows.Input;
+@inject LocalizationService Localizer;
+@implements IDisposable;
+
+<MudButton @ref="Button" @onclick="StartListening"
+           Color="Color.Primary" Size="Size.Small"
+           Variant="Variant.Filled" DropShadow="false"
+           Class="px-1 py-1" @attributes="InputAttributes"
+           Disabled="@_listening">
+    <MudStack Spacing="0" AlignItems="AlignItems.Stretch" Justify="Justify.Center">
+        @if (string.IsNullOrEmpty(_tmpHotkey.HotkeyString)) {
+            <div>@Localizer["NoneLabel"]</div>
+        } else {
+            <MudStack Spacing="1" Row="true" Justify="Justify.SpaceBetween">
+                @foreach (var key in _tmpHotkey.KeyboardKeys) {
+                    <MudChip T="string" Variant="Variant.Outlined" Text="@key.ToString().ToLower().Replace("left", "l-").Replace("right", "r-")"
+                             Size="Size.Small" Color="Color.Default"
+                             Class="px-2 ma-0" />
+                }
+                @foreach (var button in _tmpHotkey.MouseButtons) {
+                    <MudChip T="string" Variant="Variant.Outlined"
+                             Text="@((button.ToString().ToLower().Replace("left", "l-").Replace("right", "r-") + "-mouse").Replace("--", "-").Replace("button", ""))"
+                             Size="Size.Small" Color="Color.Default"
+                             Class="px-2 ma-0" />
+                }
+            </MudStack>
+        }
+
+        @if (_listening) {
+            <MudProgressLinear Class="mb-n1" Style="Width: 100%;" Indeterminate="true" />
+        }
+    </MudStack>
+</MudButton>
+
+@code {
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? InputAttributes { get; set; }
+
+    [Parameter]
+    public Hotkey Hotkey { get; set; } = new Hotkey();
+
+    [Parameter]
+    public EventCallback<Hotkey> HotkeyChanged { get; set; }
+
+    private MudButton Button = null!;
+
+    private Hotkey _tmpHotkey = new Hotkey();
+
+    private bool _listening = false;
+
+    private void StartListening() {
+        if (_listening) return;
+        _listening = true;
+        _tmpHotkey = new Hotkey();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StopListeningAsync(bool discard = false) {
+        if (!_listening) return;
+        // Clear synchronously: OnKeyUp fires for every key/mouse release, so a
+        // second release while HotkeyChanged is awaited would commit the hotkey
+        // again, and an exception would leave the component stuck listening.
+        _listening = false;
+
+        try {
+            if (discard) {
+                _tmpHotkey = new Hotkey(Hotkey);
+            }
+            else {
+                // Do not mutate the bound Hotkey before the callback: the parent
+                // uses RatConfig.IconScan.Hotkey for rollback snapshots, so an
+                // in-place Set here would corrupt the previous value on failure.
+                await HotkeyChanged.InvokeAsync(new Hotkey(_tmpHotkey));
+            }
+        }
+        finally {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override void OnInitialized() {
+        _tmpHotkey = new Hotkey(Hotkey);
+        UserActivityHelper.OnKeyboardKeyUp += OnKeyUp;
+        UserActivityHelper.OnMouseButtonUp += OnKeyUp;
+        UserActivityHelper.OnKeyboardKeyDown += OnKeyDown;
+        UserActivityHelper.OnMouseButtonDown += OnKeyDown;
+    }
+
+    private void OnKeyUp(object? sender, KeyUpEventArgs e) {
+        _ = StopListeningAsync();
+    }
+
+    private void OnKeyDown(object? sender, KeyDownEventArgs e) {
+        if (!_listening) return;
+
+        if (e.Device == Device.Keyboard && e.Key == Key.Escape) {
+            _ = StopListeningAsync(true);
+            return;
+        }
+
+        if (e.Device == Device.Keyboard) _tmpHotkey.KeyboardKeys.Add(e.Key);
+        else if (e.Device == Device.Mouse) _tmpHotkey.MouseButtons.Add(e.MouseButton);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() {
+        UserActivityHelper.OnKeyboardKeyUp -= OnKeyUp;
+        UserActivityHelper.OnMouseButtonUp -= OnKeyUp;
+        UserActivityHelper.OnKeyboardKeyDown -= OnKeyDown;
+        UserActivityHelper.OnMouseButtonDown -= OnKeyDown;
+    }
+}

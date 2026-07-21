@@ -1,51 +1,213 @@
 name: Build
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Publish a GitHub release from the current src/App/RatScanner.csproj <Version> (auto-tags and marks it Latest)."
+        type: boolean
+        default: false
   push:
+    branches:
+      - master
     tags:
       - v*
   pull_request:
     branches:
       - master
-      - main
-      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🔎 The name of the branch is ${{ github.ref }} and the repository is ${{ github.repository }}."
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            NuGet.Config
+      - name: Agent documentation integrity
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-agent-docs.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-docs.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Markdown tooling audit and lint
+        run: |
+          npm ci --no-fund --no-audit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm audit --audit-level=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run lint:md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Restore .NET tools
+        run: dotnet tool restore
       - name: Restore Dependencies
-        run: dotnet restore
+        run: dotnet restore RatScanner.sln
+      - name: C# formatting
+        run: dotnet csharpier check .
+      - name: Build
+        run: dotnet build RatScanner.sln -c Release --no-restore
+      - name: Test
+        run: dotnet test RatScanner.sln -c Release --no-build
+      - name: Dependency vulnerability audit
+        run: |
+          # Console output does not reliably expose severity. Parse JSON and fail on any reported vulnerability.
+          # Keep stdout JSON separate from stderr diagnostics (.NET 10 list package restore noise).
+          $stdoutPath = Join-Path $env:RUNNER_TEMP 'vulnerable-packages.json'
+          $stderrPath = Join-Path $env:RUNNER_TEMP 'vulnerable-packages.err'
+          $proc = Start-Process -FilePath 'dotnet' `
+            -ArgumentList @('list','RatScanner.sln','package','--vulnerable','--include-transitive','--format','json') `
+            -NoNewWindow -Wait -PassThru `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+          if (Test-Path $stderrPath) {
+            $stderrText = Get-Content -LiteralPath $stderrPath -Raw
+            if (-not [string]::IsNullOrWhiteSpace($stderrText)) { Write-Host $stderrText }
+          }
+          $jsonText = Get-Content -LiteralPath $stdoutPath -Raw
+          Write-Host $jsonText
+          if ($proc.ExitCode -ne 0) { exit $proc.ExitCode }
+          $report = $jsonText | ConvertFrom-Json
+          $severities = @(
+            $report.projects
+            | ForEach-Object { $_.frameworks }
+            | ForEach-Object { $_.topLevelPackages; $_.transitivePackages }
+            | Where-Object { $_ -ne $null }
+            | ForEach-Object { $_.vulnerabilities }
+            | Where-Object { $_ -ne $null }
+            | ForEach-Object { $_.severity }
+          )
+          if ($severities.Count -gt 0) {
+            throw ("Vulnerable package(s) detected (severity: {0}). See audit output above." -f (($severities | Select-Object -Unique) -join ', '))
+          }
       - name: Publish
-        run: dotnet publish RatScanner/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained
+        run: dotnet publish src/App/RatScanner.csproj -c Release -o publish -p:PublishSingleFile=true --runtime win-x64 --self-contained true
+      - name: Include LICENSE
+        run: |
+          if (-not (Test-Path publish/LICENSE)) { Copy-Item LICENSE publish/LICENSE -Force }
+          if (-not (Test-Path publish/LICENSE)) { throw 'LICENSE is missing from publish output.' }
       - name: Include Data
         run: |
-          curl -L "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
-          7z x publish/Data.zip -opublish/Data
-          Remove-Item publish/Data.zip
-      - name: Include Updater
-        run: curl -L "https://github.com/RatScanner/RatUpdater/releases/latest/download/RatUpdater.exe" --output "publish/RatUpdater.exe"
+          $archive = Join-Path $PWD 'publish/Data.zip'
+          $destination = Join-Path $PWD 'publish/Data'
+          & curl.exe -fL --retry 3 --retry-all-errors "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output $archive
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download RatScanner Data.zip.' }
+          & 7z x $archive "-o$destination" -y
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to extract RatScanner Data.zip.' }
+          Remove-Item -LiteralPath $archive -Force
+          $nestedData = Join-Path $destination 'Data'
+          if (-not (Test-Path (Join-Path $destination 'maps.json')) -and (Test-Path (Join-Path $nestedData 'maps.json'))) {
+            Get-ChildItem -LiteralPath $nestedData -Force | Move-Item -Destination $destination -Force
+            Remove-Item -LiteralPath $nestedData -Recurse -Force
+          }
+          foreach ($required in @('maps.json', 'unknown.png', 'traineddata/eng.traineddata')) {
+            if (-not (Test-Path (Join-Path $destination $required))) { throw "Published Data is missing $required." }
+          }
+          if (@(Get-ChildItem -LiteralPath (Join-Path $destination 'icons') -Filter '*.png' -File).Count -eq 0) {
+            throw 'Published Data contains no item icons.'
+          }
       - name: Zip Content
-        run: 7z a -r RatScanner.zip ./publish/*
-      - uses: actions/upload-artifact@v4
+        run: |
+          & 7z a -r RatScanner.zip ./publish/*
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path RatScanner.zip)) { throw 'Failed to create RatScanner.zip.' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: RatScanner
-          path: ./publish/
-      - name: Draft Release
-        uses: softprops/action-gh-release@v1
+          path: |
+            ./publish/
+            ./RatScanner.zip
+          if-no-files-found: error
+
+  release:
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.deploy)
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
-          files: RatScanner.zip
-          draft: true
+          persist-credentials: false
+      - name: Resolve release version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSHED_TAG: ${{ github.ref_name }}
+        run: |
+          $project = New-Object System.Xml.XmlDocument
+          $project.Load((Join-Path $PWD 'src/App/RatScanner.csproj'))
+          $versionNode = $project.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']")
+          if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            throw 'src/App/RatScanner.csproj is missing the product Version element.'
+          }
+          $version = $versionNode.InnerText.Trim()
+          $tag = 'v' + $version
+          # A tag push must exactly match the csproj product version.
+          if ($env:EVENT_NAME -eq 'push' -and $env:PUSHED_TAG -cne $tag) {
+            throw "Release tag '$($env:PUSHED_TAG)' does not match product version '$tag'."
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Release version resolved: $version (tag $tag)"
+      - name: Ensure the release does not already exist
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # A manual deploy must never overwrite a shipped release. Fail closed and
+          # ask for a <Version> bump when the tag or release already exists.
+          gh release view "${env:TAG}" --repo "${env:GITHUB_REPOSITORY}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Release ${env:TAG} already exists. Bump <Version> in src/App/RatScanner.csproj before deploying."
+          }
+          gh api "repos/${env:GITHUB_REPOSITORY}/git/ref/tags/${env:TAG}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            throw "Tag ${env:TAG} already exists. Bump <Version> in src/App/RatScanner.csproj before deploying."
+          }
+      - name: Download validated package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: RatScanner
+          path: release-artifact
+      - name: Publish Release
+        # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
+        # Published directly as Latest (not draft, not pre-release) so the in-app updater,
+        # which reads /releases/latest, can see it.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: release-artifact/RatScanner.zip
+          draft: false
+          prerelease: false
+          make_latest: true
+          name: RatScanner ${{ steps.version.outputs.tag }}
+          body: |
+            **RatScanner** `${{ steps.version.outputs.tag }}`
+
+            Support: [this repo](https://github.com/tarkovtracker-org/RatScanner) · [Discord](https://discord.gg/M8nBgA2sT6)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request'
-      

@@ -1,0 +1,234 @@
+.about-page {
+    padding: 8px 16px 16px;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+/* Visually hidden but accessible to screen readers */
+.about-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Single compact card with container queries for responsive project rows */
+.about-card {
+    background: var(--rs-surface);
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius);
+    padding: 16px;
+    container-type: inline-size;
+}
+
+/* Intro section — identity, description, maintainers grouped together */
+.about-intro {
+    display: grid;
+    gap: 6px;
+}
+
+/* Identity — name + version on one line */
+.about-identity {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.about-name {
+    margin: 0;
+    color: var(--rs-text);
+}
+
+.about-version {
+    color: var(--rs-muted);
+    white-space: nowrap;
+}
+
+.about-description {
+    color: var(--rs-text-2);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Maintainer credits — tighten gap after description */
+.about-maintainers {
+    color: var(--rs-text-2);
+    margin: -2px 0 0;
+    line-height: 1.4;
+}
+
+/* Inline links */
+.about-link {
+    color: var(--rs-info);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.about-link:hover {
+    text-decoration: underline;
+}
+
+.about-link:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+    border-radius: 2px;
+    text-decoration: underline;
+}
+
+/* Actions section — buttons */
+.about-actions {
+    margin-top: 12px;
+}
+
+/* Primary action buttons — 2-column grid */
+.about-btn-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+}
+
+@media (max-width: 380px) {
+    .about-btn-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.about-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--rs-radius-sm);
+    border: 1px solid var(--rs-border);
+    background: var(--rs-elevated);
+    color: var(--rs-text);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+}
+
+.about-btn:hover {
+    background: var(--rs-surface-2);
+    border-color: var(--rs-purple);
+    color: var(--rs-text);
+}
+
+.about-btn:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+}
+
+.about-btn ::deep .mud-icon-root,
+.about-btn ::deep .mud-svg-icon {
+    flex: none;
+    font-size: 18px;
+}
+
+/* Related projects — border-top separator, not a MudDivider */
+.related-projects {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-border);
+}
+
+.related-projects__title {
+    margin: 0 0 10px;
+    color: var(--rs-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.related-projects__list {
+    display: grid;
+    gap: 7px;
+}
+
+/* Inline project row — name and description on one line, wrap naturally */
+.related-project {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    column-gap: 5px;
+    line-height: 1.4;
+}
+
+.related-project__name {
+    flex: 0 0 auto;
+    color: var(--rs-info);
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.related-project__name:hover {
+    text-decoration: underline;
+}
+
+.related-project__name:focus-visible {
+    outline: 2px solid var(--rs-purple);
+    outline-offset: 2px;
+    border-radius: 2px;
+    text-decoration: underline;
+}
+
+.related-project__separator {
+    color: var(--rs-muted);
+}
+
+.related-project__desc {
+    color: var(--rs-text);
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+/* Stack name/description at narrow card widths */
+@container (max-width: 390px) {
+    .related-project {
+        display: grid;
+        gap: 2px;
+    }
+
+    .related-project__separator {
+        display: none;
+    }
+}
+
+/* License footer — border-top separator, distinct from related projects */
+.about-license {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-border);
+}
+
+.about-license__title {
+    margin: 0 0 6px;
+    color: var(--rs-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.about-license__details {
+    color: var(--rs-muted);
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}

@@ -1,0 +1,183 @@
+/* Dialog width: ~620px on desktop, full-width minus 32px on narrow.
+   max-width: none overrides MudBlazor's MaxWidth.Small cap. */
+::deep .change-connection-dialog {
+    width: min(620px, calc(100vw - 48px));
+    max-width: none;
+}
+
+@media (max-width: 600px) {
+    ::deep .change-connection-dialog {
+        width: calc(100vw - 32px);
+        max-width: none;
+    }
+}
+
+/* Content breathing room. The dialog content is a container so provider
+   cards can respond to the dialog width, not the viewport width. */
+::deep .change-connection-dialog .mud-dialog-content {
+    padding: 20px 24px;
+    container-type: inline-size;
+}
+
+::deep .change-connection-dialog .mud-dialog-actions {
+    padding: 16px 24px 20px;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+@media (max-width: 600px) {
+    ::deep .change-connection-dialog .mud-dialog-content {
+        padding: 18px 20px;
+    }
+
+    ::deep .change-connection-dialog .mud-dialog-actions {
+        padding: 14px 20px 18px;
+    }
+}
+
+/* Stack footer actions at very narrow widths: primary first (column-reverse). */
+@media (max-width: 440px) {
+    ::deep .change-connection-dialog .mud-dialog-actions {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    ::deep .change-connection-dialog .mud-dialog-actions .mud-button-root {
+        width: 100%;
+        margin: 0;
+    }
+}
+
+.source-label {
+    margin: 0 0 8px;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Provider cards side by side on wider dialogs, stacked on narrow.
+   Uses a container query based on the dialog content width, not the
+   viewport, so height changes don't affect the card layout.
+   Radio gets a fixed narrow column so both cards align. */
+.source-cards ::deep .mud-radio-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+@container (max-width: 500px) {
+    .source-cards ::deep .mud-radio-group {
+        grid-template-columns: 1fr;
+    }
+}
+
+.source-card {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--rs-border);
+    border-radius: var(--rs-radius-sm);
+    background: var(--rs-surface-2);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.source-card:hover {
+    border-color: var(--rs-text-2);
+}
+
+.source-card-selected {
+    border-color: var(--rs-purple);
+    background: var(--rs-purple-surface);
+}
+
+.source-card ::deep .mud-radio {
+    margin: 0;
+    padding: 0;
+    align-self: flex-start;
+}
+
+.source-card-body {
+    min-width: 0;
+}
+
+.source-card-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--rs-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Description: brighter than --rs-text-2 for readability. */
+.source-card-detail {
+    margin-top: 4px;
+    color: var(--rs-text);
+    opacity: 0.72;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.source-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: none;
+}
+
+.source-badge-recommended {
+    color: var(--rs-success);
+    background: color-mix(in srgb, var(--rs-success) 16%, transparent);
+}
+
+.source-badge-legacy {
+    color: var(--rs-text-2);
+    background: var(--rs-surface);
+}
+
+/* Shared note beneath both provider choices. */
+.source-shared-note {
+    margin: 0 0 16px;
+    color: var(--rs-text-2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.tracker-manage-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    text-transform: none;
+    color: var(--rs-text-2);
+    transition: color 0.15s;
+}
+
+.tracker-manage-link:hover,
+.tracker-manage-link:focus {
+    color: var(--rs-purple);
+}
+
+.inline-error {
+    margin-top: 8px;
+    color: var(--rs-danger);
+    font-size: 0.75rem;
+}
+
+/* Sentence-case buttons inside the dialog. */
+::deep .change-connection-dialog .mud-button-label {
+    text-transform: none;
+}
+
+/* Disabled buttons should be identifiable, not illegible. */
+::deep .change-connection-dialog .mud-button-root:disabled {
+    opacity: 1;
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.08);
+}

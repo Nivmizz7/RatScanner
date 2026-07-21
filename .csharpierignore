@@ -1,0 +1,12 @@
+# Keep formatting limited to C#. XAML/XML/project markup can churn and is
+# better left matching existing hand-tuned layout.
+**/*.xaml
+**/*.csproj
+**/*.props
+**/*.targets
+**/*.config
+**/NuGet.Config
+**/*.resx
+**/*.xml
+**/obj/**
+**/bin/**

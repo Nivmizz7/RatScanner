@@ -1,0 +1,171 @@
+@page "/app/settings/general"
+@layout SettingsLayout
+@inherits SettingsPageBase
+@using RatScanner.Display
+@using System.Linq
+@inject SettingsVM SettingsVM
+@implements IDisposable
+
+<div class="settings-page">
+    <div class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading">
+                <div>
+                    <h2>@Localizer["GameDisplay"]</h2>
+                    <p>@Localizer["GameDisplayDescription"]</p>
+                </div>
+                <MudButton Variant="Variant.Text"
+                           Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           Disabled="_refreshing"
+                           OnClick="RefreshDisplayDetectionAsync">
+                    @Localizer["RefreshDetection"]
+                </MudButton>
+            </header>
+
+            <MudSelect T="string"
+                       Value="@SettingsVM.SelectedGameDisplayId"
+                       ValueChanged="SetDisplayAsync"
+                       Label="@Localizer["GameDisplay"]"
+                       Variant="Variant.Outlined"
+                       Margin="Margin.Dense"
+                       FullWidth="true"
+                       Disabled="@(SettingsVM.GameDisplayOptions.Count == 0 || _savingDisplay)"
+                       Error="@(SettingsVM.DisplaySelectionError is not null)"
+                       ErrorText="@SettingsVM.DisplaySelectionError">
+                @foreach (SettingsVM.GameDisplayOption option in SettingsVM.GameDisplayOptions)
+                {
+                    <MudSelectItem T="string" Value="@option.Id">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudAlert Severity="@GetDisplaySeverity()" Variant="Variant.Outlined" Dense="true" Class="mt-3">
+                @SettingsVM.GameDisplayStatus
+            </MudAlert>
+        </section>
+    </div>
+
+    <aside class="settings-column">
+        <section class="settings-section">
+            <header class="section-heading"><div><h2>@Localizer["ApplicationSection"]</h2></div></header>
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["InterfaceLanguage"]</div>
+                    <p class="setting-description">@Localizer["InterfaceLanguageDescription"]</p>
+                </div>
+                <div class="setting-control">
+                    <MudSelect T="UiLanguage"
+                               Value="@RatConfig.UserInterface.Language"
+                               ValueChanged="SetUiLanguageAsync"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true">
+                        @foreach (UiLanguage language in GetUiLanguages())
+                        {
+                            <MudSelectItem T="UiLanguage" Value="@language">@language.ToCultureName()</MudSelectItem>
+                        }
+                    </MudSelect>
+                </div>
+            </div>
+            <div class="setting-row">
+                <div class="setting-copy">
+                    <div class="setting-label">@Localizer["TooltipDelay"]</div>
+                    <p class="setting-description">@Localizer["TooltipDelayDescription"]</p>
+                </div>
+                <div class="setting-control">
+                    <MudSelect T="int"
+                               Value="@RatConfig.ToolTip.Duration"
+                               ValueChanged="SetTooltipDelayAsync"
+                               Variant="Variant.Outlined"
+                               Margin="Margin.Dense"
+                               FullWidth="true">
+                        <MudSelectItem T="int" Value="0">@Localizer["TooltipInstant"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="500">@Localizer["TooltipShort"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="1500">@Localizer["TooltipNormal"]</MudSelectItem>
+                        <MudSelectItem T="int" Value="3000">@Localizer["TooltipLong"]</MudSelectItem>
+                    </MudSelect>
+                </div>
+            </div>
+            <ImmediateSettingSwitch Value="@RatConfig.AlwaysOnTop"
+                                    ValueChanged="@(_ => StateHasChanged())"
+                                    Label="@Localizer["AlwaysOnTop"]"
+                                    Persist="SettingsVM.SetAlwaysOnTopAsync" />
+        </section>
+    </aside>
+</div>
+
+@code {
+    private bool _refreshing;
+    private bool _savingDisplay;
+    private int _displaySaveOperations;
+
+    protected override void OnInitialized()
+    {
+        SettingsVM.PropertyChanged += PropertyChangeHandler;
+        SettingsVM.RefreshGameDisplays();
+    }
+
+    private IEnumerable<UiLanguage> GetUiLanguages() =>
+        Enum.GetValues<UiLanguage>().OrderBy(language => language.ToCultureName());
+
+    private Severity GetDisplaySeverity() => SettingsVM.GameDisplayStatusKind switch
+    {
+        GameDisplayStatusKind.Success => Severity.Success,
+        GameDisplayStatusKind.Warning => Severity.Warning,
+        GameDisplayStatusKind.Error => Severity.Error,
+        _ => Severity.Info,
+    };
+
+    private async Task RefreshDisplayDetectionAsync()
+    {
+        _refreshing = true;
+        try
+        {
+            await SettingsVM.RefreshGameDisplaysAsync();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private async Task SetDisplayAsync(string value)
+    {
+        string previous = SettingsVM.SelectedGameDisplayId;
+        SettingsVM.SelectedGameDisplayId = value;
+        SettingSaveResult result = await PersistDisplayAsync();
+        if (!result.Succeeded)
+            SettingsVM.SelectedGameDisplayId = previous;
+    }
+
+    private async Task<SettingSaveResult> PersistDisplayAsync()
+    {
+        _displaySaveOperations++;
+        _savingDisplay = true;
+        try
+        {
+            SettingSaveResult result = await SettingsVM.PersistDisplaySettingsAsync();
+            if (!result.Succeeded && result.ErrorMessage is null)
+                Snackbar.Add(Localizer["SettingSaveFailed"], Severity.Error);
+            return result;
+        }
+        finally
+        {
+            _displaySaveOperations--;
+            _savingDisplay = _displaySaveOperations > 0;
+        }
+    }
+
+    private async Task SetUiLanguageAsync(UiLanguage value) =>
+        await ReportAsync(await SettingsVM.SetUiLanguageAsync(value));
+
+    private async Task SetTooltipDelayAsync(int value) =>
+        await ReportAsync(await SettingsVM.SetTooltipDurationAsync(value));
+
+    private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        SettingsVM.PropertyChanged -= PropertyChangeHandler;
+    }
+}

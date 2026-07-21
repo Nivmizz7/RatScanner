@@ -1,0 +1,100 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
+		<UseWPF>true</UseWPF>
+		<UseWindowsForms>True</UseWindowsForms>
+		<ApplicationIcon>Resources\RatLogoSmall.ico</ApplicationIcon>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<StartupObject>RatScanner.Program</StartupObject>
+		<!--
+		  Product version line (independent of historical upstream RatScanner).
+		  Upstream historically used 3.x (e.g. 3.9.3). This project starts at 4.0.0
+		  so GitHub issues, logs, UA strings, and release tags are immediately
+		  distinguishable. Pre-release suffixes (e.g. -beta.1) are supported; the
+		  release tag must exactly match v + this value.
+		  Bump Version here for every release; tags should match as vMAJOR.MINOR.PATCH[-prerelease].
+		-->
+		<Version>4.0.0-beta</Version>
+		<Product>RatScanner</Product>
+		<AssemblyTitle>RatScanner</AssemblyTitle>
+		<Company>TarkovTracker.org</Company>
+		<Authors>TarkovTracker.org</Authors>
+		<Description>Escape from Tarkov item scanner</Description>
+		<Copyright>Copyright © TarkovTracker.org; original work by Moritz / Blightbuster</Copyright>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+		<RootNamespace>RatScanner</RootNamespace>
+		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+		<!-- OpenCvSharp4.runtime.win 4.13 ships Windows native binaries for x64 only. -->
+		<PlatformTarget>x64</PlatformTarget>
+		<nullable>Enable</nullable>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
+		<!-- Exclude Data (thousands of icons) from item defaults / dotnet-watch so the file watcher is not flooded. -->
+		<DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildProjectDirectory)\obj\generated\**;$(MSBuildProjectDirectory)\Data\**</DefaultItemExcludes>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<DebugType>none</DebugType>
+		<DebugSymbols>false</DebugSymbols>
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<DefineConstants>TRACE</DefineConstants>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<DefineConstants>DEBUG;TRACE</DefineConstants>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Bulk catalog/tasks/hideout/maps come from json.tarkov.dev (no GraphQL generator). -->
+		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.80" />
+		<PackageReference Include="MudBlazor" Version="9.7.0" />
+		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.9" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference Include="RatStash" Version="6.0.0" />
+		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- In-repo scan engine (vendored RatEye sources under src/ScanEngine; do not restore NuGet RatEye). -->
+		<ProjectReference Include="..\ScanEngine\RatEye.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+		<!-- UI locale catalogs: required at runtime and for packaging/localization tests. -->
+		<None Update="i18n\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<!-- ELv2: anyone who receives a copy must also receive the license terms. -->
+		<None Include="..\..\LICENSE" Link="LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Remove="Data\maps.json" />
+		<Content Remove="wwwroot\interactableOverlay.html" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Explicit include so Data is still copied to bin/publish after DefaultItemExcludes removed it. -->
+		<!-- Watch=false: icon dumps must not restart the dev loop. -->
+		<Content Include="Data\**" Watch="false">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Resources\RatLogoMedium.png">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Resource>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Update="_Imports.razor">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</Content>
+	</ItemGroup>
+</Project>

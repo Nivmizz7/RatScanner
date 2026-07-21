@@ -1,6 +1,9 @@
-[*.{cs}]
-indent_size=4
-tab_width=4
+# MudBlazor analyzer: surface component parameters that no longer exist (or are typos) as
+# build warnings so a MudBlazor 6->9 style regression cannot be silently splatted onto the
+# root element as an HTML attribute. MUD0001 = illegal attribute, MUD0002 = unknown parameter.
+[*.razor]
+dotnet_diagnostic.MUD0001.severity = warning
+dotnet_diagnostic.MUD0002.severity = warning
 
 [*.{appxmanifest,build,config,csproj,dbml,discomap,dtd,json,jsproj,lsproj,njsproj,nuspec,proj,props,resjson,resw,resx,StyleCop,targets,tasks,vbproj,xaml,xamlx,xml,xoml,xsd}]
 indent_size=2
@@ -29,3 +32,8 @@ dotnet_style_require_accessibility_modifiers=for_non_interface_members:hint
 # ReSharper properties
 resharper_csharp_empty_block_style=together_same_line
 resharper_place_expr_method_on_single_line=true
+
+[*.{cs,csx}]
+indent_style=space
+indent_size=4
+tab_width=4

@@ -1,0 +1,24 @@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Surface">@Localizer["DisconnectConfirmMessage"]</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="Cancel">@Localizer["CancelButton"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="Confirm">@Localizer["Disconnect"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance DialogInstance { get; set; } = null!;
+
+    [Parameter]
+    public string ModeLabel { get; set; } = "";
+
+    [Inject]
+    LocalizationService Localizer { get; set; } = null!;
+
+    private void Cancel() => DialogInstance.Cancel();
+
+    private void Confirm() => DialogInstance.Close(DialogResult.Ok(true));
+}

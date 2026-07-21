@@ -1,0 +1,47 @@
+﻿@inject LocalizationService Localizer
+@inject ISnackbar Snackbar
+
+<div class="game-mode-switch">
+	<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
+	                Value="@RatConfig.GameMode"
+	                ValueChanged="SetGameModeAsync"
+	                Disabled="@_switching"
+	                Size="Size.Small"
+	                Color="Color.Primary"
+	                CheckMark="false"
+	                FixedContent="false">
+		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Regular"
+		               Text="@Localizer["PvpMode"]" />
+		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Pve"
+		               Text="@Localizer["PveMode"]" />
+	</MudToggleGroup>
+</div>
+
+@code {
+	private bool _switching;
+
+	private async System.Threading.Tasks.Task SetGameModeAsync(RatScanner.TarkovDev.GameMode gameMode)
+	{
+		if (gameMode == RatConfig.GameMode || _switching)
+			return;
+
+		_switching = true;
+		try
+		{
+			await RatConfig.SetGameModeAsync(gameMode);
+			await InvokeAsync(StateHasChanged);
+		}
+		catch (Exception exception)
+		{
+			Logger.LogWarning("Unable to switch game mode.", exception);
+			Snackbar.Add(Localizer["GameModeSwitchFailed"], Severity.Error);
+		}
+		finally
+		{
+			_switching = false;
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+}

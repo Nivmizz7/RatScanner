@@ -1,0 +1,16 @@
+{
+  // markdownlint-cli2 options for this repo.
+  // Shared rule configuration lives once in .markdownlint.json (CLI + VS Code).
+  // Check:  npm run lint:md   |  scripts\lint-markdown.ps1
+  // Fix:    npm run lint:md:fix |  scripts\lint-markdown.ps1 -Fix
+  "globs": [
+    "**/*.md"
+  ],
+  "ignores": [
+    "**/node_modules/**",
+    "**/bin/**",
+    "**/obj/**",
+    "**/publish/**",
+    "**/.vs/**"
+  ]
+}

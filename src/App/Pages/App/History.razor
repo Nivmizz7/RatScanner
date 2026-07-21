@@ -1,0 +1,17 @@
+@page "/app/history"
+@using RatScanner.Presentation
+@inject SessionHistoryService SessionHistory
+@inject NavigationManager Navigation
+@inject LocalizationService Localizer
+@implements IDisposable
+
+<div class="history-page"><header><div><h1>@Localizer["HistoryNav"]</h1><p>@Localizer["HistoryDescription"]</p></div><MudIcon Icon="@Icons.Material.Filled.History" /></header>
+@if (SessionHistory.Items.Count == 0) { <section class="empty"><strong>@Localizer["HistoryEmptyTitle"]</strong><span>@Localizer["HistoryEmptyBody"]</span></section> }
+else { <section class="history-list">@foreach (ScanResultViewModel result in SessionHistory.Items) { <button @key="result" class="history-row" @onclick="() => OpenResult(result)"><img src="@result.Item.ImageUrl" alt="" /><div><strong>@result.Item.Name</strong><span>@result.Recommendation.Title</span></div><div><strong>@PriceFormatter.Format(result.Pricing.FleaPrice)</strong><span>@result.ScannedAt?.ToString("t")</span></div></button> }</section> }
+</div>
+@code {
+    protected override void OnInitialized() => SessionHistory.Changed += OnHistoryChanged;
+    private void OnHistoryChanged(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);
+    private void OpenResult(ScanResultViewModel result) { SessionHistory.Selected = result; Navigation.NavigateTo("/app"); }
+    public void Dispose() => SessionHistory.Changed -= OnHistoryChanged;
+}

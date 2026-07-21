@@ -1,0 +1,36 @@
+@using RatScanner.TarkovDev
+@inject LocalizationService Localizer
+
+<button type="button"
+        class="map-search-result"
+        aria-label="@Localizer.Format("OpenNamedMap", Map.Name ?? Localizer["UnknownMap"])"
+        @onclick="OnMapClick">
+    <MudPaper Class="pa-2" Elevation="3">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Style="height: 6vh;">
+            <MudStack Row="true" Justify="Justify.FlexStart" Class="flex-1" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Map" Size="Size.Large" Color="Color.Primary" />
+                <MudStack Justify="Justify.SpaceEvenly" AlignItems="AlignItems.Start">
+                    <MudText Class="ellipsis" Typo="Typo.h6" Style="max-width: 16vw">@Map.Name</MudText>
+                    <MudText Typo="Typo.caption">@Localizer["ClickToViewMap"]</MudText>
+                </MudStack>
+            </MudStack>
+        </MudStack>
+    </MudPaper>
+</button>
+
+<style>
+    .ellipsis {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public required Map Map { get; set; }
+
+    [Parameter]
+    public EventCallback OnMapClick { get; set; }
+}

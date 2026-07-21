@@ -1,0 +1,15 @@
+﻿.game-mode-switch {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	flex: none;
+}
+
+::deep .mud-toggle-group {
+	gap: 0;
+}
+
+::deep .mud-toggle-item {
+	padding: 4px 10px;
+	min-height: 28px;
+}
