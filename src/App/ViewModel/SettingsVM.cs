@@ -351,33 +351,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.Tracking.TarkovTracker.PvpSource,
             source => RatConfig.Tracking.TarkovTracker.PvpSource = source,
-            _ => RefreshTrackerAfterSourceChange()
+            _ => RefreshTrackerInBackground("Unable to refresh tracker progress after changing the PvP tracker source.")
         );
-
-    private static void RefreshTrackerAfterSourceChange()
-    {
-        // The tracker database only re-reads the active token/endpoint on
-        // activation, so apply the source change immediately instead of
-        // waiting for the periodic refresh.
-        //
-        // Fire-and-forget is safe here: TarkovTrackerDB.Configure assigns a
-        // monotonically increasing generation to each configuration, and
-        // stale async operations check IsCurrent before committing state. If
-        // the save later fails and SettingsPersistenceService rolls back via
-        // applyRuntime(previous), the rollback activation gets a newer
-        // generation and wins — so the runtime always converges on the
-        // persisted source even when the optimistic change and rollback race.
-        _ = RatScannerMain
-            .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
-            .ContinueWith(
-                t =>
-                    Logger.LogWarning(
-                        "Unable to refresh tracker progress after changing the PvP tracker source.",
-                        t.Exception
-                    ),
-                TaskContinuationOptions.OnlyOnFaulted
-            );
-    }
 
     internal Task<SettingSaveResult> SetShowTarkovTrackerTeamAsync(bool value) =>
         SaveAsync(
@@ -386,20 +361,25 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.Tracking.TarkovTracker.ShowTeam,
             v => RatConfig.Tracking.TarkovTracker.ShowTeam = v,
-            ignored =>
-            {
-                _ = RatScannerMain
-                    .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
-                    .ContinueWith(
-                        t =>
-                            Logger.LogWarning(
-                                "Unable to refresh tracker progress after changing team visibility.",
-                                t.Exception
-                            ),
-                        TaskContinuationOptions.OnlyOnFaulted
-                    );
-            }
+            _ => RefreshTrackerInBackground("Unable to refresh tracker progress after changing team visibility.")
         );
+
+    // The tracker database only re-reads the active token/endpoint on activation, so
+    // runtime-affecting changes (PvP source, team visibility) must re-activate it
+    // explicitly instead of waiting for the periodic refresh.
+    //
+    // Fire-and-forget is safe here: TarkovTrackerDB.Configure assigns a monotonically
+    // increasing generation to each configuration, and stale async operations check
+    // IsCurrent before committing state. If the save later fails and
+    // SettingsPersistenceService rolls back via applyRuntime(previous), the rollback
+    // activation gets a newer generation and wins — so the runtime always converges on
+    // the persisted value even when the optimistic change and rollback race.
+    private static void RefreshTrackerInBackground(string failureMessage)
+    {
+        _ = RatScannerMain
+            .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
+            .ContinueWith(t => Logger.LogWarning(failureMessage, t.Exception), TaskContinuationOptions.OnlyOnFaulted);
+    }
 
     internal Task<SettingSaveResult> SetMinimalUiAsync(string key, bool value) =>
         key switch
