@@ -187,14 +187,47 @@ jobs:
           $encodedTag = [Uri]::EscapeDataString($env:TAG)
           $apiRoot = "https://api.github.com/repos/${env:GITHUB_REPOSITORY}"
 
+          function Assert-GitHubReleaseDoesNotExist {
+            param(
+              [string]$ApiRoot,
+              [string]$Tag,
+              [hashtable]$Headers
+            )
+
+            $page = 1
+            do {
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "${ApiRoot}/releases?per_page=100&page=${page}" `
+                  -Headers $Headers `
+                  -Method Get `
+                  -SkipHttpErrorCheck
+              }
+              catch {
+                throw "Could not verify whether release ${Tag} exists: $($_.Exception.Message)"
+              }
+
+              if ($response.StatusCode -ne 200) {
+                throw "Could not verify whether release ${Tag} exists (GitHub API returned HTTP $($response.StatusCode))."
+              }
+
+              $releases = @(ConvertFrom-Json -InputObject $response.Content)
+              if ($releases | Where-Object { $_.tag_name -ceq $Tag } | Select-Object -First 1) {
+                throw "Release ${Tag} already exists. Bump <Version> in src/App/RatScanner.csproj before deploying."
+              }
+              $page++
+            } while ($releases.Count -eq 100)
+          }
+
           function Assert-GitHubResourceDoesNotExist {
             param(
               [string]$Uri,
-              [string]$ResourceName
+              [string]$ResourceName,
+              [hashtable]$Headers
             )
 
             try {
-              $response = Invoke-WebRequest -Uri $Uri -Headers $headers -Method Get -SkipHttpErrorCheck
+              $response = Invoke-WebRequest -Uri $Uri -Headers $Headers -Method Get -SkipHttpErrorCheck
             }
             catch {
               throw "Could not verify whether ${ResourceName} exists: $($_.Exception.Message)"
@@ -208,12 +241,13 @@ jobs:
             }
           }
 
-          Assert-GitHubResourceDoesNotExist `
-            -Uri "${apiRoot}/releases/tags/${encodedTag}" `
-            -ResourceName "Release ${env:TAG}"
+          # The by-tag endpoint excludes drafts. List all releases so an unpublished
+          # release reserves its tag just like an already-published release does.
+          Assert-GitHubReleaseDoesNotExist -ApiRoot $apiRoot -Tag $env:TAG -Headers $headers
           Assert-GitHubResourceDoesNotExist `
             -Uri "${apiRoot}/git/ref/tags/${encodedTag}" `
-            -ResourceName "Tag ${env:TAG}"
+            -ResourceName "Tag ${env:TAG}" `
+            -Headers $headers
       - name: Download validated package
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
