@@ -168,6 +168,7 @@ jobs:
       group: ${{ github.workflow }}-release-${{ needs.build.outputs.release-tag }}
       cancel-in-progress: false
     permissions:
+      # Required to create the release tag and publish the GitHub release.
       contents: write
     steps:
       - name: Ensure the release does not already exist
