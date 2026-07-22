@@ -26,11 +26,32 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      release-tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           persist-credentials: false
+      - name: Resolve product version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSHED_TAG: ${{ github.ref_name }}
+        run: |
+          $project = New-Object System.Xml.XmlDocument
+          $project.Load((Join-Path $PWD 'src/App/RatScanner.csproj'))
+          $versionNode = $project.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']")
+          if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            throw 'src/App/RatScanner.csproj is missing the product Version element.'
+          }
+          $version = $versionNode.InnerText.Trim()
+          $tag = 'v' + $version
+          # A tag push must exactly match the csproj product version.
+          if ($env:EVENT_NAME -eq 'push' -and $env:PUSHED_TAG.StartsWith('v') -and $env:PUSHED_TAG -cne $tag) {
+            throw "Release tag '$($env:PUSHED_TAG)' does not match product version '$tag'."
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
@@ -143,39 +164,17 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.deploy)
     needs: build
     runs-on: windows-latest
+    concurrency:
+      group: ${{ github.workflow }}-release-${{ needs.build.outputs.release-tag }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          persist-credentials: false
-      - name: Resolve release version
-        id: version
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PUSHED_TAG: ${{ github.ref_name }}
-        run: |
-          $project = New-Object System.Xml.XmlDocument
-          $project.Load((Join-Path $PWD 'src/App/RatScanner.csproj'))
-          $versionNode = $project.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']")
-          if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
-            throw 'src/App/RatScanner.csproj is missing the product Version element.'
-          }
-          $version = $versionNode.InnerText.Trim()
-          $tag = 'v' + $version
-          # A tag push must exactly match the csproj product version.
-          if ($env:EVENT_NAME -eq 'push' -and $env:PUSHED_TAG -cne $tag) {
-            throw "Release tag '$($env:PUSHED_TAG)' does not match product version '$tag'."
-          }
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Release version resolved: $version (tag $tag)"
       - name: Ensure the release does not already exist
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.version.outputs.tag }}
+          TAG: ${{ needs.build.outputs.release-tag }}
         run: |
           # A manual deploy must never overwrite a shipped release. Fail closed and
           # ask for a <Version> bump when the tag or release already exists.
@@ -259,15 +258,15 @@ jobs:
         # which reads /releases/latest, can see it.
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
+          tag_name: ${{ needs.build.outputs.release-tag }}
           target_commitish: ${{ github.sha }}
           files: release-artifact/RatScanner.zip
           draft: false
           prerelease: false
           make_latest: true
-          name: RatScanner ${{ steps.version.outputs.tag }}
+          name: RatScanner ${{ needs.build.outputs.release-tag }}
           body: |
-            **RatScanner** `${{ steps.version.outputs.tag }}`
+            **RatScanner** `${{ needs.build.outputs.release-tag }}`
 
             Support: [this repo](https://github.com/tarkovtracker-org/RatScanner) · [Discord](https://discord.gg/M8nBgA2sT6)
         env:
