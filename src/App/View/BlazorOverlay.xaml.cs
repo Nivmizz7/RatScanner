@@ -23,6 +23,7 @@ public partial class BlazorOverlay : Window
         Resources.Add("services", serviceProvider);
 
         InitializeComponent();
+        DpiChanged += HostWindow_DpiChanged;
     }
 
     protected override void OnSourceInitialized(System.EventArgs e)
@@ -108,8 +109,14 @@ public partial class BlazorOverlay : Window
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
+    private void HostWindow_DpiChanged(object sender, System.Windows.DpiChangedEventArgs e)
+    {
+        WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
+    }
+
     protected override void OnClosed(System.EventArgs e)
     {
+        DpiChanged -= HostWindow_DpiChanged;
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
         // WebView may not be created if the window closes before initialization completes.

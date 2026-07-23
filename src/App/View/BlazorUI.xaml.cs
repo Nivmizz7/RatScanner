@@ -56,6 +56,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     private readonly ServiceProvider _serviceProvider;
     private WebView2CompositionControl? _initializedWebView;
+    private Window? _dpiHostWindow;
     private bool _disposed;
 
     private BlazorUI()
@@ -114,10 +115,15 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     {
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
+        if (_dpiHostWindow is not null)
+            _dpiHostWindow.DpiChanged -= HostWindow_DpiChanged;
 
         _initializedWebView = e.WebView;
         _initializedWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         _initializedWebView.NavigationCompleted += WebView_Loaded;
+        _dpiHostWindow = Window.GetWindow(_initializedWebView);
+        if (_dpiHostWindow is not null)
+            _dpiHostWindow.DpiChanged += HostWindow_DpiChanged;
 
         CoreWebView2 coreWebView = _initializedWebView.CoreWebView2;
         coreWebView.SetVirtualHostNameToFolderMapping(
@@ -134,6 +140,11 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         // If we are running in a development/debugger mode, open dev tools to help out
         if (Debugger.IsAttached)
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
+    }
+
+    private void HostWindow_DpiChanged(object sender, DpiChangedEventArgs e)
+    {
+        WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
     }
 
     private void UpdateElements() { }
@@ -176,6 +187,11 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
+        if (_dpiHostWindow is not null)
+        {
+            _dpiHostWindow.DpiChanged -= HostWindow_DpiChanged;
+            _dpiHostWindow = null;
+        }
 
         BlazorInteractableOverlay?.Close();
         BlazorOverlay?.Close();
