@@ -385,19 +385,133 @@ public class TarkovDevApiTests
 public class GitHubUpdateServiceTests
 {
     [Theory]
-    // This project uses its own 4.x line; comparisons stay pure semver.
+    // This project uses its own 4.x line and full SemVer precedence.
     [InlineData("4.0.0", "v4.0.1", true)]
-    [InlineData("4.0.0+build.1", "4.0.0", false)]
+    [InlineData("4.0.0+build.1", "4.0.0+build.2", false)]
     [InlineData("4.1.0-beta.1", "4.0.9", false)]
     [InlineData("4.0.0", "4.0.1-beta.1", false)]
-    [InlineData("4.0.1-beta.1", "4.0.1", true)]
+    [InlineData("4.0.1-alpha.1", "4.0.1-beta.1", true)]
+    [InlineData("4.0.1-beta", "4.0.1-beta.1", true)]
+    [InlineData("4.0.1-beta.1", "4.0.1-beta.2", true)]
+    [InlineData("4.0.1-beta.2", "4.0.1-beta.11", true)]
+    [InlineData("4.0.1-alpha.999999999999999999999", "4.0.1-alpha.1000000000000000000000", true)]
+    [InlineData("4.0.1-ALPHA", "4.0.1-alpha", true)]
+    [InlineData("4.0.1-beta.11", "4.0.1-rc.1", true)]
+    [InlineData("4.0.1-rc.1", "4.0.1", true)]
+    [InlineData("4.0.1-beta.2", "4.0.1-beta.1", false)]
     [InlineData("4.0.1-beta.1", "4.0.2-beta.1", true)]
+    [InlineData("4.0.1", "4.0.2-beta.1", false)]
     [InlineData("unknown", "4.0.1", false)]
     // Upstream-style 3.x would always be older than a 4.x fork install (and vice versa).
     [InlineData("4.0.0", "v3.9.3", false)]
     [InlineData("3.9.3", "v4.0.0", true)]
     public void IsNewerVersion_handles_release_tag_formats(string current, string available, bool expected) =>
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));
+
+    [Fact]
+    public void TryParseVersion_preserves_three_component_system_version_shape()
+    {
+        bool parsed = GitHubUpdateService.TryParseVersion("v4.0.1-beta.1", out Version version);
+
+        Assert.True(parsed);
+        Assert.Equal(new Version(4, 0, 1), version);
+        Assert.Equal(-1, version.Revision);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_keeps_stable_installs_on_the_latest_stable_channel()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.2-beta.1", prerelease: true),
+            ReleaseJson("v4.0.1", prerelease: false)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.0",
+            includePrereleases: false
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_allows_opted_in_prerelease_installs_to_advance()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1-beta.3", prerelease: true),
+            ReleaseJson("v4.0.1-beta.2", prerelease: true),
+            ReleaseJson("v4.0.0", prerelease: false)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.1",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1-beta.3", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_promotes_prerelease_installs_to_matching_stable()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1", prerelease: false),
+            ReleaseJson("v4.0.1-rc.1", prerelease: true)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.2",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_ignores_drafts_and_untrusted_or_missing_assets()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1-beta.4", prerelease: true, draft: true),
+            ReleaseJson("v4.0.1-beta.3", prerelease: true, assetUrl: "https://evil.example/RatScanner.zip"),
+            ReleaseJson("v4.0.1-beta.2", prerelease: true)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.1",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1-beta.2", release.Version);
+    }
+
+    private static string ReleaseListJson(params string[] releases) => "[" + string.Join(",", releases) + "]";
+
+    private static string ReleaseJson(string tag, bool prerelease, bool draft = false, string assetUrl = null)
+    {
+        assetUrl ??= $"https://github.com/tarkovtracker-org/RatScanner/releases/download/{tag}/RatScanner.zip";
+        return $$"""
+            {
+              "tag_name": "{{tag}}",
+              "html_url": "https://github.com/tarkovtracker-org/RatScanner/releases/tag/{{tag}}",
+              "draft": {{draft.ToString().ToLowerInvariant()}},
+              "prerelease": {{prerelease.ToString().ToLowerInvariant()}},
+              "assets": [
+                {
+                  "name": "RatScanner.zip",
+                  "browser_download_url": "{{assetUrl}}"
+                }
+              ]
+            }
+            """;
+    }
 
     [Theory]
     [InlineData("https://github.com/tarkovtracker-org/RatScanner/releases/download/v4.0.0/RatScanner.zip", true)]

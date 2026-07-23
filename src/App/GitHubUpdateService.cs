@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -9,6 +10,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using NuGet.Versioning;
 
 namespace RatScanner;
 
@@ -22,6 +24,7 @@ internal static class GitHubUpdateService
     internal const string Owner = "tarkovtracker-org";
     internal const string Repo = "RatScanner";
     private const string LatestReleaseApi = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
+    private const string ReleasesApi = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page=100";
     private const string AssetZipName = "RatScanner.zip";
 
     private static readonly HttpClient Http = CreateHttpClient();
@@ -70,13 +73,18 @@ internal static class GitHubUpdateService
     }
 
     /// <summary>
-    /// Returns latest published release with a RatScanner.zip asset, or null on failure / no asset.
+    /// Returns the newest release eligible for the installed update channel, or null on failure / no asset.
+    /// Stable installs read GitHub's Latest release. Pre-release installs include published GitHub pre-releases.
     /// </summary>
     internal static async Task<LatestRelease?> TryGetLatestReleaseAsync()
     {
         try
         {
-            using HttpResponseMessage response = await Http.GetAsync(LatestReleaseApi).ConfigureAwait(false);
+            bool includePrereleases =
+                TryParseSemanticVersion(RatConfig.Version, out NuGetVersion current) && current.IsPrerelease;
+            string endpoint = includePrereleases ? ReleasesApi : LatestReleaseApi;
+
+            using HttpResponseMessage response = await Http.GetAsync(endpoint).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogWarning($"GitHub release check failed: HTTP {(int)response.StatusCode}");
@@ -84,42 +92,7 @@ internal static class GitHubUpdateService
             }
 
             string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            JObject root = JObject.Parse(json);
-
-            string? tag = root["tag_name"]?.Value<string>();
-            if (string.IsNullOrWhiteSpace(tag))
-                return null;
-
-            string? htmlUrl = root["html_url"]?.Value<string>() ?? $"https://github.com/{Owner}/{Repo}/releases/latest";
-            string version = tag.TrimStart('v', 'V');
-
-            JToken? assets = root["assets"];
-            string? zipUrl = assets
-                ?.OfType<JObject>()
-                .Select(a => new
-                {
-                    Name = a["name"]?.Value<string>(),
-                    Url = a["browser_download_url"]?.Value<string>(),
-                })
-                .FirstOrDefault(a =>
-                    string.Equals(a.Name, AssetZipName, StringComparison.OrdinalIgnoreCase)
-                    && IsAllowedReleaseAssetUrl(a.Url)
-                )
-                ?.Url;
-
-            if (string.IsNullOrEmpty(zipUrl))
-            {
-                Logger.LogWarning($"Latest GitHub release does not contain a trusted {AssetZipName} asset URL.");
-                return null;
-            }
-
-            return new LatestRelease
-            {
-                TagName = tag,
-                Version = version,
-                ZipDownloadUrl = zipUrl,
-                HtmlUrl = htmlUrl,
-            };
+            return SelectUpdateRelease(json, RatConfig.Version, includePrereleases);
         }
         catch (Exception e)
         {
@@ -128,11 +101,69 @@ internal static class GitHubUpdateService
         }
     }
 
+    internal static LatestRelease? SelectUpdateRelease(string json, string currentVersion, bool includePrereleases)
+    {
+        JToken root = JToken.Parse(json);
+        IEnumerable<JObject> candidates = root switch
+        {
+            JObject release => [release],
+            JArray releases => releases.OfType<JObject>(),
+            _ => [],
+        };
+
+        return candidates
+            .Where(release => release["draft"]?.Value<bool>() != true)
+            .Where(release => includePrereleases || release["prerelease"]?.Value<bool>() != true)
+            .Select(CreateRelease)
+            .Where(release => release != null && IsNewerVersion(currentVersion, release.Version))
+            .OrderByDescending(
+                release => ParseSemanticVersion(release!.Version),
+                Comparer<NuGetVersion>.Create(CompareSemanticVersions)
+            )
+            .FirstOrDefault();
+    }
+
+    private static LatestRelease? CreateRelease(JObject root)
+    {
+        string? tag = root["tag_name"]?.Value<string>();
+        if (string.IsNullOrWhiteSpace(tag))
+            return null;
+
+        string? htmlUrl = root["html_url"]?.Value<string>() ?? $"https://github.com/{Owner}/{Repo}/releases";
+        string version = tag.TrimStart('v', 'V');
+        string? zipUrl = root["assets"]
+            ?.OfType<JObject>()
+            .Select(asset => new
+            {
+                Name = asset["name"]?.Value<string>(),
+                Url = asset["browser_download_url"]?.Value<string>(),
+            })
+            .FirstOrDefault(asset =>
+                string.Equals(asset.Name, AssetZipName, StringComparison.OrdinalIgnoreCase)
+                && IsAllowedReleaseAssetUrl(asset.Url)
+            )
+            ?.Url;
+
+        if (string.IsNullOrEmpty(zipUrl))
+            return null;
+
+        return new LatestRelease
+        {
+            TagName = tag,
+            Version = version,
+            ZipDownloadUrl = zipUrl,
+            HtmlUrl = htmlUrl,
+        };
+    }
+
+    private static NuGetVersion ParseSemanticVersion(string versionText) =>
+        TryParseSemanticVersion(versionText, out NuGetVersion version) ? version : new NuGetVersion(0, 0, 0);
+
     internal static bool IsNewerVersion(string currentVersion, string availableVersion)
     {
         if (
-            !TryParseVersionInfo(currentVersion, out VersionInfo current)
-            || !TryParseVersionInfo(availableVersion, out VersionInfo available)
+            !TryParseSemanticVersion(currentVersion, out NuGetVersion current)
+            || !TryParseSemanticVersion(availableVersion, out NuGetVersion available)
         )
             return false;
 
@@ -140,28 +171,80 @@ internal static class GitHubUpdateService
         if (available.IsPrerelease && !current.IsPrerelease)
             return false;
 
-        int comparison = available.Version.CompareTo(current.Version);
-        if (comparison > 0)
-            return true;
-        if (comparison < 0)
-            return false;
+        return CompareSemanticVersions(available, current) > 0;
+    }
 
-        // Same numeric version: allow upgrading from pre-release to the matching stable.
-        return current.IsPrerelease && !available.IsPrerelease;
+    private static int CompareSemanticVersions(NuGetVersion left, NuGetVersion right)
+    {
+        int comparison = left.Major.CompareTo(right.Major);
+        if (comparison != 0)
+            return comparison;
+
+        comparison = left.Minor.CompareTo(right.Minor);
+        if (comparison != 0)
+            return comparison;
+
+        comparison = left.Patch.CompareTo(right.Patch);
+        if (comparison != 0)
+            return comparison;
+
+        if (left.IsPrerelease != right.IsPrerelease)
+            return left.IsPrerelease ? -1 : 1;
+        if (!left.IsPrerelease)
+            return 0;
+
+        string[] leftLabels = left.ReleaseLabels.ToArray();
+        string[] rightLabels = right.ReleaseLabels.ToArray();
+        int count = Math.Min(leftLabels.Length, rightLabels.Length);
+        for (int index = 0; index < count; index++)
+        {
+            comparison = CompareSemanticIdentifiers(leftLabels[index], rightLabels[index]);
+            if (comparison != 0)
+                return comparison;
+        }
+
+        return leftLabels.Length.CompareTo(rightLabels.Length);
+    }
+
+    private static int CompareSemanticIdentifiers(string left, string right)
+    {
+        bool leftNumeric = IsNumericIdentifier(left);
+        bool rightNumeric = IsNumericIdentifier(right);
+
+        if (leftNumeric != rightNumeric)
+            return leftNumeric ? -1 : 1;
+        if (leftNumeric)
+        {
+            int lengthComparison = left.Length.CompareTo(right.Length);
+            return lengthComparison != 0 ? lengthComparison : string.CompareOrdinal(left, right);
+        }
+
+        return string.CompareOrdinal(left, right);
+    }
+
+    private static bool IsNumericIdentifier(string value)
+    {
+        foreach (char character in value)
+        {
+            if (character is < '0' or > '9')
+                return false;
+        }
+
+        return value.Length > 0;
     }
 
     internal static bool TryParseVersion(string versionText, out Version version)
     {
-        bool parsed = TryParseVersionInfo(versionText, out VersionInfo info);
-        version = info.Version;
+        bool parsed = TryParseSemanticVersion(versionText, out NuGetVersion semanticVersion);
+        version = parsed
+            ? new Version(semanticVersion.Major, semanticVersion.Minor, semanticVersion.Patch)
+            : new Version(0, 0);
         return parsed;
     }
 
-    private readonly record struct VersionInfo(Version Version, bool IsPrerelease);
-
-    private static bool TryParseVersionInfo(string versionText, out VersionInfo info)
+    private static bool TryParseSemanticVersion(string versionText, out NuGetVersion version)
     {
-        info = new VersionInfo(new Version(0, 0), false);
+        version = new NuGetVersion(0, 0, 0);
         if (string.IsNullOrWhiteSpace(versionText))
             return false;
 
@@ -169,15 +252,10 @@ internal static class GitHubUpdateService
         if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
             cleaned = cleaned.Substring(1);
 
-        int cut = cleaned.IndexOfAny(['-', '+']);
-        bool isPrerelease = cut >= 0 && cleaned[cut] == '-';
-        if (cut >= 0)
-            cleaned = cleaned.Substring(0, cut);
-
-        if (!Version.TryParse(cleaned, out Version? result) || result is null)
+        if (!NuGetVersion.TryParseStrict(cleaned, out NuGetVersion? parsed) || parsed is null)
             return false;
 
-        info = new VersionInfo(result, isPrerelease);
+        version = parsed;
         return true;
     }
 
