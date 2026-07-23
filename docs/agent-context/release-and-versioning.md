@@ -45,28 +45,23 @@ Day-to-day coding should use `dev.bat`, not publish.
 
 ## CI release path
 
-Workflow: `.github/workflows/build.yml`
+Workflows:
 
-Triggers:
+- `.github/workflows/build.yml` — PRs to `master` and pushes to `master`.
+- `.github/workflows/release.yml` — manual artifact promotion from `master` only.
 
-- PRs to `master`
-- Pushes to `master`
-- Push tags `v*`
-- `workflow_dispatch`
+The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/integrity checks → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + Data → upload `RatScanner.zip` as an immutable workflow artifact.
 
-The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/integrity checks → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + Data → upload `publish/` and `RatScanner.zip`.
-
-The release job has `contents: write` and runs only on a deploy — either a `v*` tag push or a manual **Run workflow** with the `deploy` box checked. It resolves the version from the App project `<Version>`, refuses to overwrite an existing tag/release on manual deploys, auto-creates the tag when needed, and publishes the GitHub release **directly as Latest** (`draft: false`, `prerelease: false`, `make_latest: true`) with `RatScanner.zip` attached. Publishing as a non-prerelease Latest release is mandatory: the in-app updater reads `/releases/latest`, which skips drafts and pre-releases. PR and branch-push builds never receive release permissions.
+The release workflow does **not** rebuild. It resolves `<Version>` from the selected `master` commit, requires a successful push-triggered Build run for that exact commit, and downloads that run's `RatScanner.zip` with GitHub's artifact digest verification enabled. It then validates the zip, refuses to overwrite an existing tag or draft/published release, auto-creates the tag, and publishes the exact CI-tested package **directly as Latest** (`draft: false`, `prerelease: false`, `make_latest: true`). Publishing as a non-prerelease Latest release is mandatory: the in-app updater reads `/releases/latest`, which skips drafts and pre-releases. Only the Release workflow receives `actions: read` and `contents: write`; PR and branch-push builds remain read-only.
 
 ### How to cut a release
 
-Preferred (one click, no local git):
+Preferred (one click, no local git or duplicate build):
 
 1. Bump `<Version>` in `src/App/RatScanner.csproj` (e.g. `4.0.1-beta`) and land it on `master`.
-2. GitHub → **Actions** → **Build** → **Run workflow** on `master`, tick **deploy**, then **Run workflow**.
-3. CI builds/tests, tags `v<Version>`, and publishes it as the Latest release. Running installs pick it up on next launch.
-
-Alternative (tag push): bump `<Version>`, then `git tag v<Version>` and `git push origin v<Version>`.
+2. Wait for the push-triggered **Build** workflow on that `master` commit to pass.
+3. GitHub → **Actions** → **Release** → **Run workflow** from `master`.
+4. CI promotes the successful Build artifact, tags `v<Version>`, and publishes it as the Latest release. Running installs pick it up on next launch.
 
 `GitHubUpdateService` compares the numeric version part, so bump the numeric version every release (`4.0.0-beta` → `4.0.1-beta`); never ship two releases sharing the same numeric base (e.g. `4.0.0-beta` then `4.0.0-beta.2`), or the second will not be offered as an update.
 
@@ -83,7 +78,7 @@ Alternative (tag push): bump `<Version>`, then `git tag v<Version>` and `git pus
 3. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 4. Publish smoke or trust CI.
 5. Changelog/notes ready for draft release body if needed.
-6. Deploy: **Actions → Build → Run workflow → deploy** on `master` (or push a matching `v*` tag).
+6. Deploy: **Actions → Release → Run workflow** from `master`.
 7. Confirm the auto-published release is marked **Latest** (not pre-release) and has `RatScanner.zip` attached.
 
 ## Branding

@@ -25,7 +25,7 @@ Always verify `git remote -v` before push. GUI clients can default to the wrong 
 2. Land via PR to `master` on `tarkovtracker-org/RatScanner`.
 3. Do not assume direct pushes to `master` for everyday agent work; prefer PRs.
 
-CI runs for PRs targeting `master` and pushes to `master`; tag pushes and manual dispatch cover release/manual runs.
+Build CI runs for PRs targeting `master` and pushes to `master`. Releases use a separate manual workflow that promotes the exact successful artifact from the selected `master` commit without rebuilding.
 
 ## Commits and PRs
 

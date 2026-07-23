@@ -12,7 +12,7 @@ Supported workflow for this fork:
 
 1. Branch from **`master`** (`feat/…`, `fix/…`).
 2. Keep changes focused; open a PR against `master` on the fork.
-3. CI (`.github/workflows/build.yml`) runs on Windows with .NET 10, documentation/formatting checks, Release build/tests, dependency audit, and publish packaging.
+3. CI (`.github/workflows/build.yml`) runs on Windows with .NET 10, documentation/formatting checks, Release build/tests, dependency audit, and publish packaging. Releases promote the exact successful `master` build artifact through `.github/workflows/release.yml` without rebuilding.
 
 `master` is the primary integration branch. Classical long-lived git-flow with `develop` as the main integration target is **not** required for day-to-day work on this fork.
 
@@ -76,7 +76,7 @@ Do **not** reuse or "continue" historical upstream patch numbers. After a breaki
 <Version>4.0.0-beta.1</Version>
 ```
 
-**Release tags:** `vMAJOR.MINOR.PATCH[-prerelease]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). CI drafts a GitHub release when a `v*` tag is pushed.
+**Release tags:** `vMAJOR.MINOR.PATCH[-pre-release]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact, creates the tag, and publishes it as Latest.
 
 | Bump | When |
 | --- | --- |
