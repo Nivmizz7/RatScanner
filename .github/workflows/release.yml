@@ -38,6 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA: ${{ github.sha }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           if ($env:GITHUB_REF -cne 'refs/heads/master') {
             throw "Release workflow must be dispatched from master, not '$($env:GITHUB_REF)'."
@@ -49,7 +50,15 @@ jobs:
           if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
             throw 'src/App/RatScanner.csproj is missing the product Version element.'
           }
-          $tag = 'v' + $versionNode.InnerText.Trim()
+          $version = $versionNode.InnerText.Trim()
+          $tag = 'v' + $version
+          $isPrerelease = $version -match '^[^+]*-'
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "is-prerelease=$($isPrerelease.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($env:CHANNEL -eq 'testing' -and -not $isPrerelease) {
+            throw 'The testing channel requires a pre-release version suffix such as -beta.1 or -rc.1.'
+          }
 
           $headers = @{
             Authorization = "Bearer ${env:GH_TOKEN}"
@@ -88,8 +97,6 @@ jobs:
             throw "No successful master push build exists for commit $($env:EXPECTED_SHA). Wait for Build to pass before releasing."
           }
 
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "is-prerelease=$($tag.Contains('-').ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           try {
             $artifactResponse = Invoke-WebRequest `
               -Uri "${apiRoot}/actions/runs/$($buildRun.id)/artifacts?per_page=100" `
@@ -255,14 +262,6 @@ jobs:
             'Report major issues through [this repository](https://github.com/tarkovtracker-org/RatScanner/issues) or ask for help on [Discord](https://discord.gg/M8nBgA2sT6).'
           )
           Set-Content -LiteralPath release-notes.md -Value $lines -Encoding utf8NoBOM
-      - name: Validate publishing channel
-        env:
-          CHANNEL: ${{ inputs.channel }}
-          IS_PRERELEASE: ${{ steps.release.outputs.is-prerelease }}
-        run: |
-          if ($env:CHANNEL -eq 'testing' -and $env:IS_PRERELEASE -cne 'true') {
-            throw 'The testing channel requires a pre-release version suffix such as -beta.1 or -rc.1.'
-          }
       - name: Publish Release
         # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
         # The testing channel is opt-in and hidden from /releases/latest. The latest channel

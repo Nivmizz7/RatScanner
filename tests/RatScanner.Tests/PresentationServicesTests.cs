@@ -394,6 +394,8 @@ public class GitHubUpdateServiceTests
     [InlineData("4.0.1-beta", "4.0.1-beta.1", true)]
     [InlineData("4.0.1-beta.1", "4.0.1-beta.2", true)]
     [InlineData("4.0.1-beta.2", "4.0.1-beta.11", true)]
+    [InlineData("4.0.1-alpha.999999999999999999999", "4.0.1-alpha.1000000000000000000000", true)]
+    [InlineData("4.0.1-ALPHA", "4.0.1-alpha", true)]
     [InlineData("4.0.1-beta.11", "4.0.1-rc.1", true)]
     [InlineData("4.0.1-rc.1", "4.0.1", true)]
     [InlineData("4.0.1-beta.2", "4.0.1-beta.1", false)]

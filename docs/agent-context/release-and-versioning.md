@@ -81,7 +81,7 @@ The manual workflow requires an explicit publishing channel:
 
 | Channel | GitHub release state | Who receives it automatically |
 | --- | --- | --- |
-| `testing` | GitHub pre-release; not returned by `/releases/latest` | Only users who manually installed a pre-release build with the prerelease-aware updater |
+| `testing` | GitHub pre-release; not returned by `/releases/latest` | Users running a pre-release build with the prerelease-aware updater, including users moved onto it by a bridge release |
 | `latest` | Non-pre-release and marked Latest | All eligible installed builds, including the currently published `4.0.0-beta` bridge population |
 
 Use `testing` for smoke testing and normal numbered beta/RC iterations. Use `latest` only when intentionally promoting a build to the entire maintained update feed. The in-app updater keeps stable installs on `/releases/latest`; pre-release installs query published releases and follow newer SemVer pre-releases before moving to the matching stable release.
@@ -100,7 +100,7 @@ Safe bridge rollout for the updater change:
 
 1. Publish `4.0.1-beta.1` as `testing`; this does **not** replace the current Latest release and does not notify `4.0.0-beta` installs.
 2. Download and run `4.0.1-beta.1` manually in a disposable copy of the install directory; verify startup and automatic updating with a later testing build.
-3. After smoke testing, publish a new unique bridge version (for example `4.0.2-beta.1`) as `latest` to move the existing `4.0.0-beta` population onto the prerelease-aware updater. Never reuse or overwrite the testing tag.
+3. After smoke testing, publish the next unused pre-release iteration on the same numeric target (for example `4.0.1-beta.3` if `beta.2` was the later testing build) as `latest` to move the existing `4.0.0-beta` population onto the prerelease-aware updater. Never reuse or overwrite a testing tag.
 
 `GitHubUpdateService` compares full SemVer precedence, including numbered alpha/beta/RC identifiers, while ignoring build metadata. A stable installation will not automatically move onto a pre-release channel. A pre-release installation follows newer pre-releases and then the matching stable release.
 
@@ -108,7 +108,7 @@ Safe bridge rollout for the updater change:
 
 ## Update channel in-app
 
-`GitHubUpdateService` checks `tarkovtracker-org/RatScanner` releases and applies zip swap. It does **not** use upstream `api.ratscanner.com` updater endpoints. It reads `/releases/latest`, so a release is only offered when published as a non-prerelease Latest release, and only when its numeric version is higher (or it is the matching stable of an installed pre-release).
+`GitHubUpdateService` checks `tarkovtracker-org/RatScanner` releases and applies zip swap. It does **not** use upstream `api.ratscanner.com` updater endpoints. Stable installations read `/releases/latest`, while pre-release installations query the published releases list so they can receive newer testing builds. Updates are offered only when the strict SemVer precedence is higher; stable installations never move onto a pre-release channel.
 
 ## Checklist before tagging
 

@@ -116,7 +116,10 @@ internal static class GitHubUpdateService
             .Where(release => includePrereleases || release["prerelease"]?.Value<bool>() != true)
             .Select(CreateRelease)
             .Where(release => release != null && IsNewerVersion(currentVersion, release.Version))
-            .OrderByDescending(release => ParseSemanticVersion(release!.Version), VersionComparer.VersionRelease)
+            .OrderByDescending(
+                release => ParseSemanticVersion(release!.Version),
+                Comparer<NuGetVersion>.Create(CompareSemanticVersions)
+            )
             .FirstOrDefault();
     }
 
@@ -168,9 +171,66 @@ internal static class GitHubUpdateService
         if (available.IsPrerelease && !current.IsPrerelease)
             return false;
 
-        // Compare full SemVer precedence (including alpha/beta/RC identifiers),
-        // while correctly ignoring build metadata.
-        return VersionComparer.VersionRelease.Compare(available, current) > 0;
+        return CompareSemanticVersions(available, current) > 0;
+    }
+
+    private static int CompareSemanticVersions(NuGetVersion left, NuGetVersion right)
+    {
+        int comparison = left.Major.CompareTo(right.Major);
+        if (comparison != 0)
+            return comparison;
+
+        comparison = left.Minor.CompareTo(right.Minor);
+        if (comparison != 0)
+            return comparison;
+
+        comparison = left.Patch.CompareTo(right.Patch);
+        if (comparison != 0)
+            return comparison;
+
+        if (left.IsPrerelease != right.IsPrerelease)
+            return left.IsPrerelease ? -1 : 1;
+        if (!left.IsPrerelease)
+            return 0;
+
+        string[] leftLabels = left.ReleaseLabels.ToArray();
+        string[] rightLabels = right.ReleaseLabels.ToArray();
+        int count = Math.Min(leftLabels.Length, rightLabels.Length);
+        for (int index = 0; index < count; index++)
+        {
+            comparison = CompareSemanticIdentifiers(leftLabels[index], rightLabels[index]);
+            if (comparison != 0)
+                return comparison;
+        }
+
+        return leftLabels.Length.CompareTo(rightLabels.Length);
+    }
+
+    private static int CompareSemanticIdentifiers(string left, string right)
+    {
+        bool leftNumeric = IsNumericIdentifier(left);
+        bool rightNumeric = IsNumericIdentifier(right);
+
+        if (leftNumeric != rightNumeric)
+            return leftNumeric ? -1 : 1;
+        if (leftNumeric)
+        {
+            int lengthComparison = left.Length.CompareTo(right.Length);
+            return lengthComparison != 0 ? lengthComparison : string.CompareOrdinal(left, right);
+        }
+
+        return string.CompareOrdinal(left, right);
+    }
+
+    private static bool IsNumericIdentifier(string value)
+    {
+        foreach (char character in value)
+        {
+            if (character is < '0' or > '9')
+                return false;
+        }
+
+        return value.Length > 0;
     }
 
     internal static bool TryParseVersion(string versionText, out Version version)
