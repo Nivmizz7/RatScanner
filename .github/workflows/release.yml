@@ -214,8 +214,33 @@ jobs:
           make_latest: true
           name: RatScanner ${{ steps.release.outputs.tag }}
           body: |
-            **RatScanner** `${{ steps.release.outputs.tag }}`
+            # RatScanner ${{ steps.release.outputs.tag }}
 
-            Support: [this repo](https://github.com/tarkovtracker-org/RatScanner) · [Discord](https://discord.gg/M8nBgA2sT6)
+            > [!WARNING]
+            > **Very early beta release**
+            >
+            > This build is intended for early testing. The core app should be usable, but rough edges, incomplete polish, and unexpected problems should be expected while the 4.x release line is stabilized.
+
+            ## What to report right now
+
+            Please report **major problems that prevent normal use**, especially:
+
+            - Crashes, freezes, or startup failures
+            - Features that completely fail to work
+            - Problems that leave the app unusable or prevent its core scanning workflow
+
+            UI/UX polish, scan accuracy, and performance will continue to improve. Feedback in those areas is welcome, but the immediate priority is identifying serious reliability and functionality problems.
+
+            ## Beta risk notice
+
+            This version has not been fully tested across all supported Windows systems and game setups. Although it has passed project CI and works in tested environments, beta software can behave unexpectedly. Possible consequences include crashes, loss or corruption of RatScanner settings or data, system instability, game/account consequences, or other unintended effects.
+
+            By downloading or running this beta, you acknowledge and accept those risks. If you are not comfortable using early software, please wait for a more stable release.
+
+            ## Download and support
+
+            Download `RatScanner.zip` from the assets below, extract it, and run `RatScanner.exe`.
+
+            Report major issues through [this repository](https://github.com/tarkovtracker-org/RatScanner/issues) or ask for help on [Discord](https://discord.gg/M8nBgA2sT6).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
