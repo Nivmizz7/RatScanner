@@ -14,9 +14,10 @@
 		  so GitHub issues, logs, UA strings, and release tags are immediately
 		  distinguishable. Pre-release suffixes (e.g. -beta.1) are supported; the
 		  release tag must exactly match v + this value.
-		  Bump Version here for every release; tags should match as vMAJOR.MINOR.PATCH[-prerelease].
+		  Every published build gets a unique value/tag. Number iterations toward one
+		  stable target (e.g. 4.0.1-beta.1 -> beta.2 -> rc.1 -> 4.0.1).
 		-->
-		<Version>4.0.0-beta</Version>
+		<Version>4.0.1-beta.1</Version>
 		<Product>RatScanner</Product>
 		<AssemblyTitle>RatScanner</AssemblyTitle>
 		<Company>TarkovTracker.org</Company>
@@ -54,6 +55,7 @@
 		<PackageReference Include="MudBlazor" Version="9.7.0" />
 		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.10" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference Include="NuGet.Versioning" Version="7.6.0" />
 		<PackageReference Include="RatStash" Version="6.0.0" />
 		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
 	</ItemGroup>

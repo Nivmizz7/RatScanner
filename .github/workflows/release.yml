@@ -5,6 +5,15 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "Publishing channel: testing creates a GitHub pre-release; latest publishes to all installs."
+        type: choice
+        required: true
+        default: testing
+        options:
+          - testing
+          - latest
 
 concurrency:
   # Serialize all promotions so different commits cannot race to publish one version.
@@ -29,6 +38,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXPECTED_SHA: ${{ github.sha }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           if ($env:GITHUB_REF -cne 'refs/heads/master') {
             throw "Release workflow must be dispatched from master, not '$($env:GITHUB_REF)'."
@@ -40,7 +50,15 @@ jobs:
           if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
             throw 'src/App/RatScanner.csproj is missing the product Version element.'
           }
-          $tag = 'v' + $versionNode.InnerText.Trim()
+          $version = $versionNode.InnerText.Trim()
+          $tag = 'v' + $version
+          $isPrerelease = $version -match '^[^+]*-'
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "is-prerelease=$($isPrerelease.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($env:CHANNEL -eq 'testing' -and -not $isPrerelease) {
+            throw 'The testing channel requires a pre-release version suffix such as -beta.1 or -rc.1.'
+          }
 
           $headers = @{
             Authorization = "Bearer ${env:GH_TOKEN}"
@@ -79,7 +97,6 @@ jobs:
             throw "No successful master push build exists for commit $($env:EXPECTED_SHA). Wait for Build to pass before releasing."
           }
 
-          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           try {
             $artifactResponse = Invoke-WebRequest `
               -Uri "${apiRoot}/actions/runs/$($buildRun.id)/artifacts?per_page=100" `
@@ -247,16 +264,16 @@ jobs:
           Set-Content -LiteralPath release-notes.md -Value $lines -Encoding utf8NoBOM
       - name: Publish Release
         # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
-        # Published directly as Latest (not draft, not pre-release) so the in-app updater,
-        # which reads /releases/latest, can see it.
+        # The testing channel is opt-in and hidden from /releases/latest. The latest channel
+        # is visible to every installed build that follows the maintained release feed.
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: release-artifact/RatScanner.zip
           draft: false
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ inputs.channel == 'testing' }}
+          make_latest: ${{ inputs.channel == 'latest' }}
           name: RatScanner ${{ steps.release.outputs.tag }}
           body_path: release-notes.md
         env:
