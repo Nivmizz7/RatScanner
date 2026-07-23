@@ -128,7 +128,8 @@ examples/                # Sample resolution screenshots
 | Concern | Where |
 | --- | --- |
 | Local publish | `publish.bat` → `publish/`, `RatScanner.zip` |
-| CI | `.github/workflows/build.yml` |
+| Build CI | `.github/workflows/build.yml` |
+| Release promotion | `.github/workflows/release.yml` |
 | Version | `<Version>` in `src/App/RatScanner.csproj` only (product) |
 
 ## Formatting / analyzers

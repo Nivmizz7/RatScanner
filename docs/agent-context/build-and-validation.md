@@ -141,7 +141,7 @@ Confirm:
 - `RatScanner.zip` created.
 - Single-file self-contained win-x64 matches CI intent.
 
-CI transfers both the validated publish tree and zip as its build artifact. A least-privilege tag-only job verifies the tag against the App project version before creating a draft release (see `release-and-versioning.md`).
+CI uploads the validated `RatScanner.zip` as an immutable build artifact. The separate least-privilege Release workflow promotes that exact artifact only after verifying a successful push-triggered Build for the selected `master` commit; it does not rebuild (see `release-and-versioning.md`).
 
 ## Required checks by change category
 

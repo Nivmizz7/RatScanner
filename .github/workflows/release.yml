@@ -1,0 +1,221 @@
+name: Release
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      # Required to read and download the successful build artifact for this commit.
+      actions: read
+      # Required to create the release tag and publish the GitHub release.
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - name: Resolve release version and validated build
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          if ($env:GITHUB_REF -cne 'refs/heads/master') {
+            throw "Release workflow must be dispatched from master, not '$($env:GITHUB_REF)'."
+          }
+
+          $project = New-Object System.Xml.XmlDocument
+          $project.Load((Join-Path $PWD 'src/App/RatScanner.csproj'))
+          $versionNode = $project.SelectSingleNode("/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']")
+          if ($null -eq $versionNode -or [string]::IsNullOrWhiteSpace($versionNode.InnerText)) {
+            throw 'src/App/RatScanner.csproj is missing the product Version element.'
+          }
+          $tag = 'v' + $versionNode.InnerText.Trim()
+
+          $headers = @{
+            Authorization = "Bearer ${env:GH_TOKEN}"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $apiRoot = "https://api.github.com/repos/${env:GITHUB_REPOSITORY}"
+          $query = "head_sha=$($env:EXPECTED_SHA)&event=push&status=success&per_page=100"
+          try {
+            $response = Invoke-WebRequest `
+              -Uri "${apiRoot}/actions/workflows/build.yml/runs?${query}" `
+              -Headers $headers `
+              -Method Get `
+              -SkipHttpErrorCheck
+          }
+          catch {
+            throw "Could not locate the validated build for commit $($env:EXPECTED_SHA): $($_.Exception.Message)"
+          }
+          if ($response.StatusCode -ne 200) {
+            throw "Could not locate the validated build for commit $($env:EXPECTED_SHA) (GitHub API returned HTTP $($response.StatusCode))."
+          }
+
+          $runs = @((ConvertFrom-Json -InputObject $response.Content).workflow_runs)
+          $buildRun = $runs |
+            Where-Object {
+              $_.head_sha -ceq $env:EXPECTED_SHA -and
+              $_.head_branch -ceq 'master' -and
+              $_.event -ceq 'push' -and
+              $_.status -ceq 'completed' -and
+              $_.conclusion -ceq 'success' -and
+              ($_.path -ceq '.github/workflows/build.yml' -or $_.path -like '.github/workflows/build.yml@*')
+            } |
+            Sort-Object run_attempt -Descending |
+            Select-Object -First 1
+          if ($null -eq $buildRun) {
+            throw "No successful master push build exists for commit $($env:EXPECTED_SHA). Wait for Build to pass before releasing."
+          }
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          try {
+            $artifactResponse = Invoke-WebRequest `
+              -Uri "${apiRoot}/actions/runs/$($buildRun.id)/artifacts?name=RatScanner.zip&per_page=100" `
+              -Headers $headers `
+              -Method Get `
+              -SkipHttpErrorCheck
+          }
+          catch {
+            throw "Could not locate RatScanner.zip from Build run $($buildRun.id): $($_.Exception.Message)"
+          }
+          if ($artifactResponse.StatusCode -ne 200) {
+            throw "Could not locate RatScanner.zip from Build run $($buildRun.id) (GitHub API returned HTTP $($artifactResponse.StatusCode))."
+          }
+          $artifacts = @((ConvertFrom-Json -InputObject $artifactResponse.Content).artifacts)
+          $artifact = $artifacts |
+            Where-Object {
+              $_.name -ceq 'RatScanner.zip' -and
+              -not $_.expired -and
+              $_.workflow_run.id -eq $buildRun.id -and
+              $_.workflow_run.head_sha -ceq $env:EXPECTED_SHA
+            } |
+            Select-Object -First 1
+          if ($null -eq $artifact) {
+            throw "Successful Build run $($buildRun.id) has no unexpired RatScanner.zip artifact. Re-run Build for this commit before releasing."
+          }
+
+          "build-run-id=$($buildRun.id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Promoting Build run $($buildRun.id), artifact $($artifact.id), for commit $($env:EXPECTED_SHA) as ${tag}."
+      - name: Ensure the release does not already exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          # A deploy must never overwrite a shipped release. Fail closed and ask
+          # for a <Version> bump when the tag or release already exists.
+          $headers = @{
+            Authorization = "Bearer ${env:GH_TOKEN}"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $encodedTag = [Uri]::EscapeDataString($env:TAG)
+          $apiRoot = "https://api.github.com/repos/${env:GITHUB_REPOSITORY}"
+
+          function Assert-GitHubReleaseDoesNotExist {
+            param(
+              [string]$ApiRoot,
+              [string]$Tag,
+              [hashtable]$Headers
+            )
+
+            $page = 1
+            do {
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "${ApiRoot}/releases?per_page=100&page=${page}" `
+                  -Headers $Headers `
+                  -Method Get `
+                  -SkipHttpErrorCheck
+              }
+              catch {
+                throw "Could not verify whether release ${Tag} exists: $($_.Exception.Message)"
+              }
+
+              if ($response.StatusCode -ne 200) {
+                throw "Could not verify whether release ${Tag} exists (GitHub API returned HTTP $($response.StatusCode))."
+              }
+
+              $releases = @(ConvertFrom-Json -InputObject $response.Content)
+              if ($releases | Where-Object { $_.tag_name -ceq $Tag } | Select-Object -First 1) {
+                throw "Release ${Tag} already exists. Bump <Version> in src/App/RatScanner.csproj before deploying."
+              }
+              $page++
+            } while ($releases.Count -eq 100)
+          }
+
+          function Assert-GitHubResourceDoesNotExist {
+            param(
+              [string]$Uri,
+              [string]$ResourceName,
+              [hashtable]$Headers
+            )
+
+            try {
+              $response = Invoke-WebRequest -Uri $Uri -Headers $Headers -Method Get -SkipHttpErrorCheck
+            }
+            catch {
+              throw "Could not verify whether ${ResourceName} exists: $($_.Exception.Message)"
+            }
+
+            if ($response.StatusCode -eq 200) {
+              throw "${ResourceName} already exists. Bump <Version> in src/App/RatScanner.csproj before deploying."
+            }
+            if ($response.StatusCode -ne 404) {
+              throw "Could not verify whether ${ResourceName} exists (GitHub API returned HTTP $($response.StatusCode))."
+            }
+          }
+
+          # The by-tag endpoint excludes drafts. List all releases so an unpublished
+          # release reserves its tag just like an already-published release does.
+          Assert-GitHubReleaseDoesNotExist -ApiRoot $apiRoot -Tag $env:TAG -Headers $headers
+          Assert-GitHubResourceDoesNotExist `
+            -Uri "${apiRoot}/git/ref/tags/${encodedTag}" `
+            -ResourceName "Tag ${env:TAG}" `
+            -Headers $headers
+      - name: Download validated package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: RatScanner.zip
+          path: release-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.release.outputs.build-run-id }}
+          digest-mismatch: error
+      - name: Validate promoted package
+        run: |
+          $archive = Join-Path $PWD 'release-artifact/RatScanner.zip'
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw 'Validated Build artifact did not contain RatScanner.zip.'
+          }
+          & 7z t $archive
+          if ($LASTEXITCODE -ne 0) { throw 'RatScanner.zip failed archive validation.' }
+      - name: Publish Release
+        # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
+        # Published directly as Latest (not draft, not pre-release) so the in-app updater,
+        # which reads /releases/latest, can see it.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: release-artifact/RatScanner.zip
+          draft: false
+          prerelease: false
+          make_latest: true
+          name: RatScanner ${{ steps.release.outputs.tag }}
+          body: |
+            **RatScanner** `${{ steps.release.outputs.tag }}`
+
+            Support: [this repo](https://github.com/tarkovtracker-org/RatScanner) · [Discord](https://discord.gg/M8nBgA2sT6)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
