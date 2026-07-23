@@ -9,6 +9,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using NuGet.Versioning;
 
 namespace RatScanner;
 
@@ -131,8 +132,8 @@ internal static class GitHubUpdateService
     internal static bool IsNewerVersion(string currentVersion, string availableVersion)
     {
         if (
-            !TryParseVersionInfo(currentVersion, out VersionInfo current)
-            || !TryParseVersionInfo(availableVersion, out VersionInfo available)
+            !TryParseSemanticVersion(currentVersion, out NuGetVersion current)
+            || !TryParseSemanticVersion(availableVersion, out NuGetVersion available)
         )
             return false;
 
@@ -140,28 +141,21 @@ internal static class GitHubUpdateService
         if (available.IsPrerelease && !current.IsPrerelease)
             return false;
 
-        int comparison = available.Version.CompareTo(current.Version);
-        if (comparison > 0)
-            return true;
-        if (comparison < 0)
-            return false;
-
-        // Same numeric version: allow upgrading from pre-release to the matching stable.
-        return current.IsPrerelease && !available.IsPrerelease;
+        // Compare full SemVer precedence (including alpha/beta/RC identifiers),
+        // while correctly ignoring build metadata.
+        return VersionComparer.VersionRelease.Compare(available, current) > 0;
     }
 
     internal static bool TryParseVersion(string versionText, out Version version)
     {
-        bool parsed = TryParseVersionInfo(versionText, out VersionInfo info);
-        version = info.Version;
+        bool parsed = TryParseSemanticVersion(versionText, out NuGetVersion semanticVersion);
+        version = parsed ? semanticVersion.Version : new Version(0, 0);
         return parsed;
     }
 
-    private readonly record struct VersionInfo(Version Version, bool IsPrerelease);
-
-    private static bool TryParseVersionInfo(string versionText, out VersionInfo info)
+    private static bool TryParseSemanticVersion(string versionText, out NuGetVersion version)
     {
-        info = new VersionInfo(new Version(0, 0), false);
+        version = new NuGetVersion(0, 0, 0);
         if (string.IsNullOrWhiteSpace(versionText))
             return false;
 
@@ -169,15 +163,10 @@ internal static class GitHubUpdateService
         if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
             cleaned = cleaned.Substring(1);
 
-        int cut = cleaned.IndexOfAny(['-', '+']);
-        bool isPrerelease = cut >= 0 && cleaned[cut] == '-';
-        if (cut >= 0)
-            cleaned = cleaned.Substring(0, cut);
-
-        if (!Version.TryParse(cleaned, out Version? result) || result is null)
+        if (!NuGetVersion.TryParseStrict(cleaned, out NuGetVersion? parsed) || parsed is null)
             return false;
 
-        info = new VersionInfo(result, isPrerelease);
+        version = parsed;
         return true;
     }
 

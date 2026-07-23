@@ -20,8 +20,31 @@ ScanEngine's own `<Version>` is historical engine packaging metadata; product re
 | Major | Breaking change for end users |
 | Minor | Feature / significant behavior change |
 | Patch | Bug fix or config-only user impact |
-| Pre-release suffix | Beta/RC phases (e.g. `-beta.1`, `-rc.1`) |
+| Pre-release suffix | Iterations toward one target version (e.g. `-beta.1`, `-rc.1`) |
 | None | Documentation-only |
+
+### Pre-release lifecycle
+
+Pre-release suffixes describe maturity **toward the stable numeric version before the suffix**. For example, every `4.0.1-*` build is a candidate for the eventual stable `4.0.1` release.
+
+| Stage | Meaning | Example |
+| --- | --- | --- |
+| Alpha | Experimental or incomplete; core design/features may still change substantially | `4.0.1-alpha.1` |
+| Beta | Usable early test build; core behavior exists, but defects and rough areas are expected | `4.0.1-beta.1` |
+| RC | Release candidate; believed ready for stable release unless a significant defect is found | `4.0.1-rc.1` |
+| Stable | Supported release with the pre-release suffix removed | `4.0.1` |
+
+Number iterations within a stage instead of consuming patch versions:
+
+```text
+4.0.1-alpha.1
+4.0.1-beta.1
+4.0.1-beta.2
+4.0.1-rc.1
+4.0.1
+```
+
+SemVer precedence determines update order: `alpha.1 < beta.1 < beta.2 < rc.1 < stable`. Build metadata such as `+build.5` does not affect precedence and must not be used to sequence releases. Never replace or modify an existing release; every published build gets a unique version and tag.
 
 ### Prevention of accidental upstream reuse
 
@@ -63,7 +86,7 @@ Preferred (one click, no local git or duplicate build):
 3. GitHub → **Actions** → **Release** → **Run workflow** from `master`.
 4. CI promotes the successful Build artifact, tags `v<Version>`, and publishes it as the Latest release. Running installs pick it up on next launch.
 
-`GitHubUpdateService` compares the numeric version part, so bump the numeric version every release (`4.0.0-beta` → `4.0.1-beta`); never ship two releases sharing the same numeric base (e.g. `4.0.0-beta` then `4.0.0-beta.2`), or the second will not be offered as an update.
+`GitHubUpdateService` compares full SemVer precedence, including numbered alpha/beta/RC identifiers, while ignoring build metadata. A stable installation will not automatically move onto a pre-release channel. A pre-release installation follows newer pre-releases and then the matching stable release.
 
 `softprops/action-gh-release` must stay pinned to a commit SHA on the TarkovTracker org **selected actions** allowlist. GitHub rejects the entire workflow at startup (including the non-release build job) if the SHA is not listed. Process for bumps: (1) review the new softprops release, (2) add the SHA via org Actions selected-actions policy (`admin:org`), (3) update this workflow pin, (4) only then remove older softprops SHAs from the allowlist once no org workflow still references them.
 
@@ -73,7 +96,7 @@ Preferred (one click, no local git or duplicate build):
 
 ## Checklist before tagging
 
-1. Version bumped in App csproj; the release tag must match it exactly with a leading `v`.
+1. Version bumped in App csproj; the release tag must match it exactly with a leading `v`. Reuse the same numeric target while iterating pre-releases (`4.0.1-beta.1` → `4.0.1-beta.2` → `4.0.1-rc.1` → `4.0.1`).
 2. `dotnet test` / build green.
 3. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 4. Publish smoke or trust CI.

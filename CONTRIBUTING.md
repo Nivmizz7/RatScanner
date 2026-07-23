@@ -73,17 +73,29 @@ Do **not** reuse or "continue" historical upstream patch numbers. After a breaki
 **Where to bump:** only `<Version>` in `src/App/RatScanner.csproj`.
 
 ```xml
-<Version>4.0.0-beta.1</Version>
+<Version>4.0.1-beta.1</Version>
 ```
 
-**Release tags:** `vMAJOR.MINOR.PATCH[-pre-release]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact, creates the tag, and publishes it as Latest.
+**Release tags:** `vMAJOR.MINOR.PATCH[-pre-release]` (e.g. `v4.0.1`, `v4.0.1-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact, creates the tag, and publishes it as Latest.
 
-| Bump | When |
+| Bump / stage | When |
 | --- | --- |
 | **Major** | Breaking change for end users of this fork |
 | **Minor** | New feature / significant behavior change |
 | **Patch** | Bug fix or config-only change |
+| **Alpha** | Experimental/incomplete preview; substantial changes may remain |
+| **Beta** | Usable early test build; defects and rough areas are expected |
+| **RC** | Release candidate believed ready for stable unless a significant defect appears |
+| **Stable** | Remove the pre-release suffix from the same numeric target |
 | *(none)* | Documentation-only |
+
+Number iterations within one target version, for example:
+
+```text
+4.0.1-beta.1 → 4.0.1-beta.2 → 4.0.1-rc.1 → 4.0.1
+```
+
+Do not overwrite releases or use build metadata (`+build.5`) as a release counter. Every published build gets a unique version/tag; build metadata does not affect update precedence.
 
 Version format:
 

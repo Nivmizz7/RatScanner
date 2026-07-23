@@ -385,13 +385,20 @@ public class TarkovDevApiTests
 public class GitHubUpdateServiceTests
 {
     [Theory]
-    // This project uses its own 4.x line; comparisons stay pure semver.
+    // This project uses its own 4.x line and full SemVer precedence.
     [InlineData("4.0.0", "v4.0.1", true)]
-    [InlineData("4.0.0+build.1", "4.0.0", false)]
+    [InlineData("4.0.0+build.1", "4.0.0+build.2", false)]
     [InlineData("4.1.0-beta.1", "4.0.9", false)]
     [InlineData("4.0.0", "4.0.1-beta.1", false)]
-    [InlineData("4.0.1-beta.1", "4.0.1", true)]
+    [InlineData("4.0.1-alpha.1", "4.0.1-beta.1", true)]
+    [InlineData("4.0.1-beta", "4.0.1-beta.1", true)]
+    [InlineData("4.0.1-beta.1", "4.0.1-beta.2", true)]
+    [InlineData("4.0.1-beta.2", "4.0.1-beta.11", true)]
+    [InlineData("4.0.1-beta.11", "4.0.1-rc.1", true)]
+    [InlineData("4.0.1-rc.1", "4.0.1", true)]
+    [InlineData("4.0.1-beta.2", "4.0.1-beta.1", false)]
     [InlineData("4.0.1-beta.1", "4.0.2-beta.1", true)]
+    [InlineData("4.0.1", "4.0.2-beta.1", false)]
     [InlineData("unknown", "4.0.1", false)]
     // Upstream-style 3.x would always be older than a 4.x fork install (and vice versa).
     [InlineData("4.0.0", "v3.9.3", false)]
