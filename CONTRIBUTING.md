@@ -76,7 +76,7 @@ Do **not** reuse or "continue" historical upstream patch numbers. After a breaki
 <Version>4.0.1-beta.1</Version>
 ```
 
-**Release tags:** `vMAJOR.MINOR.PATCH[-pre-release]` (e.g. `v4.0.1`, `v4.0.1-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact, creates the tag, and publishes it as Latest.
+**Release tags:** `vMAJOR.MINOR.PATCH[-pre-release]` (e.g. `v4.0.1`, `v4.0.1-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact and creates the tag. Choose `testing` for an opt-in GitHub pre-release or `latest` only for an intentional rollout to the maintained update feed.
 
 | Bump / stage | When |
 | --- | --- |

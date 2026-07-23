@@ -75,16 +75,32 @@ Workflows:
 
 The build job (Windows, .NET 10.x, `contents: read`) runs agent-docs regression/integrity checks → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + Data → upload `RatScanner.zip` as an immutable workflow artifact.
 
-The release workflow does **not** rebuild. It resolves `<Version>` from the selected `master` commit, requires a successful push-triggered Build run for that exact commit, and downloads that run's `RatScanner.zip` with GitHub's artifact digest verification enabled. It then validates the zip, refuses to overwrite an existing tag or draft/published release, auto-creates the tag, and publishes the exact CI-tested package **directly as Latest** (`draft: false`, `prerelease: false`, `make_latest: true`). Publishing as a non-prerelease Latest release is mandatory: the in-app updater reads `/releases/latest`, which skips drafts and pre-releases. Only the Release workflow receives `actions: read` and `contents: write`; PR and branch-push builds remain read-only.
+The release workflow does **not** rebuild. It resolves `<Version>` from the selected `master` commit, requires a successful push-triggered Build run for that exact commit, and downloads that run's `RatScanner.zip` with GitHub's artifact digest verification enabled. It then validates the zip, refuses to overwrite an existing tag or draft/published release, and auto-creates the tag. Only the Release workflow receives `actions: read` and `contents: write`; PR and branch-push builds remain read-only.
+
+The manual workflow requires an explicit publishing channel:
+
+| Channel | GitHub release state | Who receives it automatically |
+| --- | --- | --- |
+| `testing` | GitHub pre-release; not returned by `/releases/latest` | Only users who manually installed a pre-release build with the prerelease-aware updater |
+| `latest` | Non-pre-release and marked Latest | All eligible installed builds, including the currently published `4.0.0-beta` bridge population |
+
+Use `testing` for smoke testing and normal numbered beta/RC iterations. Use `latest` only when intentionally promoting a build to the entire maintained update feed. The in-app updater keeps stable installs on `/releases/latest`; pre-release installs query published releases and follow newer SemVer pre-releases before moving to the matching stable release.
 
 ### How to cut a release
 
 Preferred (one click, no local git or duplicate build):
 
-1. Bump `<Version>` in `src/App/RatScanner.csproj` (e.g. `4.0.1-beta`) and land it on `master`.
+1. Bump `<Version>` in `src/App/RatScanner.csproj` and land it on `master`.
 2. Wait for the push-triggered **Build** workflow on that `master` commit to pass.
 3. GitHub → **Actions** → **Release** → **Run workflow** from `master`.
-4. CI promotes the successful Build artifact, tags `v<Version>`, and publishes it as the Latest release. Running installs pick it up on next launch.
+4. Select `testing` for an opt-in pre-release or `latest` for deliberate broad rollout.
+5. CI promotes the successful Build artifact and tags `v<Version>` without rebuilding.
+
+Safe bridge rollout for the updater change:
+
+1. Publish `4.0.1-beta.1` as `testing`; this does **not** replace the current Latest release and does not notify `4.0.0-beta` installs.
+2. Download and run `4.0.1-beta.1` manually in a disposable copy of the install directory; verify startup and automatic updating with a later testing build.
+3. After smoke testing, publish a new unique bridge version (for example `4.0.2-beta.1`) as `latest` to move the existing `4.0.0-beta` population onto the prerelease-aware updater. Never reuse or overwrite the testing tag.
 
 `GitHubUpdateService` compares full SemVer precedence, including numbered alpha/beta/RC identifiers, while ignoring build metadata. A stable installation will not automatically move onto a pre-release channel. A pre-release installation follows newer pre-releases and then the matching stable release.
 
@@ -101,8 +117,8 @@ Preferred (one click, no local git or duplicate build):
 3. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 4. Publish smoke or trust CI.
 5. Changelog/notes ready for draft release body if needed.
-6. Deploy: **Actions → Release → Run workflow** from `master`.
-7. Confirm the auto-published release is marked **Latest** (not pre-release) and has `RatScanner.zip` attached.
+6. Deploy: **Actions → Release → Run workflow** from `master`, choosing `testing` or `latest` deliberately.
+7. Confirm `testing` releases are marked **Pre-release**, or confirm broad-rollout releases are marked **Latest**, and verify `RatScanner.zip` is attached.
 
 ## Branding
 

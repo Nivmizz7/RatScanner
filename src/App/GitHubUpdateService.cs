@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -23,6 +24,7 @@ internal static class GitHubUpdateService
     internal const string Owner = "tarkovtracker-org";
     internal const string Repo = "RatScanner";
     private const string LatestReleaseApi = $"https://api.github.com/repos/{Owner}/{Repo}/releases/latest";
+    private const string ReleasesApi = $"https://api.github.com/repos/{Owner}/{Repo}/releases?per_page=100";
     private const string AssetZipName = "RatScanner.zip";
 
     private static readonly HttpClient Http = CreateHttpClient();
@@ -71,13 +73,18 @@ internal static class GitHubUpdateService
     }
 
     /// <summary>
-    /// Returns latest published release with a RatScanner.zip asset, or null on failure / no asset.
+    /// Returns the newest release eligible for the installed update channel, or null on failure / no asset.
+    /// Stable installs read GitHub's Latest release. Pre-release installs include published GitHub pre-releases.
     /// </summary>
     internal static async Task<LatestRelease?> TryGetLatestReleaseAsync()
     {
         try
         {
-            using HttpResponseMessage response = await Http.GetAsync(LatestReleaseApi).ConfigureAwait(false);
+            bool includePrereleases =
+                TryParseSemanticVersion(RatConfig.Version, out NuGetVersion current) && current.IsPrerelease;
+            string endpoint = includePrereleases ? ReleasesApi : LatestReleaseApi;
+
+            using HttpResponseMessage response = await Http.GetAsync(endpoint).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogWarning($"GitHub release check failed: HTTP {(int)response.StatusCode}");
@@ -85,42 +92,7 @@ internal static class GitHubUpdateService
             }
 
             string json = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-            JObject root = JObject.Parse(json);
-
-            string? tag = root["tag_name"]?.Value<string>();
-            if (string.IsNullOrWhiteSpace(tag))
-                return null;
-
-            string? htmlUrl = root["html_url"]?.Value<string>() ?? $"https://github.com/{Owner}/{Repo}/releases/latest";
-            string version = tag.TrimStart('v', 'V');
-
-            JToken? assets = root["assets"];
-            string? zipUrl = assets
-                ?.OfType<JObject>()
-                .Select(a => new
-                {
-                    Name = a["name"]?.Value<string>(),
-                    Url = a["browser_download_url"]?.Value<string>(),
-                })
-                .FirstOrDefault(a =>
-                    string.Equals(a.Name, AssetZipName, StringComparison.OrdinalIgnoreCase)
-                    && IsAllowedReleaseAssetUrl(a.Url)
-                )
-                ?.Url;
-
-            if (string.IsNullOrEmpty(zipUrl))
-            {
-                Logger.LogWarning($"Latest GitHub release does not contain a trusted {AssetZipName} asset URL.");
-                return null;
-            }
-
-            return new LatestRelease
-            {
-                TagName = tag,
-                Version = version,
-                ZipDownloadUrl = zipUrl,
-                HtmlUrl = htmlUrl,
-            };
+            return SelectUpdateRelease(json, RatConfig.Version, includePrereleases);
         }
         catch (Exception e)
         {
@@ -128,6 +100,61 @@ internal static class GitHubUpdateService
             return null;
         }
     }
+
+    internal static LatestRelease? SelectUpdateRelease(string json, string currentVersion, bool includePrereleases)
+    {
+        JToken root = JToken.Parse(json);
+        IEnumerable<JObject> candidates = root switch
+        {
+            JObject release => [release],
+            JArray releases => releases.OfType<JObject>(),
+            _ => [],
+        };
+
+        return candidates
+            .Where(release => release["draft"]?.Value<bool>() != true)
+            .Where(release => includePrereleases || release["prerelease"]?.Value<bool>() != true)
+            .Select(CreateRelease)
+            .Where(release => release != null && IsNewerVersion(currentVersion, release.Version))
+            .OrderByDescending(release => ParseSemanticVersion(release!.Version), VersionComparer.VersionRelease)
+            .FirstOrDefault();
+    }
+
+    private static LatestRelease? CreateRelease(JObject root)
+    {
+        string? tag = root["tag_name"]?.Value<string>();
+        if (string.IsNullOrWhiteSpace(tag))
+            return null;
+
+        string? htmlUrl = root["html_url"]?.Value<string>() ?? $"https://github.com/{Owner}/{Repo}/releases";
+        string version = tag.TrimStart('v', 'V');
+        string? zipUrl = root["assets"]
+            ?.OfType<JObject>()
+            .Select(asset => new
+            {
+                Name = asset["name"]?.Value<string>(),
+                Url = asset["browser_download_url"]?.Value<string>(),
+            })
+            .FirstOrDefault(asset =>
+                string.Equals(asset.Name, AssetZipName, StringComparison.OrdinalIgnoreCase)
+                && IsAllowedReleaseAssetUrl(asset.Url)
+            )
+            ?.Url;
+
+        if (string.IsNullOrEmpty(zipUrl))
+            return null;
+
+        return new LatestRelease
+        {
+            TagName = tag,
+            Version = version,
+            ZipDownloadUrl = zipUrl,
+            HtmlUrl = htmlUrl,
+        };
+    }
+
+    private static NuGetVersion ParseSemanticVersion(string versionText) =>
+        TryParseSemanticVersion(versionText, out NuGetVersion version) ? version : new NuGetVersion(0, 0, 0);
 
     internal static bool IsNewerVersion(string currentVersion, string availableVersion)
     {

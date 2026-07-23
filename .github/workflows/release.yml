@@ -5,6 +5,15 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      channel:
+        description: "Publishing channel: testing creates a GitHub pre-release; latest publishes to all installs."
+        type: choice
+        required: true
+        default: testing
+        options:
+          - testing
+          - latest
 
 concurrency:
   # Serialize all promotions so different commits cannot race to publish one version.
@@ -80,6 +89,7 @@ jobs:
           }
 
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "is-prerelease=$($tag.Contains('-').ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           try {
             $artifactResponse = Invoke-WebRequest `
               -Uri "${apiRoot}/actions/runs/$($buildRun.id)/artifacts?per_page=100" `
@@ -245,18 +255,26 @@ jobs:
             'Report major issues through [this repository](https://github.com/tarkovtracker-org/RatScanner/issues) or ask for help on [Discord](https://discord.gg/M8nBgA2sT6).'
           )
           Set-Content -LiteralPath release-notes.md -Value $lines -Encoding utf8NoBOM
+      - name: Validate publishing channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          IS_PRERELEASE: ${{ steps.release.outputs.is-prerelease }}
+        run: |
+          if ($env:CHANNEL -eq 'testing' -and $env:IS_PRERELEASE -cne 'true') {
+            throw 'The testing channel requires a pre-release version suffix such as -beta.1 or -rc.1.'
+          }
       - name: Publish Release
         # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
-        # Published directly as Latest (not draft, not pre-release) so the in-app updater,
-        # which reads /releases/latest, can see it.
+        # The testing channel is opt-in and hidden from /releases/latest. The latest channel
+        # is visible to every installed build that follows the maintained release feed.
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: release-artifact/RatScanner.zip
           draft: false
-          prerelease: false
-          make_latest: true
+          prerelease: ${{ inputs.channel == 'testing' }}
+          make_latest: ${{ inputs.channel == 'latest' }}
           name: RatScanner ${{ steps.release.outputs.tag }}
           body_path: release-notes.md
         env:

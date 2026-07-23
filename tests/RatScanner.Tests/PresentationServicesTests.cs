@@ -406,6 +406,101 @@ public class GitHubUpdateServiceTests
     public void IsNewerVersion_handles_release_tag_formats(string current, string available, bool expected) =>
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));
 
+    [Fact]
+    public void SelectUpdateRelease_keeps_stable_installs_on_the_latest_stable_channel()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.2-beta.1", prerelease: true),
+            ReleaseJson("v4.0.1", prerelease: false)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.0",
+            includePrereleases: false
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_allows_opted_in_prerelease_installs_to_advance()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1-beta.3", prerelease: true),
+            ReleaseJson("v4.0.1-beta.2", prerelease: true),
+            ReleaseJson("v4.0.0", prerelease: false)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.1",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1-beta.3", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_promotes_prerelease_installs_to_matching_stable()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1", prerelease: false),
+            ReleaseJson("v4.0.1-rc.1", prerelease: true)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.2",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1", release.Version);
+    }
+
+    [Fact]
+    public void SelectUpdateRelease_ignores_drafts_and_untrusted_or_missing_assets()
+    {
+        string json = ReleaseListJson(
+            ReleaseJson("v4.0.1-beta.4", prerelease: true, draft: true),
+            ReleaseJson("v4.0.1-beta.3", prerelease: true, assetUrl: "https://evil.example/RatScanner.zip"),
+            ReleaseJson("v4.0.1-beta.2", prerelease: true)
+        );
+
+        GitHubUpdateService.LatestRelease release = GitHubUpdateService.SelectUpdateRelease(
+            json,
+            "4.0.1-beta.1",
+            includePrereleases: true
+        );
+
+        Assert.NotNull(release);
+        Assert.Equal("4.0.1-beta.2", release.Version);
+    }
+
+    private static string ReleaseListJson(params string[] releases) => "[" + string.Join(",", releases) + "]";
+
+    private static string ReleaseJson(string tag, bool prerelease, bool draft = false, string assetUrl = null)
+    {
+        assetUrl ??= $"https://github.com/tarkovtracker-org/RatScanner/releases/download/{tag}/RatScanner.zip";
+        return $$"""
+            {
+              "tag_name": "{{tag}}",
+              "html_url": "https://github.com/tarkovtracker-org/RatScanner/releases/tag/{{tag}}",
+              "draft": {{draft.ToString().ToLowerInvariant()}},
+              "prerelease": {{prerelease.ToString().ToLowerInvariant()}},
+              "assets": [
+                {
+                  "name": "RatScanner.zip",
+                  "browser_download_url": "{{assetUrl}}"
+                }
+              ]
+            }
+            """;
+    }
+
     [Theory]
     [InlineData("https://github.com/tarkovtracker-org/RatScanner/releases/download/v4.0.0/RatScanner.zip", true)]
     [InlineData(
