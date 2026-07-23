@@ -72,7 +72,7 @@ jobs:
               $_.conclusion -ceq 'success' -and
               ($_.path -ceq '.github/workflows/build.yml' -or $_.path -like '.github/workflows/build.yml@*')
             } |
-            Sort-Object run_attempt -Descending |
+            Sort-Object updated_at, run_attempt, id -Descending |
             Select-Object -First 1
           if ($null -eq $buildRun) {
             throw "No successful master push build exists for commit $($env:EXPECTED_SHA). Wait for Build to pass before releasing."

@@ -76,7 +76,7 @@ Do **not** reuse or "continue" historical upstream patch numbers. After a breaki
 <Version>4.0.0-beta.1</Version>
 ```
 
-**Release tags:** `vMAJOR.MINOR.PATCH[-prerelease]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). CI drafts a GitHub release when a `v*` tag is pushed.
+**Release tags:** `vMAJOR.MINOR.PATCH[-prerelease]` (e.g. `v4.0.1`, `v4.0.0-beta.2`). After the version lands on `master` and its Build passes, the manual Release workflow promotes that exact CI artifact, creates the tag, and publishes it as Latest.
 
 | Bump | When |
 | --- | --- |
