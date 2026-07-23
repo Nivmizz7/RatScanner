@@ -192,6 +192,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           run-id: ${{ steps.release.outputs.build-run-id }}
+          skip-decompress: true
           digest-mismatch: error
       - name: Validate promoted package
         run: |
@@ -210,7 +211,7 @@ jobs:
             ''
           )
 
-          if ($env:TAG.Contains('-')) {
+          if ($env:TAG -match '(?i)-beta(?:[.-]|$)') {
             $lines += @(
               '> [!WARNING]',
               '> **Very early beta release**',
