@@ -176,7 +176,9 @@ internal static class GitHubUpdateService
     internal static bool TryParseVersion(string versionText, out Version version)
     {
         bool parsed = TryParseSemanticVersion(versionText, out NuGetVersion semanticVersion);
-        version = parsed ? semanticVersion.Version : new Version(0, 0);
+        version = parsed
+            ? new Version(semanticVersion.Major, semanticVersion.Minor, semanticVersion.Patch)
+            : new Version(0, 0);
         return parsed;
     }
 

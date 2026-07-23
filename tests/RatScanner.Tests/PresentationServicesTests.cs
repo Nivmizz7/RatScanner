@@ -407,6 +407,16 @@ public class GitHubUpdateServiceTests
         Assert.Equal(expected, GitHubUpdateService.IsNewerVersion(current, available));
 
     [Fact]
+    public void TryParseVersion_preserves_three_component_system_version_shape()
+    {
+        bool parsed = GitHubUpdateService.TryParseVersion("v4.0.1-beta.1", out Version version);
+
+        Assert.True(parsed);
+        Assert.Equal(new Version(4, 0, 1), version);
+        Assert.Equal(-1, version.Revision);
+    }
+
+    [Fact]
     public void SelectUpdateRelease_keeps_stable_installs_on_the_latest_stable_channel()
     {
         string json = ReleaseListJson(
