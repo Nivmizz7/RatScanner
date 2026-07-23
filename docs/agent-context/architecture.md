@@ -44,7 +44,7 @@ WPF does **not** implement most product UI; Blazor does.
 
 - Package: `Microsoft.AspNetCore.Components.WebView.Wpf` on the **.NET 10** line (see App `.csproj`). App TFM already targets Windows 10+ (`net10.0-windows10.0.22621.0`) as required for the .NET 10 composition control. App also pins `Microsoft.Web.WebView2` directly so composition-control fixes do not lag the Blazor package's transitive SDK.
 - .NET 10 `BlazorWebView.WebView` is a `WebView2CompositionControl` (WPF airspace-friendly). Existing code that touches `blazorWebView.WebView` for transparent background, virtual host mapping, and settings remains valid.
-- Each host refreshes the composition control's layout on a WPF DPI transition (`WebView2DpiWorkaround`) so its physical-pixel rendering and input transform follow the destination monitor. The opaque main window avoids WPF's unnecessary layered-window path; transparent overlays retain composition hosting.
+- Each host refreshes the composition control's layout on a WPF DPI transition (`WebView2DpiWorkaround`) so its physical-pixel rendering and input transform follow the destination monitor. The main window retains layered transparency for Minimal UI, and transparent overlays retain composition hosting.
 - Three host HTML pages under `src/App/wwwroot/`.
 - Root components: `RazorApp` (main), overlay Razor roots in XAML.
 - Virtual host mapping: `local.data` → on-disk `Data/` for icons/assets in WebView (`SetVirtualHostNameToFolderMapping`).

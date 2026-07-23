@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
@@ -18,6 +19,7 @@ namespace RatScanner.View;
 public partial class BlazorInteractableOverlay : Window
 {
     private WebView2CompositionControl? _initializedWebView;
+    private DispatcherOperation? _pendingDpiRefresh;
 
     public BlazorInteractableOverlay(ServiceProvider serviceProvider)
     {
@@ -115,12 +117,14 @@ public partial class BlazorInteractableOverlay : Window
 
     private void HostWindow_DpiChanged(object sender, System.Windows.DpiChangedEventArgs e)
     {
-        WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
+        _pendingDpiRefresh = WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
     }
 
     protected override void OnClosed(System.EventArgs e)
     {
         DpiChanged -= HostWindow_DpiChanged;
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
         // WebView may not be created if the window closes before initialization completes.

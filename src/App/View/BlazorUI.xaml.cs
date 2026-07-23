@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Navigation;
+using System.Windows.Threading;
 using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
@@ -57,6 +58,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     private readonly ServiceProvider _serviceProvider;
     private WebView2CompositionControl? _initializedWebView;
     private Window? _dpiHostWindow;
+    private DispatcherOperation? _pendingDpiRefresh;
     private bool _disposed;
 
     private BlazorUI()
@@ -109,21 +111,19 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         BlazorInteractableOverlay ??= new BlazorInteractableOverlay(_serviceProvider);
 
         InitializeComponent();
+        Loaded += BlazorUI_Loaded;
+        Unloaded += BlazorUI_Unloaded;
     }
 
     private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
-        if (_dpiHostWindow is not null)
-            _dpiHostWindow.DpiChanged -= HostWindow_DpiChanged;
 
         _initializedWebView = e.WebView;
         _initializedWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
         _initializedWebView.NavigationCompleted += WebView_Loaded;
-        _dpiHostWindow = Window.GetWindow(_initializedWebView);
-        if (_dpiHostWindow is not null)
-            _dpiHostWindow.DpiChanged += HostWindow_DpiChanged;
 
         CoreWebView2 coreWebView = _initializedWebView.CoreWebView2;
         coreWebView.SetVirtualHostNameToFolderMapping(
@@ -133,6 +133,9 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         );
         coreWebView.Settings.AreDefaultContextMenusEnabled = false;
         coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
+
+        if (IsLoaded)
+            QueueDpiRefresh();
     }
 
     private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -142,9 +145,48 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
+    private void BlazorUI_Loaded(object sender, RoutedEventArgs e)
+    {
+        AttachDpiHostWindow();
+        QueueDpiRefresh();
+    }
+
+    private void BlazorUI_Unloaded(object sender, RoutedEventArgs e)
+    {
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
+        DetachDpiHostWindow();
+    }
+
     private void HostWindow_DpiChanged(object sender, DpiChangedEventArgs e)
     {
-        WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
+        QueueDpiRefresh();
+    }
+
+    private void AttachDpiHostWindow()
+    {
+        Window? hostWindow = Window.GetWindow(this);
+        if (ReferenceEquals(_dpiHostWindow, hostWindow))
+            return;
+
+        DetachDpiHostWindow();
+        _dpiHostWindow = hostWindow;
+        if (_dpiHostWindow is not null)
+            _dpiHostWindow.DpiChanged += HostWindow_DpiChanged;
+    }
+
+    private void DetachDpiHostWindow()
+    {
+        if (_dpiHostWindow is null)
+            return;
+
+        _dpiHostWindow.DpiChanged -= HostWindow_DpiChanged;
+        _dpiHostWindow = null;
+    }
+
+    private void QueueDpiRefresh()
+    {
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
+        _pendingDpiRefresh = WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
     }
 
     private void UpdateElements() { }
@@ -185,13 +227,12 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
             return;
         _disposed = true;
 
+        Loaded -= BlazorUI_Loaded;
+        Unloaded -= BlazorUI_Unloaded;
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
+        DetachDpiHostWindow();
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
-        if (_dpiHostWindow is not null)
-        {
-            _dpiHostWindow.DpiChanged -= HostWindow_DpiChanged;
-            _dpiHostWindow = null;
-        }
 
         BlazorInteractableOverlay?.Close();
         BlazorOverlay?.Close();

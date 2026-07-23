@@ -1,4 +1,3 @@
-using System;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -9,31 +8,42 @@ namespace RatScanner.View;
 /// </summary>
 internal static class WebView2DpiWorkaround
 {
-    public static void RefreshAfterDpiChange(WebView2CompositionControl? webView)
+    public static DispatcherOperation? RefreshAfterDpiChange(WebView2CompositionControl? webView)
     {
-        if (webView is null)
-            return;
+        if (webView is null || webView.Dispatcher.HasShutdownStarted)
+            return null;
 
         // The composition control refreshes its cached DPI scale from SizeChanged, but WPF can
         // raise DpiChanged without changing the control's logical size when a window crosses
         // monitors. Force one harmless layout-size transition after WPF finishes the DPI change.
-        _ = webView.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => RefreshLayoutForCurrentDpi(webView));
+        return webView.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => RefreshLayoutForCurrentDpi(webView));
+    }
+
+    public static void CancelPendingRefresh(ref DispatcherOperation? operation)
+    {
+        _ = operation?.Abort();
+        operation = null;
     }
 
     private static void RefreshLayoutForCurrentDpi(WebView2CompositionControl webView)
     {
-        if (!webView.IsLoaded || webView.ActualWidth <= 1)
+        if (!webView.IsLoaded)
+            return;
+
+        // A control this narrow has no usable input area to correct. Its next growth raises the
+        // SizeChanged event that refreshes WebView2's DPI scale through the built-in path.
+        if (webView.ActualWidth <= 1)
             return;
 
         double originalMaxWidth = webView.MaxWidth;
         try
         {
-            webView.MaxWidth = Math.Max(0, webView.ActualWidth - 1);
+            webView.SetCurrentValue(WebView2CompositionControl.MaxWidthProperty, webView.ActualWidth - 1);
             webView.UpdateLayout();
         }
         finally
         {
-            webView.MaxWidth = originalMaxWidth;
+            webView.SetCurrentValue(WebView2CompositionControl.MaxWidthProperty, originalMaxWidth);
             webView.UpdateLayout();
         }
     }
