@@ -76,7 +76,17 @@ public partial class BlazorOverlay : Window
         }
 
         nint handle = new WindowInteropHelper(this).Handle;
-        NativeMethods.SetWindowPos(handle, 0, left, top, right - left, bottom - top, 0);
+        // SWP_NOZORDER keeps the WPF-declared Topmost state untouched and
+        // SWP_NOACTIVATE prevents the resize from ever activating the overlay.
+        NativeMethods.SetWindowPos(
+            handle,
+            0,
+            left,
+            top,
+            right - left,
+            bottom - top,
+            NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate
+        );
     }
 
     private void SetWindowStyle()
@@ -88,6 +98,7 @@ public partial class BlazorOverlay : Window
         const uint wsExTransparent = 0x00000020; // WS_EX_TRANSPARENT (click-through)
         const uint wsExLayered = 0x00080000; // WS_EX_LAYERED (required by WS_EX_TRANSPARENT)
         const uint wsExNoActivate = 0x08000000; // WS_EX_NOACTIVATE (never steal focus from the game)
+        const nint clickThroughStyles = (nint)(wsExToolWindow | wsExTransparent | wsExLayered | wsExNoActivate);
 
         nint handle = new WindowInteropHelper(this).Handle;
         if (handle == 0)
@@ -96,13 +107,45 @@ public partial class BlazorOverlay : Window
         NativeMethods.SetWindowLongPtr(
             handle,
             gwlExStyle,
-            NativeMethods.GetWindowLongPtr(handle, gwlExStyle)
-                | (nint)(wsExToolWindow | wsExTransparent | wsExLayered | wsExNoActivate)
+            NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | clickThroughStyles
+        );
+        // Extended-style changes are cached by Windows and only take effect
+        // after a frame-changed SetWindowPos. Without this the overlay can keep
+        // swallowing every click on the desktop/taskbar despite the new style.
+        NativeMethods.SetWindowPos(handle, 0, 0, 0, 0, 0, NativeMethods.SwpFrameChangedFlags);
+
+        // WebView2 creates its own child input windows beneath the WPF host;
+        // hit-test transparency on the top-level window alone does not cover
+        // them. Apply click-through to every descendant as well.
+        ApplyStyleToDescendants(handle, gwlExStyle, clickThroughStyles);
+    }
+
+    private static void ApplyStyleToDescendants(nint parent, int gwlExStyle, nint styles)
+    {
+        NativeMethods.EnumChildWindows(
+            parent,
+            (child, _) =>
+            {
+                NativeMethods.SetWindowLongPtr(
+                    child,
+                    gwlExStyle,
+                    NativeMethods.GetWindowLongPtr(child, gwlExStyle) | styles
+                );
+                NativeMethods.SetWindowPos(child, 0, 0, 0, 0, 0, NativeMethods.SwpFrameChangedFlags);
+                ApplyStyleToDescendants(child, gwlExStyle, styles);
+                return true;
+            },
+            0
         );
     }
 
     private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
+        // WebView2 may (re)create its child input windows during navigation;
+        // re-apply click-through so a late-created input window cannot start
+        // swallowing desktop/taskbar clicks.
+        SetWindowStyle();
+
         // If we are running in a development/debugger mode, open dev tools to help out
         if (Debugger.IsAttached)
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
@@ -120,6 +163,15 @@ public partial class BlazorOverlay : Window
 
     private static class NativeMethods
     {
+        public const uint SwpNoZOrder = 0x0004;
+        public const uint SwpNoActivate = 0x0010;
+        public const uint SwpFrameChanged = 0x0020;
+        public const uint SwpNoMove = 0x0002;
+        public const uint SwpNoSize = 0x0001;
+        public const uint SwpFrameChangedFlags = SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged;
+
+        public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
         public static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
 
@@ -136,5 +188,9 @@ public partial class BlazorOverlay : Window
             int cy,
             uint uFlags
         );
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
     }
 }

@@ -96,12 +96,31 @@ public partial class BlazorInteractableOverlay : Window
     {
         const int gwlExStyle = -20; // GWL_EXSTYLE
         const uint wsExToolWindow = 0x00000080; // WS_EX_TOOLWINDOW
+        const uint swpNoMove = 0x0002;
+        const uint swpNoSize = 0x0001;
+        const uint swpNoZOrder = 0x0004;
+        const uint swpNoActivate = 0x0010;
+        const uint swpFrameChanged = 0x0020;
 
         nint handle = new WindowInteropHelper(this).Handle;
+        if (handle == 0)
+            return;
+
         NativeMethods.SetWindowLongPtr(
             handle,
             gwlExStyle,
             NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | (nint)wsExToolWindow
+        );
+        // Extended-style changes are cached; only a frame-changed SetWindowPos
+        // applies them immediately.
+        NativeMethods.SetWindowPos(
+            handle,
+            0,
+            0,
+            0,
+            0,
+            0,
+            swpNoMove | swpNoSize | swpNoZOrder | swpNoActivate | swpFrameChanged
         );
     }
 
