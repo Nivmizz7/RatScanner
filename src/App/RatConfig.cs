@@ -208,6 +208,8 @@ internal static class RatConfig
     internal static event Action? SettingsChanged;
     internal static int LastWindowPositionX = int.MinValue;
     internal static int LastWindowPositionY = int.MinValue;
+    internal static int LastWindowWidth = 0;
+    internal static int LastWindowHeight = 0;
     internal static WindowMode LastWindowMode = WindowMode.Normal;
 
     internal static float GameScale => RatScannerMain.Instance.RatEyeEngine.Config.ProcessingConfig.Scale;
@@ -390,6 +392,8 @@ internal static class RatConfig
 
         LastWindowPositionX = config.ReadInt(nameof(LastWindowPositionX), LastWindowPositionX);
         LastWindowPositionY = config.ReadInt(nameof(LastWindowPositionY), LastWindowPositionY);
+        LastWindowWidth = config.ReadInt(nameof(LastWindowWidth), LastWindowWidth);
+        LastWindowHeight = config.ReadInt(nameof(LastWindowHeight), LastWindowHeight);
         LastWindowMode = (WindowMode)config.ReadInt(nameof(LastWindowMode), (int)LastWindowMode);
 
         if (GameDisplayPreferencesStore.TryRead(config, ScreenWidth, ScreenHeight, ScreenScale, out var preferences))
@@ -521,6 +525,8 @@ internal static class RatConfig
             config.WriteInt(nameof(ConfigVersion), ConfigVersion);
             config.WriteInt(nameof(LastWindowPositionX), LastWindowPositionX);
             config.WriteInt(nameof(LastWindowPositionY), LastWindowPositionY);
+            config.WriteInt(nameof(LastWindowWidth), LastWindowWidth);
+            config.WriteInt(nameof(LastWindowHeight), LastWindowHeight);
             config.WriteInt(nameof(LastWindowMode), (int)LastWindowMode);
 
             GameDisplayPreferencesStore.Write(config, GetGameDisplayPreferences());

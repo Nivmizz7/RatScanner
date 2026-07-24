@@ -80,11 +80,7 @@ public partial class PageSwitcher : Window
             AddJumpList();
             AddTrayIcon();
 
-            if (RatConfig.LastWindowPositionX != int.MinValue && RatConfig.LastWindowPositionY != int.MinValue)
-            {
-                Left = RatConfig.LastWindowPositionX;
-                Top = RatConfig.LastWindowPositionY;
-            }
+            RestoreWindowBounds();
             Topmost = RatConfig.AlwaysOnTop;
             if (RatConfig.LastWindowMode == RatConfig.WindowMode.Minimal)
                 ShowMinimalUI();
@@ -109,6 +105,58 @@ public partial class PageSwitcher : Window
         MaxHeight = double.PositiveInfinity;
         Width = DefaultWidth;
         Height = DefaultHeight;
+    }
+
+    /// <summary>
+    /// Restores the persisted normal-mode window size and position from the
+    /// previous session. Saved bounds are validated against the currently
+    /// attached displays: a monitor layout change since the last run must not
+    /// resurrect the window on a screen that no longer exists.
+    /// </summary>
+    private void RestoreWindowBounds()
+    {
+        if (RatConfig.LastWindowWidth >= MinimumWidth && RatConfig.LastWindowHeight >= MinimumHeight)
+        {
+            Width = RatConfig.LastWindowWidth;
+            Height = RatConfig.LastWindowHeight;
+        }
+
+        if (RatConfig.LastWindowPositionX == int.MinValue || RatConfig.LastWindowPositionY == int.MinValue)
+            return;
+
+        double left = RatConfig.LastWindowPositionX;
+        double top = RatConfig.LastWindowPositionY;
+        if (IsVisibleOnAnyScreen(left, top, Width, Height))
+        {
+            Left = left;
+            Top = top;
+        }
+        // Otherwise leave the default position: the saved location refers to a
+        // display that is not currently attached.
+    }
+
+    /// <summary>
+    /// True when enough of the window (roughly the caption strip) intersects
+    /// the working area of at least one attached display for the user to grab it.
+    /// </summary>
+    internal static bool IsVisibleOnAnyScreen(double left, double top, double width, double height)
+    {
+        // The title bar is the reliable grab strip; require most of it plus a
+        // minimal slice of the window body to land on some screen.
+        double grabLeft = left + Math.Min(40, width / 4);
+        double grabRight = left + width - Math.Min(40, width / 4);
+        double grabTop = top;
+        double grabBottom = top + Math.Min(48, height);
+
+        foreach (System.Windows.Forms.Screen screen in System.Windows.Forms.Screen.AllScreens)
+        {
+            System.Drawing.Rectangle area = screen.WorkingArea;
+            bool intersects =
+                grabRight > area.Left && grabLeft < area.Right && grabBottom > area.Top && grabTop < area.Bottom;
+            if (intersects)
+                return true;
+        }
+        return false;
     }
 
     internal void Navigate(UserControl nextControl, object? state = null)
@@ -400,6 +448,14 @@ public partial class PageSwitcher : Window
                     Top = minimalTop - chromeMargin;
                 }
             }
+            else
+            {
+                // Entered minimal UI straight from startup (LastWindowMode =
+                // Minimal), so no in-session restore bounds exist. Fall back
+                // to the persisted normal-mode bounds.
+                WindowState = WindowState.Normal;
+                RestoreWindowBounds();
+            }
 
             // The offset is only valid for one exit; clear it so a subsequent
             // tray-menu exit doesn't use a stale value.
@@ -513,10 +569,38 @@ public partial class PageSwitcher : Window
 
     internal void ExitApplication()
     {
-        RatConfig.LastWindowPositionX = (int)Left;
-        RatConfig.LastWindowPositionY = (int)Top;
+        PersistWindowBounds();
         RatConfig.SaveConfig();
         Application.Current.Shutdown();
+    }
+
+    /// <summary>
+    /// Persists the normal-mode window bounds so the next launch restores the
+    /// user's size and position. When closing from minimal UI or a maximized
+    /// window, the pre-minimal / pre-maximize restore bounds are what the user
+    /// actually arranged, so those are saved instead of the live geometry.
+    /// </summary>
+    private void PersistWindowBounds()
+    {
+        Rect bounds =
+            _isMinimalUi ? _restoreBounds
+            : WindowState == WindowState.Maximized ? RestoreBounds
+            : new Rect(Left, Top, Width, Height);
+
+        if (bounds.IsEmpty || bounds.Width < MinimumWidth || bounds.Height < MinimumHeight)
+        {
+            // No trustworthy normal-mode geometry (e.g. first run closed while
+            // still in minimal UI): keep the previous saved size, only track
+            // the position as before.
+            RatConfig.LastWindowPositionX = (int)Left;
+            RatConfig.LastWindowPositionY = (int)Top;
+            return;
+        }
+
+        RatConfig.LastWindowPositionX = (int)bounds.X;
+        RatConfig.LastWindowPositionY = (int)bounds.Y;
+        RatConfig.LastWindowWidth = (int)bounds.Width;
+        RatConfig.LastWindowHeight = (int)bounds.Height;
     }
 
     private void OnToggleSidebar(object? sender, RoutedEventArgs e)
