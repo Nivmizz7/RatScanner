@@ -92,7 +92,8 @@
                                        Value="@_pvpDraftSource"
                                        ValueChanged="OnPvpDraftSourceChanged"
                                        Class="source-cards">
-                            <div class="@(_pvpDraftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")">
+                            <div class="@(_pvpDraftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")"
+                                       @onclick="() => OnPvpDraftSourceChanged(PvpSource.Org)">
                                 <MudRadio T="PvpSource" Value="PvpSource.Org" />
                                 <div class="source-card-body">
                                     <div class="source-card-title">
@@ -102,7 +103,8 @@
                                     <div class="source-card-detail">@Localizer["SourceOrgSupports"]</div>
                                 </div>
                             </div>
-                            <div class="@(_pvpDraftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")">
+                            <div class="@(_pvpDraftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")"
+                                       @onclick="() => OnPvpDraftSourceChanged(PvpSource.Io)">
                                 <MudRadio T="PvpSource" Value="PvpSource.Io" />
                                 <div class="source-card-body">
                                     <div class="source-card-title">
