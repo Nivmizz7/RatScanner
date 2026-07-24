@@ -45,17 +45,17 @@
         <ScannerStatus />
     </div>
 
-    @if (_recent.Count > 0)
+    @if (RecentScans.Count > 0)
     {
         <section class="recent" aria-label="@Localizer["RecentScans"]">
             <span class="recent-label">@Localizer["RecentScans"]</span>
-            @foreach (ItemScan scan in _recent)
+            @foreach (ScanResultViewModel scan in RecentScans)
             {
                 <button type="button"
                         class="thumb @(_result?.Item.Id == scan.Item.Id ? "selected" : null)"
                         title="@scan.Item.Name"
                         @onclick="() => SelectRecent(scan)">
-                    <img src="@scan.Item.IconLink" alt="" />
+                    <img src="@scan.Item.ImageUrl" alt="" />
                     <span>@ShortLabel(scan.Item.ShortName, scan.Item.Name)</span>
                 </button>
             }
@@ -327,7 +327,6 @@
     private List<Item>? _items;
     private string? _itemsLocale;
     private TarkovDev.GameMode? _itemsGameMode;
-    private readonly List<ItemScan> _recent = new();
     private MudAutocomplete<Item>? _search;
     private bool _detailsOpen;
     private bool _copiedId;
@@ -432,6 +431,11 @@
         }
     }
 
+    // The recent-scans strip derives from the DI-singleton SessionHistoryService
+    // instead of component-local state, so navigating away from the Scan page
+    // and back no longer wipes it (issue #12).
+    private IReadOnlyList<ScanResultViewModel> RecentScans => History.Items.Take(RecentLimit).ToArray();
+
     protected override void OnInitialized()
     {
         RefreshResult();
@@ -441,10 +445,8 @@
             History.Selected = null;
         }
 
-        if (!MenuVM.LastItemScan.IsSeed)
-            AddRecent(MenuVM.LastItemScan);
-
         MenuVM.PropertyChanged += OnResultChanged;
+        History.Changed += OnHistoryChanged;
     }
 
     private void RefreshResult()
@@ -458,24 +460,15 @@
         await InvokeAsync(() =>
         {
             RefreshResult();
-            if (!MenuVM.LastItemScan.IsSeed)
-                AddRecent(MenuVM.LastItemScan);
             StateHasChanged();
         });
 
-    private void AddRecent(ItemScan scan)
-    {
-        if (scan.IsSeed)
-            return;
-        _recent.RemoveAll(existing => existing.Item.Id == scan.Item.Id);
-        _recent.Insert(0, scan);
-        if (_recent.Count > RecentLimit)
-            _recent.RemoveRange(RecentLimit, _recent.Count - RecentLimit);
-    }
+    private async void OnHistoryChanged(object? sender, EventArgs e) =>
+        await InvokeAsync(StateHasChanged);
 
-    private void SelectRecent(ItemScan scan)
+    private void SelectRecent(ScanResultViewModel scan)
     {
-        _result = ScanResultAdapter.Map(scan, MenuVM, true);
+        _result = scan;
         _detailsOpen = false;
         _copiedId = false;
     }
@@ -586,5 +579,9 @@
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
-    public void Dispose() => MenuVM.PropertyChanged -= OnResultChanged;
+    public void Dispose()
+    {
+        MenuVM.PropertyChanged -= OnResultChanged;
+        History.Changed -= OnHistoryChanged;
+    }
 }
