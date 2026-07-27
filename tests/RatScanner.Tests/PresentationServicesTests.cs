@@ -166,6 +166,29 @@ public class SessionHistoryServiceTests
         Assert.Equal(1, changed);
     }
 
+    [Fact]
+    public void History_is_bounded_and_duplicate_items_move_to_the_front()
+    {
+        ItemQueue queue = new();
+        using SessionHistoryService history = new(
+            queue,
+            scan => ScanResultAdapter.Map(scan, questRemaining: 0, hideoutRemaining: 0, false)
+        );
+
+        for (int index = 0; index < 55; index++)
+            queue.Enqueue(new DefaultItemScan(CreateItem($"item-{index}")));
+
+        Assert.Equal(50, history.Items.Count);
+        Assert.Equal("item-54", history.Items[0].Item.Id);
+        Assert.Equal("item-5", history.Items[^1].Item.Id);
+
+        queue.Enqueue(new DefaultItemScan(CreateItem("item-10")));
+
+        Assert.Equal(50, history.Items.Count);
+        Assert.Equal("item-10", history.Items[0].Item.Id);
+        Assert.Single(history.Items, result => result.Item.Id == "item-10");
+    }
+
     private static Item CreateItem(string id) =>
         new()
         {
