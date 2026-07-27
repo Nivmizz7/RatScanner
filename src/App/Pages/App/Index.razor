@@ -45,11 +45,14 @@
         <ScannerStatus />
     </div>
 
-    @if (RecentScans.Count > 0)
+    @{
+        IReadOnlyList<ScanResultViewModel> recentScans = RecentScans;
+    }
+    @if (recentScans.Count > 0)
     {
         <section class="recent" aria-label="@Localizer["RecentScans"]">
             <span class="recent-label">@Localizer["RecentScans"]</span>
-            @foreach (ScanResultViewModel scan in RecentScans)
+            @foreach (ScanResultViewModel scan in recentScans)
             {
                 <button type="button"
                         class="thumb @(_result?.Item.Id == scan.Item.Id ? "selected" : null)"
@@ -434,7 +437,14 @@
     // The recent-scans strip derives from the DI-singleton SessionHistoryService
     // instead of component-local state, so navigating away from the Scan page
     // and back no longer wipes it (issue #12).
-    private IReadOnlyList<ScanResultViewModel> RecentScans => History.Items.Take(RecentLimit).ToArray();
+    private IReadOnlyList<ScanResultViewModel> RecentScans
+    {
+        get
+        {
+            IReadOnlyList<ScanResultViewModel> items = History.Items;
+            return items.Count <= RecentLimit ? items : items.Take(RecentLimit).ToArray();
+        }
+    }
 
     protected override void OnInitialized()
     {
