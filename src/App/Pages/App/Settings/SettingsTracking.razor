@@ -92,8 +92,12 @@
                                        Value="@_pvpDraftSource"
                                        ValueChanged="OnPvpDraftSourceChanged"
                                        Class="source-cards">
-                            <div class="@(_pvpDraftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")">
-                                <MudRadio T="PvpSource" Value="PvpSource.Org" />
+                            <div class="@(_pvpDraftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")"
+                                       @onclick="() => OnPvpDraftSourceChanged(PvpSource.Org)">
+                                <MudRadio T="PvpSource"
+                                          Value="PvpSource.Org"
+                                          Disabled="@IsPvpSourceTesting"
+                                          @onclick:stopPropagation="true" />
                                 <div class="source-card-body">
                                     <div class="source-card-title">
                                         @Localizer["SourceOrg"]
@@ -102,8 +106,12 @@
                                     <div class="source-card-detail">@Localizer["SourceOrgSupports"]</div>
                                 </div>
                             </div>
-                            <div class="@(_pvpDraftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")">
-                                <MudRadio T="PvpSource" Value="PvpSource.Io" />
+                            <div class="@(_pvpDraftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")"
+                                       @onclick="() => OnPvpDraftSourceChanged(PvpSource.Io)">
+                                <MudRadio T="PvpSource"
+                                          Value="PvpSource.Io"
+                                          Disabled="@IsPvpSourceTesting"
+                                          @onclick:stopPropagation="true" />
                                 <div class="source-card-body">
                                     <div class="source-card-title">
                                         @Localizer["SourceIo"]
@@ -280,6 +288,8 @@
     private bool IsTesting(GameMode mode) =>
         IsEditingIoCredential(mode) ? _ioTesting : _orgTesting[mode];
 
+    private bool IsPvpSourceTesting => _ioTesting || _orgTesting[GameMode.Regular];
+
     private bool CanConnect(GameMode mode)
     {
         if (IsTesting(mode))
@@ -325,6 +335,9 @@
 
     private void OnPvpDraftSourceChanged(PvpSource source)
     {
+        if (IsPvpSourceTesting)
+            return;
+
         _pvpDraftSource = source;
         _orgError[GameMode.Regular] = null;
         _ioError = null;
