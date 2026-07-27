@@ -86,11 +86,14 @@ public sealed class WindowBoundsPersistenceTests
     [Fact]
     public void Physical_working_area_is_converted_to_wpf_logical_units()
     {
-        PageSwitcher.LogicalWorkingArea area = PageSwitcher.PhysicalToLogicalWorkingArea(
+        bool converted = PageSwitcher.TryPhysicalToLogicalWorkingArea(
             new System.Drawing.Rectangle(3840, 0, 2560, 1440),
-            1.5
+            1.5,
+            isDpiReliable: true,
+            out PageSwitcher.LogicalWorkingArea area
         );
 
+        Assert.True(converted);
         Assert.Equal(2560, area.Left);
         Assert.Equal(0, area.Top);
         Assert.Equal(4266.666666666667, area.Right, 10);
@@ -98,12 +101,31 @@ public sealed class WindowBoundsPersistenceTests
     }
 
     [Fact]
+    public void Unreliable_dpi_query_is_excluded_from_restore_validation()
+    {
+        bool converted = PageSwitcher.TryPhysicalToLogicalWorkingArea(
+            new System.Drawing.Rectangle(0, 0, 3840, 2160),
+            dpiScale: 1,
+            isDpiReliable: false,
+            out PageSwitcher.LogicalWorkingArea area
+        );
+
+        Assert.False(converted);
+        Assert.Equal(default, area);
+    }
+
+    [Fact]
     public void High_dpi_physical_extent_does_not_accept_off_screen_logical_position()
     {
-        PageSwitcher.LogicalWorkingArea[] workingAreas =
-        [
-            PageSwitcher.PhysicalToLogicalWorkingArea(new System.Drawing.Rectangle(0, 0, 3840, 2160), 2),
-        ];
+        Assert.True(
+            PageSwitcher.TryPhysicalToLogicalWorkingArea(
+                new System.Drawing.Rectangle(0, 0, 3840, 2160),
+                2,
+                isDpiReliable: true,
+                out PageSwitcher.LogicalWorkingArea workingArea
+            )
+        );
+        PageSwitcher.LogicalWorkingArea[] workingAreas = [workingArea];
 
         Assert.False(PageSwitcher.IsVisibleOnAnyScreen(1900, 100, 1080, 720, workingAreas));
     }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Automation;
@@ -45,6 +46,7 @@ public partial class PageSwitcher : Window
     private UserControl? activeControl;
     private bool _isMinimalUi;
     private bool _isExiting;
+    private bool _hasPersistedWindowBounds;
     private WindowState _restoreWindowState = WindowState.Normal;
     private Rect _restoreBounds;
 
@@ -203,31 +205,44 @@ public partial class PageSwitcher : Window
         return true;
     }
 
-    internal static LogicalWorkingArea PhysicalToLogicalWorkingArea(
+    internal static bool TryPhysicalToLogicalWorkingArea(
         System.Drawing.Rectangle physicalArea,
-        double dpiScale
+        double dpiScale,
+        bool isDpiReliable,
+        out LogicalWorkingArea workingArea
     )
     {
-        double scale = double.IsFinite(dpiScale) && dpiScale > 0 ? dpiScale : 1;
-        return new LogicalWorkingArea(
-            physicalArea.Left / scale,
-            physicalArea.Top / scale,
-            physicalArea.Right / scale,
-            physicalArea.Bottom / scale
+        workingArea = default;
+        if (!isDpiReliable || !double.IsFinite(dpiScale) || dpiScale <= 0)
+            return false;
+
+        workingArea = new LogicalWorkingArea(
+            physicalArea.Left / dpiScale,
+            physicalArea.Top / dpiScale,
+            physicalArea.Right / dpiScale,
+            physicalArea.Bottom / dpiScale
         );
+        return true;
     }
 
     private static IReadOnlyList<LogicalWorkingArea> GetLogicalWorkingAreas()
     {
         System.Windows.Forms.Screen[] screens = System.Windows.Forms.Screen.AllScreens;
-        LogicalWorkingArea[] workingAreas = new LogicalWorkingArea[screens.Length];
-        for (int index = 0; index < screens.Length; index++)
+        List<LogicalWorkingArea> workingAreas = new(screens.Length);
+        foreach (System.Windows.Forms.Screen screen in screens)
         {
-            System.Windows.Forms.Screen screen = screens[index];
-            (double dpiScale, _) = WindowsGameDisplayService.GetDpiScale(screen.Bounds);
+            (double dpiScale, bool isDpiReliable) = WindowsGameDisplayService.GetDpiScale(screen.Bounds);
             // WinForms exposes physical pixels while WPF persists window
             // coordinates in device-independent units.
-            workingAreas[index] = PhysicalToLogicalWorkingArea(screen.WorkingArea, dpiScale);
+            if (
+                TryPhysicalToLogicalWorkingArea(
+                    screen.WorkingArea,
+                    dpiScale,
+                    isDpiReliable,
+                    out LogicalWorkingArea workingArea
+                )
+            )
+                workingAreas.Add(workingArea);
         }
         return workingAreas;
     }
@@ -261,6 +276,13 @@ public partial class PageSwitcher : Window
             Hide();
 
         base.OnStateChanged(e);
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (!e.Cancel)
+            PersistWindowBoundsOnce();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -647,10 +669,19 @@ public partial class PageSwitcher : Window
         if (_isExiting)
             return;
 
+        _isExiting = true;
+        PersistWindowBoundsOnce();
+        Application.Current.Shutdown();
+    }
+
+    private void PersistWindowBoundsOnce()
+    {
+        if (_hasPersistedWindowBounds)
+            return;
+
         PersistWindowBounds();
         RatConfig.SaveConfig();
-        _isExiting = true;
-        Application.Current.Shutdown();
+        _hasPersistedWindowBounds = true;
     }
 
     /// <summary>
