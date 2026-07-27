@@ -8,6 +8,8 @@ The standalone RatEye submodule (`src/ScanEngine/`, project under `RatEye/`, ass
 
 - **Inspection / multi-inspection** — name-plate OCR path (Tesseract).
 - **Inventory + icon template matching** — icon scan path (OpenCvSharp), optional rotation.
+- **Low-confidence icon verification** — exact short-name OCR when traineddata
+  is available; ambiguous or duplicate names never override the template.
 - **IconManager** — static icon library from `Data/icons` (+ optional dynamic cache config).
 
 The App owns capture, hotkeys, mapping to tarkov.dev catalog models, and UI. The engine owns image processing.
