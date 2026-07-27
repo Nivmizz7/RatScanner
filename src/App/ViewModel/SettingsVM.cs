@@ -453,35 +453,6 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             static v => v is >= 0 and <= 100 ? null : "Opacity must be between 0 and 100."
         );
 
-    internal Task<SettingSaveResult> SetOverlayEnabledAsync(bool value) =>
-        SaveAsync(
-            nameof(RatConfig.Overlay.Search.Enable),
-            "search overlay",
-            value,
-            () => RatConfig.Overlay.Search.Enable,
-            v => RatConfig.Overlay.Search.Enable = v,
-            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
-        );
-
-    internal Task<SettingSaveResult> SetOverlayBlurAsync(bool value) =>
-        SaveAsync(
-            nameof(RatConfig.Overlay.Search.BlurBehind),
-            "search overlay blur",
-            value,
-            () => RatConfig.Overlay.Search.BlurBehind,
-            v => RatConfig.Overlay.Search.BlurBehind = v
-        );
-
-    internal Task<SettingSaveResult> SetOverlayHotkeyAsync(Hotkey value) =>
-        SaveAsync(
-            nameof(RatConfig.Overlay.Search.Hotkey),
-            "search-overlay hotkey",
-            new Hotkey(value),
-            () => new Hotkey(RatConfig.Overlay.Search.Hotkey),
-            v => RatConfig.Overlay.Search.Hotkey = new Hotkey(v),
-            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
-        );
-
     internal async Task<SettingSaveResult> PersistDisplaySettingsAsync()
     {
         if (!CanPersistDisplaySettings)

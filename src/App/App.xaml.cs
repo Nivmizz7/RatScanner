@@ -85,7 +85,6 @@ public partial class App : Application, ISingleInstance
         {
             "/showUI" => PageSwitcher.Instance.ShowUI,
             "/showMinimalUI" => PageSwitcher.Instance.ShowMinimalUI,
-            "/showOverlay" => PageSwitcher.Instance.ShowOverlay,
             _ => () => OnInstanceInvoked(Array.Empty<string>()),
         };
         action.Invoke();
