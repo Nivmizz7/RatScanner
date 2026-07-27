@@ -24,8 +24,12 @@ public partial class PageSwitcher : Window
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
-    public const int MinimumWidth = 450;
-    public const int MinimumHeight = 520;
+
+    // Compact-friendly minimums: the Blazor shell switches the sidebar to an
+    // overlay drawer below 680px and the scan page has density tiers that keep
+    // the full scan result usable (no scroll) down to roughly this size.
+    public const int MinimumWidth = 360;
+    public const int MinimumHeight = 380;
 
     private NotifyIcon _notifyIcon = null!;
     private ContextMenuStrip _contextMenuStrip = new();

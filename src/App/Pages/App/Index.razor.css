@@ -1,12 +1,14 @@
 .scan-page {
     width: min(100%, 960px);
     height: 100vh;
+    height: 100dvh;
     margin: auto;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 10px;
     overflow: auto;
+    scrollbar-width: thin;
 }
 
 .utility-bar {
@@ -162,7 +164,8 @@
 }
 
 .result-card {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
+    min-height: 0;
     margin: 0;
     padding: 16px 18px;
     display: flex;
@@ -686,45 +689,240 @@ label {
     }
 }
 
+/* Narrow window (sidebar becomes an overlay drawer at 680px). Keep the whole
+   scan result visible without scrolling: shrink art/type, let long names and
+   prices wrap instead of forcing a single row, and keep the market columns
+   side-by-side until the very smallest width. */
 @media (max-width: 680px) {
     .scan-page {
-        height: auto;
-        min-height: calc(100vh - 56px);
-        padding: 12px;
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .utility-bar {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .utility-bar .scanner-status-root {
+        grid-column: 1 / -1;
+        justify-self: start;
+        height: 26px;
     }
 
     .recent {
         display: none;
     }
 
-    .market-columns,
-    .requirements.has-required,
-    .details-rows {
-        grid-template-columns: 1fr;
-        gap: 12px;
+    .result-card {
+        padding: 12px;
+        gap: 10px;
+        border-radius: 12px;
     }
-}
 
-@media (max-width: 479px) {
     .result-header {
-        grid-template-columns: 1fr;
+        grid-template-columns: 52px minmax(0, 1fr);
+        gap: 10px;
     }
 
-    .item-art-wrap {
-        justify-self: start;
+    .item-art {
+        width: 52px;
+        height: 52px;
     }
 
-    .actions {
-        flex-direction: column;
-        align-items: stretch;
+    h1 {
+        font-size: 17px;
+        overflow-wrap: anywhere;
     }
 
-    .action-links {
-        width: 100%;
+    .identity-meta,
+    .identity-source {
+        font-size: 12px;
+    }
+
+    .recommendation {
+        min-height: 0;
+        padding: 8px 10px;
+    }
+
+    .recommendation h2 {
+        font-size: 14px;
+    }
+
+    .recommendation p {
+        font-size: 12px;
+    }
+
+    .market {
+        gap: 8px;
+        padding-top: 10px;
+    }
+
+    .market-columns {
+        gap: 8px 14px;
+    }
+
+    .market-column .price,
+    .market-column .trader-name {
+        font-size: 16px;
+        overflow-wrap: anywhere;
+    }
+
+    .market-column .price.banned {
+        font-size: 14px;
+    }
+
+    .supporting-price {
+        font-size: 14px;
+    }
+
+    .requirement-chip {
+        padding: 6px 10px;
+    }
+
+    .acq-chip {
+        flex: 1 1 100px;
+        padding: 6px 10px;
     }
 
     .link-btn,
     .details-toggle {
-        justify-content: center;
+        min-height: 30px;
+        font-size: 12px;
+    }
+
+    .details {
+        gap: 12px;
+    }
+
+    .details-rows {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}
+
+/* Small windows: single-column requirement chips; tighten type further. */
+@media (max-width: 520px) {
+    .requirements.has-required {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+
+    .requirement-chip {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: baseline;
+        column-gap: 8px;
+    }
+
+    .requirement-chip .req-meta {
+        grid-column: 1 / -1;
+    }
+
+    .market-column .price,
+    .market-column .trader-name {
+        font-size: 15px;
+    }
+}
+
+/* Very small windows: single-column everything, compact empty state. */
+@media (max-width: 460px) {
+    .scan-page {
+        padding: 8px;
+        gap: 6px;
+    }
+
+    .result-header {
+        grid-template-columns: 44px minmax(0, 1fr);
+    }
+
+    .item-art {
+        width: 44px;
+        height: 44px;
+    }
+
+    .recommendation {
+        grid-column: 1 / -1;
+    }
+
+    .market-columns {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .market-column {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: baseline;
+        column-gap: 8px;
+    }
+
+    .market-column label {
+        grid-row: span 3;
+    }
+
+    .state-banner {
+        padding: 8px 10px;
+    }
+
+    .empty-state {
+        min-height: 140px;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        text-align: center;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .empty-state strong {
+        font-size: 15px;
+    }
+
+    .actions {
+        flex-wrap: nowrap;
+    }
+
+    .action-links {
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+
+    .link-btn {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* Short windows (e.g. half-height on a small laptop or snapped to a corner):
+   collapse vertical chrome so the result fits without scrolling. */
+@media (max-height: 620px) {
+    .scan-page {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        gap: 6px;
+    }
+
+    .recent {
+        display: none;
+    }
+
+    .result-card {
+        padding-top: 10px;
+        padding-bottom: 10px;
+        gap: 8px;
+    }
+
+    .empty-state {
+        min-height: 0;
+    }
+
+    .market {
+        padding-top: 8px;
+    }
+
+    .actions {
+        padding-top: 2px;
+    }
+
+    .details {
+        gap: 10px;
     }
 }

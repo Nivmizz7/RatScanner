@@ -53,11 +53,13 @@
     align-items: start;
 }
 
-/* Tracking page: two independent cards side by side, TarkovTracker wider. */
+/* Tracking page: two independent cards side by side, TarkovTracker wider.
+   Minima stay below the narrow-container breakpoint so the cards stack
+   instead of overflowing on small windows. */
 .settings-content ::deep .tracking-settings {
     grid-template-columns:
-        minmax(360px, 0.9fr)
-        minmax(480px, 1.1fr);
+        minmax(min(360px, 100%), 0.9fr)
+        minmax(min(480px, 100%), 1.1fr);
     gap: 20px;
 }
 
@@ -153,6 +155,8 @@
 
 @container (max-width: 679px) {
     .settings-shell {
+        width: 100%;
+        margin-left: 0;
         padding: 14px 12px 36px;
     }
 
