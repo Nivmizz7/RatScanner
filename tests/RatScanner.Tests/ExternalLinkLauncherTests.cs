@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -48,12 +51,63 @@ public sealed class ExternalLinkLauncherTests
     }
 
     [Fact]
-    public void Open_ignores_rejected_targets_instead_of_throwing()
+    public void Open_does_not_launch_rejected_targets()
     {
-        // The Blazor click handlers call this synchronously; a throw here would surface as an
-        // unhandled exception in the WebView render loop rather than a logged no-op.
-        ExternalLinkLauncher.Open(null);
-        ExternalLinkLauncher.Open(@"C:\Windows\System32\cmd.exe");
-        ExternalLinkLauncher.Open("not a url");
+        bool launched = false;
+        List<string> warnings = [];
+
+        ExternalLinkLauncher.Open(
+            @"C:\Windows\System32\cmd.exe",
+            _ =>
+            {
+                launched = true;
+                return null;
+            },
+            warnings.Add
+        );
+
+        Assert.False(launched);
+        Assert.Single(warnings);
+        Assert.DoesNotContain(@"C:\Windows", warnings[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Open_launches_accepted_targets_through_the_shell()
+    {
+        ProcessStartInfo captured = null;
+
+        ExternalLinkLauncher.Open(
+            "https://tarkov.dev/item/123?source=test#details",
+            startInfo =>
+            {
+                captured = startInfo;
+                return null;
+            },
+            _ => Assert.Fail("Accepted links should not log a warning.")
+        );
+
+        Assert.NotNull(captured);
+        Assert.True(captured.UseShellExecute);
+        Assert.Equal("https://tarkov.dev/item/123?source=test#details", captured.FileName);
+    }
+
+    [Fact]
+    public void Open_logs_a_sanitized_target_when_launching_fails()
+    {
+        List<string> warnings = [];
+
+        ExternalLinkLauncher.Open(
+            "https://user:secret@example.com/item/123?token=sensitive#fragment",
+            _ => throw new InvalidOperationException("failure contains sensitive details"),
+            warnings.Add
+        );
+
+        string warning = Assert.Single(warnings);
+        Assert.Contains("https://example.com/item/123", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("user", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("token", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("fragment", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("failure", warning, StringComparison.Ordinal);
     }
 }
