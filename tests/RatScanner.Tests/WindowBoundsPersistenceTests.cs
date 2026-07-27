@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -69,21 +70,115 @@ public sealed class WindowBoundsPersistenceTests
     [Fact]
     public void Off_screen_saved_position_is_rejected()
     {
-        // A position far outside any possible monitor arrangement must not be
-        // considered visible (monitor unplugged since last run).
-        Assert.False(PageSwitcher.IsVisibleOnAnyScreen(-100000, -100000, 1080, 720));
+        PageSwitcher.LogicalWorkingArea[] workingAreas = [new(0, 0, 1920, 1080)];
+
+        Assert.False(PageSwitcher.IsVisibleOnAnyScreen(-100000, -100000, 1080, 720, workingAreas));
     }
 
     [Fact]
     public void On_screen_position_is_accepted()
     {
-        // Center of the primary working area must be restorable on any machine
-        // that can run the test suite (Windows desktop session).
-        System.Drawing.Rectangle area = System.Windows.Forms.Screen.PrimaryScreen!.WorkingArea;
-        double left = area.Left + (area.Width - 1080) / 2.0;
-        double top = area.Top + (area.Height - 720) / 2.0;
+        PageSwitcher.LogicalWorkingArea[] workingAreas = [new(-1280, 0, 1920, 1080)];
 
-        Assert.True(PageSwitcher.IsVisibleOnAnyScreen(left, top, 1080, 720));
+        Assert.True(PageSwitcher.IsVisibleOnAnyScreen(-1100, 120, 900, 640, workingAreas));
+    }
+
+    [Fact]
+    public void Physical_working_area_is_converted_to_wpf_logical_units()
+    {
+        PageSwitcher.LogicalWorkingArea area = PageSwitcher.PhysicalToLogicalWorkingArea(
+            new System.Drawing.Rectangle(3840, 0, 2560, 1440),
+            1.5
+        );
+
+        Assert.Equal(2560, area.Left);
+        Assert.Equal(0, area.Top);
+        Assert.Equal(4266.666666666667, area.Right, 10);
+        Assert.Equal(960, area.Bottom);
+    }
+
+    [Fact]
+    public void High_dpi_physical_extent_does_not_accept_off_screen_logical_position()
+    {
+        PageSwitcher.LogicalWorkingArea[] workingAreas =
+        [
+            PageSwitcher.PhysicalToLogicalWorkingArea(new System.Drawing.Rectangle(0, 0, 3840, 2160), 2),
+        ];
+
+        Assert.False(PageSwitcher.IsVisibleOnAnyScreen(1900, 100, 1080, 720, workingAreas));
+    }
+
+    [Fact]
+    public void Off_screen_saved_position_rejects_saved_size_as_one_placement()
+    {
+        PageSwitcher.LogicalWorkingArea[] workingAreas = [new(0, 0, 1920, 1080)];
+
+        bool restored = PageSwitcher.TryGetRestorableBounds(
+            5000,
+            100,
+            3200,
+            1800,
+            PageSwitcher.DefaultWidth,
+            PageSwitcher.DefaultHeight,
+            workingAreas,
+            out Rect bounds
+        );
+
+        Assert.False(restored);
+        Assert.True(bounds.IsEmpty);
+    }
+
+    [Fact]
+    public void Missing_saved_size_uses_default_size_with_valid_saved_position()
+    {
+        PageSwitcher.LogicalWorkingArea[] workingAreas = [new(0, 0, 1920, 1080)];
+
+        bool restored = PageSwitcher.TryGetRestorableBounds(
+            120,
+            80,
+            0,
+            0,
+            PageSwitcher.DefaultWidth,
+            PageSwitcher.DefaultHeight,
+            workingAreas,
+            out Rect bounds
+        );
+
+        Assert.True(restored);
+        Assert.Equal(new Rect(120, 80, PageSwitcher.DefaultWidth, PageSwitcher.DefaultHeight), bounds);
+    }
+
+    [Fact]
+    public void Minimized_window_persists_restore_bounds()
+    {
+        Rect restoreBounds = new(120, 80, 900, 640);
+        Rect iconicBounds = new(-32000, -32000, 160, 28);
+
+        bool persisted = PageSwitcher.TryGetPersistableBounds(
+            isMinimalUi: false,
+            WindowState.Minimized,
+            restoreBounds,
+            iconicBounds,
+            out Rect bounds
+        );
+
+        Assert.True(persisted);
+        Assert.Equal(restoreBounds, bounds);
+    }
+
+    [Fact]
+    public void Minimal_ui_without_restore_bounds_preserves_previous_normal_bounds()
+    {
+        bool persisted = PageSwitcher.TryGetPersistableBounds(
+            isMinimalUi: true,
+            WindowState.Normal,
+            Rect.Empty,
+            new Rect(1700, 20, 260, 90),
+            out Rect bounds
+        );
+
+        Assert.False(persisted);
+        Assert.True(bounds.IsEmpty);
     }
 
     private static string CreateTemporaryDirectory()

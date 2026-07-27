@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Automation;
@@ -8,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using RatScanner.Display;
 using RatScanner.View;
 using ContextMenuStrip = System.Windows.Forms.ContextMenuStrip;
 using NotifyIcon = System.Windows.Forms.NotifyIcon;
@@ -42,6 +44,7 @@ public partial class PageSwitcher : Window
 
     private UserControl? activeControl;
     private bool _isMinimalUi;
+    private bool _isExiting;
     private WindowState _restoreWindowState = WindowState.Normal;
     private Rect _restoreBounds;
 
@@ -115,24 +118,24 @@ public partial class PageSwitcher : Window
     /// </summary>
     private void RestoreWindowBounds()
     {
-        if (RatConfig.LastWindowWidth >= MinimumWidth && RatConfig.LastWindowHeight >= MinimumHeight)
-        {
-            Width = RatConfig.LastWindowWidth;
-            Height = RatConfig.LastWindowHeight;
-        }
-
-        if (RatConfig.LastWindowPositionX == int.MinValue || RatConfig.LastWindowPositionY == int.MinValue)
+        if (
+            !TryGetRestorableBounds(
+                RatConfig.LastWindowPositionX,
+                RatConfig.LastWindowPositionY,
+                RatConfig.LastWindowWidth,
+                RatConfig.LastWindowHeight,
+                Width,
+                Height,
+                GetLogicalWorkingAreas(),
+                out Rect bounds
+            )
+        )
             return;
 
-        double left = RatConfig.LastWindowPositionX;
-        double top = RatConfig.LastWindowPositionY;
-        if (IsVisibleOnAnyScreen(left, top, Width, Height))
-        {
-            Left = left;
-            Top = top;
-        }
-        // Otherwise leave the default position: the saved location refers to a
-        // display that is not currently attached.
+        Width = bounds.Width;
+        Height = bounds.Height;
+        Left = bounds.Left;
+        Top = bounds.Top;
     }
 
     /// <summary>
@@ -141,6 +144,17 @@ public partial class PageSwitcher : Window
     /// </summary>
     internal static bool IsVisibleOnAnyScreen(double left, double top, double width, double height)
     {
+        return IsVisibleOnAnyScreen(left, top, width, height, GetLogicalWorkingAreas());
+    }
+
+    internal static bool IsVisibleOnAnyScreen(
+        double left,
+        double top,
+        double width,
+        double height,
+        IReadOnlyList<LogicalWorkingArea> workingAreas
+    )
+    {
         // The title bar is the reliable grab strip; require most of it plus a
         // minimal slice of the window body to land on some screen.
         double grabLeft = left + Math.Min(40, width / 4);
@@ -148,9 +162,8 @@ public partial class PageSwitcher : Window
         double grabTop = top;
         double grabBottom = top + Math.Min(48, height);
 
-        foreach (System.Windows.Forms.Screen screen in System.Windows.Forms.Screen.AllScreens)
+        foreach (LogicalWorkingArea area in workingAreas)
         {
-            System.Drawing.Rectangle area = screen.WorkingArea;
             bool intersects =
                 grabRight > area.Left && grabLeft < area.Right && grabBottom > area.Top && grabTop < area.Bottom;
             if (intersects)
@@ -158,6 +171,68 @@ public partial class PageSwitcher : Window
         }
         return false;
     }
+
+    internal static bool TryGetRestorableBounds(
+        int savedLeft,
+        int savedTop,
+        int savedWidth,
+        int savedHeight,
+        double defaultWidth,
+        double defaultHeight,
+        IReadOnlyList<LogicalWorkingArea> workingAreas,
+        out Rect bounds
+    )
+    {
+        bounds = Rect.Empty;
+        if (savedLeft == int.MinValue || savedTop == int.MinValue)
+            return false;
+
+        bool hasValidSavedSize = savedWidth >= MinimumWidth && savedHeight >= MinimumHeight;
+        double width = hasValidSavedSize ? savedWidth : defaultWidth;
+        double height = hasValidSavedSize ? savedHeight : defaultHeight;
+        if (
+            !double.IsFinite(width)
+            || !double.IsFinite(height)
+            || width < MinimumWidth
+            || height < MinimumHeight
+            || !IsVisibleOnAnyScreen(savedLeft, savedTop, width, height, workingAreas)
+        )
+            return false;
+
+        bounds = new Rect(savedLeft, savedTop, width, height);
+        return true;
+    }
+
+    internal static LogicalWorkingArea PhysicalToLogicalWorkingArea(
+        System.Drawing.Rectangle physicalArea,
+        double dpiScale
+    )
+    {
+        double scale = double.IsFinite(dpiScale) && dpiScale > 0 ? dpiScale : 1;
+        return new LogicalWorkingArea(
+            physicalArea.Left / scale,
+            physicalArea.Top / scale,
+            physicalArea.Right / scale,
+            physicalArea.Bottom / scale
+        );
+    }
+
+    private static IReadOnlyList<LogicalWorkingArea> GetLogicalWorkingAreas()
+    {
+        System.Windows.Forms.Screen[] screens = System.Windows.Forms.Screen.AllScreens;
+        LogicalWorkingArea[] workingAreas = new LogicalWorkingArea[screens.Length];
+        for (int index = 0; index < screens.Length; index++)
+        {
+            System.Windows.Forms.Screen screen = screens[index];
+            (double dpiScale, _) = WindowsGameDisplayService.GetDpiScale(screen.Bounds);
+            // WinForms exposes physical pixels while WPF persists window
+            // coordinates in device-independent units.
+            workingAreas[index] = PhysicalToLogicalWorkingArea(screen.WorkingArea, dpiScale);
+        }
+        return workingAreas;
+    }
+
+    internal readonly record struct LogicalWorkingArea(double Left, double Top, double Right, double Bottom);
 
     internal void Navigate(UserControl nextControl, object? state = null)
     {
@@ -569,8 +644,12 @@ public partial class PageSwitcher : Window
 
     internal void ExitApplication()
     {
+        if (_isExiting)
+            return;
+
         PersistWindowBounds();
         RatConfig.SaveConfig();
+        _isExiting = true;
         Application.Current.Shutdown();
     }
 
@@ -582,25 +661,39 @@ public partial class PageSwitcher : Window
     /// </summary>
     private void PersistWindowBounds()
     {
-        Rect bounds =
-            _isMinimalUi ? _restoreBounds
-            : WindowState == WindowState.Maximized ? RestoreBounds
-            : new Rect(Left, Top, Width, Height);
-
-        if (bounds.IsEmpty || bounds.Width < MinimumWidth || bounds.Height < MinimumHeight)
-        {
-            // No trustworthy normal-mode geometry (e.g. first run closed while
-            // still in minimal UI): keep the previous saved size, only track
-            // the position as before.
-            RatConfig.LastWindowPositionX = (int)Left;
-            RatConfig.LastWindowPositionY = (int)Top;
+        if (
+            !TryGetPersistableBounds(
+                _isMinimalUi,
+                WindowState,
+                _restoreBounds,
+                new Rect(Left, Top, Width, Height),
+                out Rect bounds
+            )
+        )
             return;
-        }
 
         RatConfig.LastWindowPositionX = (int)bounds.X;
         RatConfig.LastWindowPositionY = (int)bounds.Y;
         RatConfig.LastWindowWidth = (int)bounds.Width;
         RatConfig.LastWindowHeight = (int)bounds.Height;
+    }
+
+    internal static bool TryGetPersistableBounds(
+        bool isMinimalUi,
+        WindowState windowState,
+        Rect restoreBounds,
+        Rect liveBounds,
+        out Rect bounds
+    )
+    {
+        bounds = isMinimalUi || windowState != WindowState.Normal ? restoreBounds : liveBounds;
+        return !bounds.IsEmpty
+            && double.IsFinite(bounds.X)
+            && double.IsFinite(bounds.Y)
+            && double.IsFinite(bounds.Width)
+            && double.IsFinite(bounds.Height)
+            && bounds.Width >= MinimumWidth
+            && bounds.Height >= MinimumHeight;
     }
 
     private void OnToggleSidebar(object? sender, RoutedEventArgs e)
