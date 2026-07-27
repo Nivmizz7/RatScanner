@@ -15,7 +15,10 @@
                            Class="source-cards">
                 <div class="@(_draftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")"
                          @onclick="() => OnDraftSourceChanged(PvpSource.Org)">
-                    <MudRadio T="PvpSource" Value="PvpSource.Org" />
+                    <MudRadio T="PvpSource"
+                              Value="PvpSource.Org"
+                              Disabled="_testing"
+                              @onclick:stopPropagation="true" />
                     <div class="source-card-body">
                         <div class="source-card-title">
                             @Localizer["SourceOrg"]
@@ -26,7 +29,10 @@
                 </div>
                 <div class="@(_draftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")"
                          @onclick="() => OnDraftSourceChanged(PvpSource.Io)">
-                    <MudRadio T="PvpSource" Value="PvpSource.Io" />
+                    <MudRadio T="PvpSource"
+                              Value="PvpSource.Io"
+                              Disabled="_testing"
+                              @onclick:stopPropagation="true" />
                     <div class="source-card-body">
                         <div class="source-card-title">
                             @Localizer["SourceIo"]
@@ -129,6 +135,9 @@
 
     private void OnDraftSourceChanged(PvpSource source)
     {
+        if (_testing)
+            return;
+
         _draftSource = source;
         _error = null;
     }
@@ -152,6 +161,10 @@
         if (string.IsNullOrWhiteSpace(candidate) || _testing)
             return;
 
+        // Snapshot the provider for the entire asynchronous operation. Even if
+        // a future UI change permits source edits while validation is running,
+        // the validated provider and persisted credential cannot diverge.
+        bool submitToIo = IsIoDraft;
         _validation?.Cancel();
         _validation?.Dispose();
         CancellationTokenSource cancellation = new();
@@ -160,7 +173,7 @@
         _error = null;
         try
         {
-            TrackerValidationResult result = IsIoDraft
+            TrackerValidationResult result = submitToIo
                 ? await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, cancellation.Token)
                 : await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(Mode, candidate, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
@@ -171,7 +184,7 @@
             }
 
             SettingSaveResult saved;
-            if (IsIoDraft)
+            if (submitToIo)
             {
                 string previousIo = RatConfig.Tracking.TarkovTracker.IoToken;
                 saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
@@ -220,10 +233,9 @@
             }
 
             // Activate only when this credential drives the active game mode.
-            // At this point PvpSource always equals _draftSource: the source
-            // change above either succeeded (setting PvpSource = _draftSource)
-            // or was skipped because they already matched, so the PvP-source
-            // mismatch guard is redundant and only the game-mode check matters.
+            // At this point PvpSource always equals the snapshotted submission
+            // source: the source change above either succeeded or was skipped
+            // because they already matched, so only the game-mode check matters.
             bool drivesActiveMode = RatConfig.GameMode == Mode;
             if (drivesActiveMode)
                 await RatScannerMain.Instance.ActivateTrackerModeAsync(Mode, cancellation.Token);
