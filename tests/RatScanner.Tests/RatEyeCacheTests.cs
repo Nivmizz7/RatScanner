@@ -52,6 +52,44 @@ public class RatEyeCacheTests
     }
 
     [Fact]
+    public void Changed_source_icon_uses_a_new_cache_entry()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "RatEye-cache-source-test-" + Guid.NewGuid().ToString("N"));
+        string iconsDirectory = Path.Combine(root, "icons");
+        string cacheDirectory = Path.Combine(root, "cache");
+        Directory.CreateDirectory(iconsDirectory);
+        Directory.CreateDirectory(cacheDirectory);
+
+        Config config = CreateConfig(iconsDirectory);
+        try
+        {
+            string sourcePath = Path.Combine(iconsDirectory, "one.png");
+            WriteIcon(sourcePath);
+
+            using (IconManager manager = new(config, cacheDirectory))
+                manager.EnsureStaticIconsLoaded(new Vector2(1, 1));
+
+            string firstCachePath = Assert.Single(Directory.GetFiles(cacheDirectory, "*.bmp"));
+            File.SetLastWriteTimeUtc(sourcePath, File.GetLastWriteTimeUtc(sourcePath).AddSeconds(1));
+
+            using (IconManager manager = new(config, cacheDirectory))
+                manager.EnsureStaticIconsLoaded(new Vector2(1, 1));
+
+            string[] cachePaths = Directory.GetFiles(cacheDirectory, "*.bmp");
+            Assert.Equal(2, cachePaths.Length);
+            Assert.Contains(
+                cachePaths,
+                path => !string.Equals(path, firstCachePath, StringComparison.OrdinalIgnoreCase)
+            );
+        }
+        finally
+        {
+            config.ProcessingConfig.InspectionConfig.Marker.Dispose();
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Cache_pruning_removes_stale_and_oldest_oversize_entries()
     {
         string root = Path.Combine(Path.GetTempPath(), "RatEye-cache-prune-test-" + Guid.NewGuid().ToString("N"));
@@ -110,6 +148,11 @@ public class RatEyeCacheTests
     private static void WriteIcon(string path)
     {
         using Bitmap bitmap = new(64, 64);
+        using (Graphics graphics = Graphics.FromImage(bitmap))
+        {
+            using Brush brush = new SolidBrush(System.Drawing.Color.White);
+            graphics.FillEllipse(brush, 16, 16, 32, 32);
+        }
         bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
     }
 

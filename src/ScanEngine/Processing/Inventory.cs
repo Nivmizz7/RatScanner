@@ -13,6 +13,7 @@ namespace RatEye.Processing
     {
         private readonly Config _config;
         private readonly Mat _image;
+        private Mat _normalGridMask;
         private Mat _grid;
         private Mat _vertGrid;
         private List<Rect> _boundingBoxes = new();
@@ -113,6 +114,7 @@ namespace RatEye.Processing
             var maxGridScalar = new Scalar(maxHue, maxSaturation, maxValue);
             using var hsv = _image.CvtColor(ColorConversionCodes.BGR2HSV_FULL);
             using var colorFilter = hsv.InRange(minGridScalar, maxGridScalar);
+            _normalGridMask = colorFilter.Clone();
 
             Logger.LogDebugMat(colorFilter, "inventory/colorFilter");
 
@@ -217,6 +219,8 @@ namespace RatEye.Processing
                 }
             }
 
+            AddContourIconsFromNormalGrid();
+
             // Quarter of the normal sized slot
             var overlapThreshold = scaledSlotSize / 2;
 
@@ -249,6 +253,56 @@ namespace RatEye.Processing
                     }
                 }
             }
+        }
+
+        private void AddContourIconsFromNormalGrid()
+        {
+            if (_normalGridMask == null || _normalGridMask.Empty())
+                return;
+
+            using var contourSource = _normalGridMask.Clone();
+            var contours = contourSource.FindContoursAsArray(
+                RetrievalModes.List,
+                ContourApproximationModes.ApproxSimple
+            );
+            var scaledSlotSize = (int)ProcessingConfig.ScaledSlotSize;
+            var tolerance = Math.Max(3, (int)Math.Ceiling(scaledSlotSize * 0.08));
+            var imageBounds = new Rect(0, 0, _image.Width, _image.Height);
+
+            using var image = _image.ToBitmap();
+            foreach (var contour in contours)
+            {
+                var rect = Cv2.BoundingRect(contour);
+                if (
+                    !IsSlotAlignedDimension(rect.Width, scaledSlotSize, tolerance)
+                    || !IsSlotAlignedDimension(rect.Height, scaledSlotSize, tolerance)
+                )
+                    continue;
+
+                var scaledSlotSizeVec = new Vector2(scaledSlotSize, scaledSlotSize);
+                var topLeft = new Vector2(rect.Location) - scaledSlotSizeVec / 8;
+                var size = new Vector2(rect.Size) + scaledSlotSizeVec / 4;
+                var paddedRect = new Rect(topLeft, size).Intersect(imageBounds);
+                if (paddedRect.Width <= 0 || paddedRect.Height <= 0)
+                    continue;
+
+                topLeft = new Vector2(paddedRect.Location);
+                size = new Vector2(paddedRect.Size);
+                if (_icons.Any(icon => icon.Position == topLeft && icon.Size == size))
+                    continue;
+
+                var iconImage = image.Crop(topLeft.X, topLeft.Y, size.X, size.Y);
+                _icons.Add(new Icon(iconImage, topLeft, size, _config));
+            }
+        }
+
+        private static bool IsSlotAlignedDimension(int pixels, int slotSize, int tolerance)
+        {
+            if (pixels < slotSize - tolerance)
+                return false;
+
+            var slots = Math.Max(1, (int)Math.Round(pixels / (double)slotSize));
+            return Math.Abs(pixels - slots * slotSize) <= tolerance;
         }
 
         /// <summary>
@@ -550,6 +604,7 @@ namespace RatEye.Processing
             foreach (Icon icon in _icons)
                 icon.Dispose();
             _image.Dispose();
+            _normalGridMask?.Dispose();
             _grid?.Dispose();
             _vertGrid?.Dispose();
             _disposed = true;

@@ -16,6 +16,9 @@ namespace RatEye.Processing
     /// </summary>
     public class Icon : IDisposable
     {
+        private const float OcrVerificationThreshold = 0.7f;
+        private static readonly Regex OcrShortNameSanitizer = new(@"[^\p{L}\p{N} \-.]");
+
         private readonly Config _config;
         private readonly Bitmap _icon;
         private Bitmap _scaledIcon;
@@ -163,6 +166,7 @@ namespace RatEye.Processing
                             TemplateMatch();
                             if (IconConfig.ScanRotatedIcons)
                                 TemplateMatch(true);
+                            VerifyLowConfidenceTemplateMatchWithOcr();
                         }
                         else if (IconConfig.ScanMode == Config.Processing.Icon.ScanModes.OCR)
                             OCR();
@@ -349,6 +353,85 @@ namespace RatEye.Processing
                 if (!ReferenceEquals(final, filteredBitmap))
                     final.Dispose();
             }
+        }
+
+        private void VerifyLowConfidenceTemplateMatchWithOcr()
+        {
+            if (_detectionConfidence >= OcrVerificationThreshold)
+                return;
+
+            var langCode = ProcessingConfig.Language.ToISO3Code();
+            var trainedDataPath = System.IO.Path.Combine(PathConfig.TrainedData, $"{langCode}.traineddata");
+            if (!System.IO.File.Exists(trainedDataPath))
+                return;
+
+            Bitmap ocrIcon = _icon.Rescale(ProcessingConfig.InverseScale * 2);
+            try
+            {
+                var titleHeight = Math.Min(
+                    ocrIcon.Height,
+                    (int)Math.Round(ProcessingConfig.BaseSlotSize * (40f / 63f))
+                );
+                var titleLeft = Math.Min(ocrIcon.Width - 1, (int)Math.Floor(ocrIcon.Width * 0.55f));
+                using var title = ocrIcon.Crop(titleLeft, 0, ocrIcon.Width - titleLeft, titleHeight);
+                using var titleMat = title.ToMat();
+                using var gray =
+                    titleMat.Channels() == 1 ? titleMat.Clone() : titleMat.CvtColor(ColorConversionCodes.BGR2GRAY);
+                using var binary = gray.Threshold(110, 255, ThresholdTypes.Binary);
+                Cv2.BitwiseNot(binary, binary);
+                using var enlarged = binary.Resize(new OpenCvSharp.Size(), 3, 3, InterpolationFlags.Cubic);
+                using var filteredBitmap = enlarged.ToBitmap();
+                using var pix = PixConverter.ToPix(filteredBitmap);
+
+                string text;
+                var tesseractEngine = GetTesseractEngine();
+                lock (tesseractEngine)
+                {
+                    using var result = tesseractEngine.Process(pix, PageSegMode.SingleLine);
+                    text = result.GetText();
+                }
+
+                var slotSize = IconSlotSize();
+                var items = _config.RatStashDB.GetItems(item =>
+                {
+                    var size = new Vector2(item.GetSlotSize());
+                    return size == slotSize || size == slotSize.Flipped;
+                });
+                var verifiedItem = FindUniqueExactShortName(items, text);
+                if (verifiedItem == null)
+                    return;
+
+                _item = verifiedItem;
+                _itemExtraInfo = null;
+                _detectionConfidence = 1;
+                _rotated = new Vector2(verifiedItem.GetSlotSize()) != slotSize;
+                Logger.LogDebug(
+                    $"Verified low-confidence template match as '{verifiedItem.ShortName}' using icon title OCR."
+                );
+            }
+            finally
+            {
+                if (!ReferenceEquals(ocrIcon, _icon))
+                    ocrIcon.Dispose();
+            }
+        }
+
+        internal static Item FindUniqueExactShortName(IEnumerable<Item> items, string ocrText)
+        {
+            var normalizedText = NormalizeOcrShortName(ocrText);
+            if (string.IsNullOrWhiteSpace(normalizedText))
+                return null;
+
+            var matches = items.Where(item => NormalizeOcrShortName(item.ShortName) == normalizedText).Take(2).ToList();
+            return matches.Count == 1 ? matches[0] : null;
+        }
+
+        internal static string NormalizeOcrShortName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+
+            return OcrShortNameSanitizer.Replace(value.CyrillicToLatin().Trim(), "").Trim().ToLowerInvariant();
         }
 
         /// <summary>

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using RatEye;
@@ -140,6 +141,57 @@ public class OpenCvPipelineTests
         Assert.Contains("at least two pixels", exception.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("F-1/", "f-1")]
+    [InlineData(" F-1[\r\n", "f-1")]
+    [InlineData("", "")]
+    public void Icon_OCR_short_name_normalization_removes_UI_noise(string source, string expected) =>
+        Assert.Equal(expected, RatEye.Processing.Icon.NormalizeOcrShortName(source));
+
+    [Fact]
+    public void Icon_OCR_short_name_verification_requires_a_unique_exact_match()
+    {
+        RatStash.Item expected = new() { Id = "f1", ShortName = "F-1" };
+        RatStash.Item other = new() { Id = "other", ShortName = "Other" };
+
+        Assert.Same(expected, RatEye.Processing.Icon.FindUniqueExactShortName([expected, other], "F-1/"));
+        Assert.Null(
+            RatEye.Processing.Icon.FindUniqueExactShortName(
+                [expected, new RatStash.Item { Id = "duplicate", ShortName = "F-1" }],
+                "F-1"
+            )
+        );
+    }
+
+    [Fact]
+    public void Inventory_locates_adjacent_current_ui_cells_from_one_pixel_borders()
+    {
+        using Bitmap source = new(250, 150);
+        using (Graphics graphics = Graphics.FromImage(source))
+        {
+            graphics.Clear(System.Drawing.Color.Black);
+            using Pen gridPen = new(System.Drawing.Color.FromArgb(73, 81, 84), 1);
+            graphics.DrawRectangle(gridPen, 11, 36, 84, 84);
+            graphics.DrawRectangle(gridPen, 95, 36, 84, 84);
+        }
+
+        Config config = new()
+        {
+            ProcessingConfig = new Config.Processing
+            {
+                Scale = 4f / 3f,
+                InventoryConfig = new Config.Processing.Inventory { OptimizeHighlighted = false },
+            },
+        };
+
+        using RatEyeEngine engine = new(config, RatStash.Database.FromItems([]));
+        using RatEye.Processing.Inventory inventory = engine.NewInventory(source);
+
+        Assert.Equal(2, inventory.Icons.Count());
+        Assert.NotNull(inventory.LocateIcon(new Vector2(53, 79)));
+        Assert.NotNull(inventory.LocateIcon(new Vector2(137, 79)));
+    }
+
     [Fact]
     public void Blank_inspection_is_a_low_confidence_failure_without_ocr()
     {
@@ -245,6 +297,8 @@ public class OpenCvPipelineTests
                 using Mat iconMat = BitmapConverter.ToMat(iconSource);
                 Assert.True(Cv2.ImWrite(iconPath, iconMat));
             }
+            using (Bitmap blankSource = new(64, 64))
+                blankSource.Save(Path.Combine(root, "blank.png"), System.Drawing.Imaging.ImageFormat.Png);
             File.WriteAllText(Path.Combine(root, "broken.png"), "not an image");
 
             RatStash.Item expected = new()
@@ -263,12 +317,20 @@ public class OpenCvPipelineTests
                 Width = 1,
                 Height = 1,
             };
+            RatStash.Item blank = new()
+            {
+                Id = "blank",
+                Name = "Blank fixture",
+                ShortName = "Blank",
+                Width = 1,
+                Height = 1,
+            };
             Config config = CreateProcessingConfig(optimizeHighlighted: false);
             config.PathConfig.StaticIcons = root;
             config.ProcessingConfig.IconConfig.UseStaticIcons = true;
             config.ProcessingConfig.IconConfig.ScanRotatedIcons = false;
 
-            using RatEyeEngine engine = new(config, RatStash.Database.FromItems([expected, broken]));
+            using RatEyeEngine engine = new(config, RatStash.Database.FromItems([expected, broken, blank]));
             engine.Config.IconManager.EnsureStaticIconsLoaded(new Vector2(1, 1));
             KeyValuePair<string, Mat> loaded = Assert.Single(engine.Config.IconManager.StaticIcons[new Vector2(1, 1)]);
             Assert.EndsWith("fixture.png", loaded.Key, StringComparison.Ordinal);

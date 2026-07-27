@@ -285,6 +285,11 @@ public class RatEyeIconManagerTests
     private static void WriteIcon(string path, int width, int height)
     {
         using System.Drawing.Bitmap bitmap = new(width, height);
+        using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromImage(bitmap))
+        {
+            using System.Drawing.Brush brush = new System.Drawing.SolidBrush(System.Drawing.Color.White);
+            graphics.FillEllipse(brush, width / 4, height / 4, width / 2, height / 2);
+        }
         bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Png);
     }
 }

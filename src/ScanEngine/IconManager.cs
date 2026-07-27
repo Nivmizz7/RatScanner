@@ -230,9 +230,12 @@ namespace RatEye
                                     return;
 
                                 var useCache = _config.ProcessingConfig.UseCache;
+                                var sourceFile = new FileInfo(iconPath);
+                                var cacheIdentity =
+                                    $"{iconKey}|{sourceFile.Length}|{sourceFile.LastWriteTimeUtc.Ticks}";
                                 var cacheIconPath = Path.Combine(
                                     _cacheDirectory,
-                                    $"{iconKey.CacheKey(configHash)}.bmp"
+                                    $"{cacheIdentity.CacheKey(configHash)}.bmp"
                                 );
                                 icon = useCache ? TryLoadCachedIcon(cacheIconPath) : null;
                                 var cacheHit = icon != null;
@@ -242,6 +245,11 @@ namespace RatEye
                                     using var mat = Cv2.ImRead(iconPath, ImreadModes.Unchanged);
                                     if (mat.Empty())
                                         throw new InvalidDataException("The icon image is empty or unreadable.");
+                                    if (!HasVisibleIconContent(mat))
+                                    {
+                                        Logger.LogDebug("Skipping icon without visible pixels: " + iconPath);
+                                        return;
+                                    }
                                     icon = GetIconWithBackground(mat, item);
                                 }
 
@@ -301,6 +309,18 @@ namespace RatEye
                 PruneCacheBestEffort();
 
             return loadedIcons;
+        }
+
+        private static bool HasVisibleIconContent(Mat icon)
+        {
+            if (icon.Channels() == 4)
+            {
+                using var alpha = icon.ExtractChannel(3);
+                return Cv2.CountNonZero(alpha) > 0;
+            }
+
+            using var gray = icon.Channels() == 1 ? icon.Clone() : icon.CvtColor(ColorConversionCodes.BGR2GRAY);
+            return Cv2.CountNonZero(gray) > 0;
         }
 
         private static bool IsRecoverableIconLoadException(Exception exception) =>
