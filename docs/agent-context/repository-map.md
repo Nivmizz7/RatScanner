@@ -30,13 +30,13 @@ examples/                # Sample resolution screenshots
 
 | Concern | Where |
 | --- | --- |
-| Blazor host controls | `View/BlazorUI`, `BlazorOverlay`, `BlazorInteractableOverlay` |
+| Blazor host controls | `View/BlazorUI`, `BlazorOverlay` |
 | Minimal WPF UI | `View/MinimalMenu` |
 | Root router | `RazorApp.razor` → `/app` |
 | App shell layout | `Shared/AppLayout`, `MainLayout`, `SettingsLayout`, `OverlayLayout` |
-| Pages | `Pages/App/*`, `Pages/Overlay/*`, `Pages/InteractableOverlay/*` |
+| Pages | `Pages/App/*`, `Pages/Overlay/*` |
 | Shared components | `Shared/ScannerStatus`, `Components/HotkeySelector` |
-| Host HTML | `wwwroot/index.html`, `overlay.html`, `interactableOverlay.html` |
+| Host HTML | `wwwroot/index.html`, `overlay.html` |
 | Global theme CSS | `wwwroot/css/theme.css` |
 | Scoped page CSS | co-located `*.razor.css` |
 

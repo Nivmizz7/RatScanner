@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Xml.Linq;
+using RatScanner.View;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -18,6 +19,35 @@ public sealed class WebViewHostingContractTests
 
         Assert.Equal("True", window.Attribute("AllowsTransparency")?.Value);
         Assert.Equal("None", window.Attribute("WindowStyle")?.Value);
+    }
+
+    [Fact]
+    public void Passive_overlay_styles_remain_click_through_and_nonactivating()
+    {
+        Assert.Equal((nint)0x080800A0, OverlayNativeMethods.PassiveClickThroughStyles);
+    }
+
+    [Fact]
+    public void Frame_refresh_preserves_geometry_z_order_and_activation()
+    {
+        Assert.Equal((uint)0x0037, OverlayNativeMethods.SwpFrameChangedFlags);
+    }
+
+    [Fact]
+    public void Full_screen_interactable_search_overlay_is_not_shipped()
+    {
+        string root = FindRepositoryRoot();
+        string appRoot = Path.Combine(root, "src", "App");
+        string interactablePages = Path.Combine(appRoot, "Pages", "InteractableOverlay");
+
+        Assert.False(File.Exists(Path.Combine(appRoot, "View", "BlazorInteractableOverlay.xaml")));
+        if (Directory.Exists(interactablePages))
+            Assert.Empty(Directory.GetFiles(interactablePages, "*", SearchOption.AllDirectories));
+        Assert.DoesNotContain("/showOverlay", File.ReadAllText(Path.Combine(appRoot, "App.xaml.cs")));
+        Assert.DoesNotContain(
+            "BlazorInteractableOverlay",
+            File.ReadAllText(Path.Combine(appRoot, "View", "BlazorUI.xaml.cs"))
+        );
     }
 
     private static string FindRepositoryRoot()

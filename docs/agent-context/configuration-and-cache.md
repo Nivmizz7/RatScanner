@@ -24,7 +24,6 @@ Logical groups (nested static classes):
 | `UserInterface` | UI language |
 | `MinimalUi` | field visibility, opacity |
 | `Tracking` / `TarkovTracker` | DPAPI-protected PvP/PvE `.org` keys, legacy PvP-only `.io` key, team, refresh |
-| `Overlay.Search` | enable, blur, hotkey |
 | Other top-level | game mode, always on top, tray, TTLs, window position/mode |
 
 Game display preferences (monitor id, custom resolution/scale) are also on `RatConfig` and refreshed through `Display/*` services (`WindowsGameDisplayService`, `GameDisplayPreferencesStore`).

@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
@@ -82,61 +81,57 @@ public partial class BlazorOverlay : Window
         nint handle = new WindowInteropHelper(this).Handle;
         // SWP_NOZORDER keeps the WPF-declared Topmost state untouched and
         // SWP_NOACTIVATE prevents the resize from ever activating the overlay.
-        NativeMethods.SetWindowPos(
+        OverlayNativeMethods.SetWindowPos(
             handle,
             0,
             left,
             top,
             right - left,
             bottom - top,
-            NativeMethods.SwpNoZOrder | NativeMethods.SwpNoActivate
+            OverlayNativeMethods.SwpNoZOrder | OverlayNativeMethods.SwpNoActivate
         );
     }
 
     private void SetWindowStyle()
     {
-        const int gwlExStyle = -20; // GWL_EXSTYLE
-        const uint wsExToolWindow = 0x00000080; // WS_EX_TOOLWINDOW
-        // The passive overlay spans every screen; without WS_EX_TRANSPARENT it
-        // swallows all mouse input the moment a scan tooltip renders.
-        const uint wsExTransparent = 0x00000020; // WS_EX_TRANSPARENT (click-through)
-        const uint wsExLayered = 0x00080000; // WS_EX_LAYERED (required by WS_EX_TRANSPARENT)
-        const uint wsExNoActivate = 0x08000000; // WS_EX_NOACTIVATE (never steal focus from the game)
-        const nint clickThroughStyles = (nint)(wsExToolWindow | wsExTransparent | wsExLayered | wsExNoActivate);
-
         nint handle = new WindowInteropHelper(this).Handle;
         if (handle == 0)
             return;
 
-        NativeMethods.SetWindowLongPtr(
+        // The passive overlay spans every screen; without these styles it can
+        // swallow all mouse input the moment its WebView is created.
+        OverlayNativeMethods.SetWindowLongPtr(
             handle,
-            gwlExStyle,
-            NativeMethods.GetWindowLongPtr(handle, gwlExStyle) | clickThroughStyles
+            OverlayNativeMethods.GwlExStyle,
+            OverlayNativeMethods.GetWindowLongPtr(handle, OverlayNativeMethods.GwlExStyle)
+                | OverlayNativeMethods.PassiveClickThroughStyles
         );
         // Extended-style changes are cached by Windows and only take effect
         // after a frame-changed SetWindowPos. Without this the overlay can keep
         // swallowing every click on the desktop/taskbar despite the new style.
-        NativeMethods.SetWindowPos(handle, 0, 0, 0, 0, 0, NativeMethods.SwpFrameChangedFlags);
+        OverlayNativeMethods.SetWindowPos(handle, 0, 0, 0, 0, 0, OverlayNativeMethods.SwpFrameChangedFlags);
 
         // WebView2 creates its own child input windows beneath the WPF host;
         // hit-test transparency on the top-level window alone does not cover
         // them. Apply click-through to every descendant as well.
-        ApplyStyleToDescendants(handle, gwlExStyle, clickThroughStyles);
+        ApplyStyleToDescendants(handle);
     }
 
-    private static void ApplyStyleToDescendants(nint parent, int gwlExStyle, nint styles)
+    private static void ApplyStyleToDescendants(nint parent)
     {
-        NativeMethods.EnumChildWindows(
+        // EnumChildWindows already walks the complete descendant tree. Do not
+        // recurse here or deeper WebView2 windows are frame-refreshed repeatedly.
+        OverlayNativeMethods.EnumChildWindows(
             parent,
             (child, _) =>
             {
-                NativeMethods.SetWindowLongPtr(
+                OverlayNativeMethods.SetWindowLongPtr(
                     child,
-                    gwlExStyle,
-                    NativeMethods.GetWindowLongPtr(child, gwlExStyle) | styles
+                    OverlayNativeMethods.GwlExStyle,
+                    OverlayNativeMethods.GetWindowLongPtr(child, OverlayNativeMethods.GwlExStyle)
+                        | OverlayNativeMethods.PassiveClickThroughStyles
                 );
-                NativeMethods.SetWindowPos(child, 0, 0, 0, 0, 0, NativeMethods.SwpFrameChangedFlags);
-                ApplyStyleToDescendants(child, gwlExStyle, styles);
+                OverlayNativeMethods.SetWindowPos(child, 0, 0, 0, 0, 0, OverlayNativeMethods.SwpFrameChangedFlags);
                 return true;
             },
             0
@@ -171,38 +166,5 @@ public partial class BlazorOverlay : Window
         blazorOverlayWebView?.WebView?.Dispose();
         Resources.Remove("services");
         base.OnClosed(e);
-    }
-
-    private static class NativeMethods
-    {
-        public const uint SwpNoZOrder = 0x0004;
-        public const uint SwpNoActivate = 0x0010;
-        public const uint SwpFrameChanged = 0x0020;
-        public const uint SwpNoMove = 0x0002;
-        public const uint SwpNoSize = 0x0001;
-        public const uint SwpFrameChangedFlags = SwpNoMove | SwpNoSize | SwpNoZOrder | SwpNoActivate | SwpFrameChanged;
-
-        public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
-
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")]
-        public static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
-        public static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern bool SetWindowPos(
-            nint hWnd,
-            nint hWndInsertAfter,
-            int X,
-            int Y,
-            int cx,
-            int cy,
-            uint uFlags
-        );
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool EnumChildWindows(nint hWndParent, EnumWindowsProc lpEnumFunc, nint lParam);
     }
 }

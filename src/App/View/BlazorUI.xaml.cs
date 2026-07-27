@@ -51,7 +51,6 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     }
 
     public static BlazorOverlay BlazorOverlay { get; set; } = null!;
-    public static BlazorInteractableOverlay BlazorInteractableOverlay { get; set; } = null!;
 
     public IServiceProvider Services => _serviceProvider;
 
@@ -107,8 +106,6 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         BlazorOverlay ??= new BlazorOverlay(_serviceProvider);
         BlazorOverlay.Show();
-
-        BlazorInteractableOverlay ??= new BlazorInteractableOverlay(_serviceProvider);
 
         InitializeComponent();
         Loaded += BlazorUI_Loaded;
@@ -234,13 +231,11 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
 
-        BlazorInteractableOverlay?.Close();
         BlazorOverlay?.Close();
         // WebView may not be created if startup failed or exit happened before init.
         blazorWebView?.WebView?.Dispose();
         Resources.Remove("services");
         _serviceProvider.Dispose();
-        BlazorInteractableOverlay = null!;
         BlazorOverlay = null!;
     }
 }

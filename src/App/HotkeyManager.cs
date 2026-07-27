@@ -1,11 +1,8 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
-using System.Windows;
 using System.Windows.Input;
-using RatScanner.View;
 using static RatScanner.RatConfig;
-using OverlayC = RatScanner.RatConfig.Overlay;
 
 namespace RatScanner;
 
@@ -17,8 +14,6 @@ internal sealed class HotkeyManager : IDisposable
 
     internal ActiveHotkey NameScanHotkey;
     internal ActiveHotkey IconScanHotkey;
-    internal ActiveHotkey OpenInteractableOverlayHotkey;
-    internal ActiveHotkey CloseInteractableOverlayHotkey;
 
     internal HotkeyManager(RatScannerMain owner)
     {
@@ -38,12 +33,7 @@ internal sealed class HotkeyManager : IDisposable
     /// <remarks>
     /// Called by the constructor
     /// </remarks>
-    [MemberNotNull(
-        nameof(NameScanHotkey),
-        nameof(IconScanHotkey),
-        nameof(OpenInteractableOverlayHotkey),
-        nameof(CloseInteractableOverlayHotkey)
-    )]
+    [MemberNotNull(nameof(NameScanHotkey), nameof(IconScanHotkey))]
     internal void RegisterHotkeys()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -71,16 +61,6 @@ internal sealed class HotkeyManager : IDisposable
             NameScan.Enable,
             canHandle: e => !IconScanHotkey.Enabled || !IconScanHotkey.IsPressed(e)
         );
-        OpenInteractableOverlayHotkey = new ActiveHotkey(
-            OverlayC.Search.Hotkey,
-            OnOpenInteractableOverlayHotkey,
-            enabled: OverlayC.Search.Enable,
-            suppressHotkey: false
-        );
-        CloseInteractableOverlayHotkey = new ActiveHotkey(
-            new Hotkey(new[] { Key.Escape }),
-            OnCloseInteractableOverlayHotkey
-        );
     }
 
     /// <summary>
@@ -90,8 +70,6 @@ internal sealed class HotkeyManager : IDisposable
     {
         NameScanHotkey?.Dispose();
         IconScanHotkey?.Dispose();
-        OpenInteractableOverlayHotkey?.Dispose();
-        CloseInteractableOverlayHotkey?.Dispose();
     }
 
     public void Dispose()
@@ -113,18 +91,6 @@ internal sealed class HotkeyManager : IDisposable
             UserActivityHelper.Stop(true, true, false);
         }
         _disposed = true;
-    }
-
-    private static void Wrap<T>(Func<T> func)
-    {
-        try
-        {
-            func();
-        }
-        catch (Exception e)
-        {
-            Logger.LogWarning("A RatScanner hotkey action failed.", e);
-        }
     }
 
     private static void Wrap(Action action)
@@ -168,19 +134,5 @@ internal sealed class HotkeyManager : IDisposable
             _owner.IconScan(UserActivityHelper.GetMousePosition());
             Logger.LogDebug("OnIconScanHotkey: EXIT");
         });
-    }
-
-    private void OnOpenInteractableOverlayHotkey(object? sender, KeyUpEventArgs e)
-    {
-        Wrap(() =>
-            Application.Current.Dispatcher.Invoke(() => Wrap(() => BlazorUI.BlazorInteractableOverlay.ShowOverlay()))
-        );
-    }
-
-    private void OnCloseInteractableOverlayHotkey(object? sender, KeyUpEventArgs e)
-    {
-        Wrap(() =>
-            Application.Current.Dispatcher.Invoke(() => Wrap(() => BlazorUI.BlazorInteractableOverlay.HideOverlay()))
-        );
     }
 }

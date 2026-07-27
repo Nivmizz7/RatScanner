@@ -9,7 +9,6 @@ Scoped mandatory rules also live in `src/App/AGENTS.md`.
 - Host pages:
   - Main: `wwwroot/index.html` → `RazorApp` → routes under `/app`
   - Overlay tooltip: `wwwroot/overlay.html` → `/overlay`
-  - Interactable overlay: `wwwroot/interactableOverlay.html` → `/interactableOverlay`
 - Each `BlazorWebView` sets its route with `StartPath`. Do not replace this with `NavigateTo` from a root component: all routers scan the same assembly, so an initial `/` render leaks the main app page into transparent overlay windows.
 - Icons/static Data files are exposed to WebView via virtual host `local.data` → `Data/`.
 
@@ -34,11 +33,10 @@ Package version: see App `.csproj` only.
 | App shell (collapsible sidebar, PVP/PVE selector) | `Shared/AppLayout.razor(+.css)` |
 | Mud providers / shared theme | `Shared/MainLayout.razor` |
 | Settings chrome | `Shared/SettingsLayout.razor(+.css)` |
-| Overlay shells | `Shared/OverlayLayout.razor`, overlay page trees |
+| Overlay shell | `Shared/OverlayLayout.razor`, passive tooltip page |
 | Scanner status chip | `Shared/ScannerStatus.razor(+.css)` |
 | Primary scan / search UI | `Pages/App/Index.razor(+.css)` |
 | Settings pages | `Pages/App/Settings/*` |
-| Interactable search/maps | `Pages/InteractableOverlay/*` |
 | Scan tooltip overlay | `Pages/Overlay/*` |
 
 Presentation logic for results: `Presentation/*` and `ViewModel/*`.
@@ -101,8 +99,7 @@ After material UI changes, manually verify at least:
 2. Settings general page (language / display controls if touched).
 3. Settings advanced page (advanced capture / diagnostics / detected configuration if touched).
 4. Sidebar navigation open/close on narrow window.
-5. Optional: interactable overlay search.
-6. Optional: DPI scale / multi-monitor if display logic changed.
+5. Optional: DPI scale / multi-monitor if display logic changed.
 
 ## Screenshot acquisition (UI-adjacent)
 

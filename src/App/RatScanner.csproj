@@ -75,7 +75,6 @@
 
 	<ItemGroup>
 		<Content Remove="Data\maps.json" />
-		<Content Remove="wwwroot\interactableOverlay.html" />
 	</ItemGroup>
 
 	<ItemGroup>
