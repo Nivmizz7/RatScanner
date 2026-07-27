@@ -79,8 +79,11 @@ Help: [FAQ][faq-page] · [Discord][discord] · [TarkovTracker Discord][tt-discor
 
 Requirements: **64-bit Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
-1. Clone **this** repo: `https://github.com/tarkovtracker-org/RatScanner`
+1. Clone **this** repo recursively: `git clone --recurse-submodules https://github.com/tarkovtracker-org/RatScanner`
 2. From the repo root, run **`dev.bat`** (downloads icons/OCR data and restores packages on first run)
+
+For an existing clone, initialize RatEye with
+`git submodule update --init --recursive`.
 
 ### Day-to-day coding
 
@@ -97,7 +100,7 @@ Requirements: **64-bit Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/dow
 
 ```text
 src/App/           # Main WPF app
-src/ScanEngine/    # Scan engine (historical RatEye; in-tree)
+src/ScanEngine/    # Standalone RatEye Git submodule
 tests/             # Unit tests
 scripts/           # dev + data setup
 ```
@@ -139,7 +142,7 @@ See `CONTRIBUTING.md`. PRs and issues: **[tarkovtracker-org/RatScanner][fork-rep
 
 Default integration branch is **`master`**. Day-to-day work uses short-lived `feat/…` / `fix/…` branches and PRs against the fork.
 
-**Agent / contributor architecture docs:** root [`AGENTS.md`](AGENTS.md) (control plane) and [`docs/agent-context/`](docs/agent-context/README.md) (focused context). Nested `AGENTS.md` files under `src/App`, `src/ScanEngine`, and `tests` apply path-scoped rules. Implementation and project files override stale documentation.
+**Agent / contributor architecture docs:** root [`AGENTS.md`](AGENTS.md) (control plane) and [`docs/agent-context/`](docs/agent-context/README.md) (focused context). RatEye has its own scoped instructions in the `src/ScanEngine` submodule; `src/App/AGENTS.md` and `tests/AGENTS.md` apply to this repository. Implementation and project files override stale documentation.
 
 ## Community & support
 

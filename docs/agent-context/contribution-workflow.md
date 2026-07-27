@@ -64,10 +64,11 @@ When a PR changes architecture, commands, packages, CI, config paths, or behavio
 2. Update the matching `docs/agent-context/*.md`.
 3. Update nested `AGENTS.md` if scoped rules changed.
 4. Update `README.md` / `CONTRIBUTING.md` when user-facing workflow changes.
-5. Never leave agent docs claiming GraphQL bulk catalog, NuGet RatEye, or Linux support.
+5. Never leave agent docs claiming GraphQL bulk catalog, NuGet RatEye consumption, vendored RatEye, or Linux support.
 
 ## License and attribution
 
 - Keep `LICENSE` in published output.
 - Preserve “software has been modified” notices (README, Credits).
-- Scan engine provenance note: `src/ScanEngine/VENDOR.md`.
+- Scan engine source: `src/ScanEngine` submodule from `tarkovtracker-org/RatEye`.
+- When both repositories change, push the RatEye commit before any RatScanner branch that references its gitlink.

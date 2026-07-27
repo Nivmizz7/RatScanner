@@ -10,3 +10,4 @@
 **/*.xml
 **/obj/**
 **/bin/**
+src/ScanEngine/**

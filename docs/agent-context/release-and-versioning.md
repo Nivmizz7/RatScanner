@@ -11,7 +11,7 @@
 
 **Bump only** `<Version>` in `src/App/RatScanner.csproj`. Do not mirror historical upstream patch numbers.
 
-ScanEngine's own `<Version>` is historical engine packaging metadata; product releases are App-driven.
+RatEye owns its own package version in the submodule. RatScanner product releases remain App-driven and do not reuse RatEye's version.
 
 ### Semver guidance
 

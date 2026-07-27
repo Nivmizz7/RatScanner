@@ -23,7 +23,7 @@ Context docs are not a second source of product truth. If prose disagrees with c
 | [local-development.md](local-development.md) | Setup, `dev.bat`, data install, watch loop failures |
 | [build-and-validation.md](build-and-validation.md) | Restore/build/test/format, what to run per change type |
 | [app-ui.md](app-ui.md) | Razor, MudBlazor, CSS, themes, host pages, layouts |
-| [scan-engine.md](scan-engine.md) | OCR/icon pipeline, RatEye engine, vendoring rules |
+| [scan-engine.md](scan-engine.md) | OCR/icon pipeline and standalone RatEye boundary |
 | [data-integrations.md](data-integrations.md) | json.tarkov.dev, slim maps GraphQL, TarkovTracker, caches |
 | [configuration-and-cache.md](configuration-and-cache.md) | `config.cfg`, paths, TTL, offline cache |
 | [localization.md](localization.md) | UI `i18n` files and `LocalizationService` |
@@ -38,7 +38,7 @@ Root routing table: [`AGENTS.md`](../../AGENTS.md).
 1. When you change architecture, commands, packages, CI, paths, or user-visible behavior, update the **matching** context file(s) in the same change.
 2. Prefer links to authoritative files (`*.csproj`, scripts, workflows) over restating content that will drift.
 3. Do not copy package version numbers into these docs.
-4. Nested `src/App/AGENTS.md`, `src/ScanEngine/AGENTS.md`, and `tests/AGENTS.md` hold **scoped** rules; keep them short; point here for depth.
+4. Nested `src/App/AGENTS.md` and `tests/AGENTS.md` hold RatScanner-scoped rules. The `src/ScanEngine` submodule supplies RatEye's own `AGENTS.md`.
 5. Do not re-expand the root control plane into a subsystem dump.
 6. After structural doc changes, run `scripts/check-agent-docs.ps1` (also run in CI).
 7. After any `*.md` edit, run `scripts/lint-markdown.ps1 -Fix` (markdownlint-cli2; tables/fences/whitespace). CI enforces check mode; the optional hook checks without rewriting staged content.

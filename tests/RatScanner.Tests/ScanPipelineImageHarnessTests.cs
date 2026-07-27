@@ -181,12 +181,7 @@ public class ScanPipelineImageHarnessTests
         // the way LocateIconHighlighted pads a located highlight region.
         Rectangle cell = new(409, 119, 104, 104);
         using Bitmap crop = screenshot.Clone(cell, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-        using RatEye.Processing.Icon icon = new(
-            crop,
-            Vector2.Zero,
-            new Vector2(cell.Width, cell.Height),
-            engine.Config
-        );
+        using RatEye.Processing.Icon icon = engine.NewIcon(crop, Vector2.Zero, new Vector2(cell.Width, cell.Height));
 
         _output.WriteLine($"Item={icon.Item?.Name ?? "<null>"} conf={icon.DetectionConfidence}");
         Assert.NotNull(icon.Item);
@@ -209,12 +204,7 @@ public class ScanPipelineImageHarnessTests
         // T30 backpack equipment slot on the gear screen, padded like a located highlight.
         Rectangle cell = new(864, 858, 195, 213);
         using Bitmap crop = screenshot.Clone(cell, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-        using RatEye.Processing.Icon icon = new(
-            crop,
-            Vector2.Zero,
-            new Vector2(cell.Width, cell.Height),
-            engine.Config
-        );
+        using RatEye.Processing.Icon icon = engine.NewIcon(crop, Vector2.Zero, new Vector2(cell.Width, cell.Height));
 
         _output.WriteLine($"Item={icon.Item?.Name ?? "<null>"} conf={icon.DetectionConfidence}");
         Assert.True(

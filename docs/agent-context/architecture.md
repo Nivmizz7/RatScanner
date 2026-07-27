@@ -120,4 +120,4 @@ flowchart TD
 ## Related nested rules
 
 - `src/App/AGENTS.md` — App-scoped constraints.
-- `src/ScanEngine/AGENTS.md` — vendoring / namespaces.
+- `src/ScanEngine/AGENTS.md` — standalone RatEye boundaries, tests, and packaging.

@@ -28,6 +28,7 @@ Supported workflow for this fork:
 Requirements: **64-bit Windows**, [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```bat
+git submodule update --init --recursive
 dev.bat                 :: watch rebuild + restart (preferred)
 dev.bat -Once           :: run once
 dotnet restore RatScanner.sln
@@ -51,7 +52,7 @@ Agent and architecture guidance: root `AGENTS.md` + `docs/agent-context/`.
 - Prefer clear structure over commentary that restates the code.
 - MudBlazor/CSS: prefer component parameters and specificity over `!important`.
 - Bulk catalog data goes through `TarkovDevAPI` (json.tarkov.dev); maps may use intentional slim GraphQL + JSON fallback. Do not reintroduce GraphQL schema generation for bulk catalog or a NuGet `RatEye` package.
-- Edit the in-repo scan engine under `src/ScanEngine/` (namespaces remain `RatEye`).
+- `src/ScanEngine/` is the `tarkovtracker-org/RatEye` submodule. Commit engine changes in RatEye first, then update RatScanner's gitlink; RatEye must not reference RatScanner.
 
 ## Documentation
 

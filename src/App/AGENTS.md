@@ -9,7 +9,7 @@ WPF host, Blazor WebView UI, configuration, tarkov.dev/TarkovTracker clients, sc
 ## Mandatory
 
 1. **Windows x64-only** host assumptions (WPF, WebView2, WinForms tray/screens/DPI, x64 OpenCvSharp native runtime, DPAPI).
-2. Reference scan engine via **ProjectReference** to `../ScanEngine/RatEye.csproj` only — never NuGet `RatEye`.
+2. Reference the standalone scan engine via **ProjectReference** to `../ScanEngine/RatEye/RatEye.csproj` only — never NuGet `RatEye`.
 3. Bulk catalog I/O goes through **`TarkovDevAPI`**. Keep maps off cold-start critical path; slim GraphQL maps + JSON fallback is intentional.
 4. Product **`<Version>`** lives only in `RatScanner.csproj`. Product name is `RatScanner` (`Constants.Branding`); user-agent is `RatScanner/…`.
 5. **UI styling:** prefer MudBlazor parameters and specificity; avoid new `!important` except clear a11y/third-party necessities. Global tokens: `wwwroot/css/theme.css`.

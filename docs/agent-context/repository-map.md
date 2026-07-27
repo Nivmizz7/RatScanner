@@ -7,7 +7,7 @@ Organized by **concern**. Exact filenames change; start here, then confirm on di
 ```text
 RatScanner.sln
 src/App/                 # WPF + Blazor app (assembly RatScanner)
-src/ScanEngine/          # Vendored scan engine (assembly RatEye)
+src/ScanEngine/          # Standalone RatEye Git submodule
 tests/RatScanner.Tests/  # xUnit tests
 scripts/                 # dev, data setup, zip helper, agent-docs check, markdown lint, optional bench
 .github/workflows/       # CI build + release
@@ -60,11 +60,11 @@ examples/                # Sample resolution screenshots
 
 | Concern | Where |
 | --- | --- |
-| Engine facade | `src/ScanEngine/RatEyeEngine.cs` |
-| Config | `src/ScanEngine/Config/*` |
-| Inspection / inventory / icon | `src/ScanEngine/Processing/*` |
-| Icon templates | `src/ScanEngine/IconManager.cs`, `Resources/` |
-| Provenance | `src/ScanEngine/VENDOR.md` |
+| Engine facade | `src/ScanEngine/RatEye/RatEyeEngine.cs` |
+| Config | `src/ScanEngine/RatEye/Config/*` |
+| Inspection / inventory / icon | `src/ScanEngine/RatEye/Processing/*` |
+| Icon templates | `src/ScanEngine/RatEye/IconManager.cs`, `Resources/` |
+| Replay benchmark | `src/ScanEngine/RatEye.Benchmarks` |
 
 ## Data integrations
 
@@ -139,9 +139,9 @@ examples/                # Sample resolution screenshots
 | CSharpier | `dotnet-tools.json`, `.csharpierrc.json`, `.csharpierignore`; invoke via `dotnet tool restore` then `dotnet csharpier check .` / `format .` |
 | Editor defaults | `.editorconfig`, `.vscode/settings.json` |
 
-## Vendored code
+## Source dependency
 
-See `src/ScanEngine/VENDOR.md`. Do not reintroduce NuGet RatEye.
+`src/ScanEngine` is the standalone RatEye submodule. Initialize it recursively and do not reintroduce a NuGet RatEye dependency.
 
 ## Intentionally not product source
 

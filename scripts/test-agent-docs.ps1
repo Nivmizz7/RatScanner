@@ -90,11 +90,13 @@ try {
         'CONTRIBUTING.md',
         'FAQ.md',
         'LICENSE',
+        '.gitmodules',
         'README.md',
         'RatScanner.sln',
         'dev.bat',
         'publish.bat',
         'dotnet-tools.json',
+        'Directory.Build.targets',
         '.csharpierrc.json',
         '.markdownlint-cli2.jsonc',
         '.markdownlint.json',
@@ -103,8 +105,7 @@ try {
         'src\App\AGENTS.md',
         'src\App\RatScanner.csproj',
         'src\ScanEngine\AGENTS.md',
-        'src\ScanEngine\RatEye.csproj',
-        'src\ScanEngine\VENDOR.md',
+        'src\ScanEngine\RatEye\RatEye.csproj',
         'tests\AGENTS.md',
         'tests\RatScanner.Tests\RatScanner.Tests.csproj'
     )) {
@@ -164,13 +165,25 @@ try {
         Restore-FixtureFile -RelativePath 'src\App\RatScanner.csproj'
     }
 
+    $gitmodulesPath = Join-Path $fixtureRoot '.gitmodules'
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        "[submodule `"RatEye`"]`r`n`tpath = src/ScanEngine`r`n`turl = https://example.invalid/RatEye.git`r`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'RatEye submodule points at an unexpected repository'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
     [xml]$appProject = Get-Content -LiteralPath $appProjectPath -Raw
     foreach ($reference in @($appProject.SelectNodes("//*[local-name()='ProjectReference']"))) {
         [void]$reference.ParentNode.RemoveChild($reference)
     }
     $appProject.Save($appProjectPath)
     try {
-        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'App must ProjectReference src\ScanEngine\RatEye.csproj' -Scenario 'missing in-tree ScanEngine ProjectReference'
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'App must ProjectReference src\ScanEngine\RatEye\RatEye.csproj' -Scenario 'missing RatEye submodule ProjectReference'
     }
     finally {
         Restore-FixtureFile -RelativePath 'src\App\RatScanner.csproj'
@@ -199,6 +212,18 @@ try {
     }
 
     $workflowPath = Join-Path $fixtureRoot '.github\workflows\build.yml'
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        [regex]::Replace($workflow, '(?m)^\s*submodules:\s*recursive\r?\n', '')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'CI omits RatEye submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
     $wrongPushWorkflow = [regex]::Replace(
         $workflow,

@@ -106,6 +106,14 @@
                                     ValueChanged="@(_ => StateHasChanged())"
                                     Label="@Localizer["LogDebugInfo"]"
                                     Persist="SettingsVM.SetLogDebugAsync" />
+            <MudButton Variant="Variant.Outlined"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportScanDiagnostics"
+                       Class="mt-3">
+                @Localizer["ExportScanDiagnostics"]
+            </MudButton>
+            <p class="settings-help mt-2">@Localizer["ExportScanDiagnosticsDescription"]</p>
         </section>
 
         <section class="settings-section">
@@ -177,6 +185,21 @@
     {
         SettingsVM.ResetDisplayDraftToDetected();
         await PersistDisplayAsync();
+    }
+
+    private void ExportScanDiagnostics()
+    {
+        ScanDiagnosticExportResult result = RatScannerMain.Instance.ExportLastScanDiagnostics();
+        if (result.Succeeded)
+        {
+            Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);
+            return;
+        }
+
+        string message = result.Error is null
+            ? Localizer["NoScanDiagnostics"]
+            : string.Format(Localizer["ScanDiagnosticsExportFailed"], result.Error);
+        Snackbar.Add(message, Severity.Error);
     }
 
     private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);

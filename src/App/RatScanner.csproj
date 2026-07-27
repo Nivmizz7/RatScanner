@@ -61,8 +61,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- In-repo scan engine (vendored RatEye sources under src/ScanEngine; do not restore NuGet RatEye). -->
-		<ProjectReference Include="..\ScanEngine\RatEye.csproj" />
+		<!-- Standalone RatEye source checked out as the src/ScanEngine submodule. -->
+		<ProjectReference Include="..\ScanEngine\RatEye\RatEye.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

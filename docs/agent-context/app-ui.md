@@ -116,9 +116,9 @@ The always-visible PVP/PVE selector in `AppLayout` switches mode-specific tarkov
 | Package family | Project |
 | --- | --- |
 | WebView.Wpf, MudBlazor, Win Compatibility, SingleInstanceCore | App |
-| Scan/vision packages for processing | ScanEngine (plus App for Tesseract where referenced) |
+| Scan/vision packages for processing | Standalone RatEye submodule (plus App for Tesseract where referenced) |
 
-Do not move MudBlazor into ScanEngine.
+Do not move MudBlazor into RatEye.
 
 ## Practical UI change checklist
 

@@ -5,7 +5,7 @@ VisualStudioVersion = 17.1.31911.260
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RatScanner", "src\App\RatScanner.csproj", "{6C9373BE-454F-4A4A-850E-17AC27C76992}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RatEye", "src\ScanEngine\RatEye.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RatEye", "src\ScanEngine\RatEye\RatEye.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RatScanner.Tests", "tests\RatScanner.Tests\RatScanner.Tests.csproj", "{C9A0B012-A8AD-4396-B7B8-4CA69308C4CA}"
 EndProject

@@ -1,10 +1,10 @@
 # Scan engine
 
-Scoped mandatory rules: `src/ScanEngine/AGENTS.md`. Provenance: `src/ScanEngine/VENDOR.md`.
+RatEye's scoped mandatory rules live in the `src/ScanEngine/AGENTS.md` submodule file.
 
 ## Role
 
-The scan engine (folder `src/ScanEngine/`, assembly and namespaces still **`RatEye`**) turns screenshots into item matches using:
+The standalone RatEye submodule (`src/ScanEngine/`, project under `RatEye/`, assembly and namespaces **`RatEye`**) turns screenshots into item matches using:
 
 - **Inspection / multi-inspection** — name-plate OCR path (Tesseract).
 - **Inventory + icon template matching** — icon scan path (OpenCvSharp), optional rotation.
@@ -56,7 +56,7 @@ From App output `Data/` (installed via setup-data):
 - Tesseract traineddata
 - Correlation helpers as used by config paths
 
-Native OpenCV bits come from OpenCvSharp Windows packages on ScanEngine. Missing Data degrades or breaks scanning; that is a setup problem, not a reason to restore NuGet RatEye.
+Native OpenCV bits come from OpenCvSharp Windows packages on RatEye. Missing Data degrades or breaks scanning; that is a setup problem, not a reason to consume the RatEye NuGet package.
 
 ## Confidence and presentation handoff
 
@@ -64,28 +64,30 @@ Engine results surface through App scan types (`ItemNameScan` / `ItemIconScan`) 
 
 ## Fixture and accuracy expectations
 
-- Upstream RatEye test binaries are **not** vendored (size). See `VENDOR.md`.
-- App unit tests cover limited cache/presentation contracts plus OpenCV native/pipeline smoke (`OpenCvPipelineTests` uses **synthetic** bitmaps only — not game assets) and icon-cache regeneration.
-- Accuracy-sensitive changes (OCR name match, icon template thresholds) still require manual scan smoke with real Data (+ game or carefully prepared captures). Do not treat synthetic OpenCV tests as accuracy proof.
+- RatEye owns synthetic OpenCV, cache, processing, historical fixture, and replay-benchmark coverage.
+- RatScanner keeps `ScanPipelineImageHarnessTests` because it mirrors App-owned data projection and capture/crop geometry.
+- Accuracy-sensitive changes require a RatEye benchmark report and, when practical, a manual scan smoke with real Data. Do not treat synthetic OpenCV tests as accuracy proof.
+- The App retains only the latest captured scan in memory and exports it from Advanced settings on explicit user action. RatEye owns the versioned replay contract and benchmark runner.
 - Prefer deterministic pure helpers when adding new regression coverage.
 - Keep OpenCvSharp Extensions + Windows packages on the **same** version; do not adopt slim runtimes unless every used module is present.
 
-## Vendoring rules
+## Repository boundary
 
-- Sources vendored from historical RatEye tag noted in `VENDOR.md`.
-- Referenced only via `ProjectReference` from App.
-- **Never** add NuGet package `RatEye` back to the solution.
-- Do not publish this project as a NuGet package from the monorepo (`IsPackable=false`).
-- Namespaces stay `RatEye` unless a deliberate, coordinated rename is requested.
+- `src/ScanEngine` is a Git submodule of `tarkovtracker-org/RatEye`.
+- App references `src/ScanEngine/RatEye/RatEye.csproj` directly.
+- **Never** add a NuGet package reference for RatEye to RatScanner.
+- RatEye remains independently packable and versioned; RatScanner's product version remains App-owned.
+- RatEye must never reference RatScanner, WPF, Blazor, HTTP clients, or App settings.
+- Commit and validate RatEye first, then update RatScanner's gitlink.
 
 ## Changing processing behavior
 
-1. Read this file + nested ScanEngine `AGENTS.md` + relevant Processing types.
-2. Prefer minimal, testable changes inside ScanEngine when the logic is pure image matching.
+1. Read this file + RatEye's `AGENTS.md` + relevant Processing types.
+2. Prefer minimal, testable changes inside RatEye when the logic is pure image matching.
 3. Keep App ↔ engine contract stable (Config shape, Item ids via RatStash).
 4. Rebuild App after engine changes (ProjectReference).
-5. Validate with build/tests; manual scan smoke for accuracy-sensitive edits.
-6. Update `VENDOR.md` only when provenance or license facts change — not for every code tweak.
+5. Validate RatEye independently, then RatScanner; replay fixtures/manual scan smoke for accuracy-sensitive edits.
+6. Keep RatEye and RatScanner commits reviewable and preserve the dependency ordering.
 
 ## What not to put in ScanEngine
 
@@ -94,4 +96,4 @@ Engine results surface through App scan types (`ItemNameScan` / `ItemIconScan`) 
 - TarkovTracker progress
 - Application settings persistence
 
-Keep the engine library-shaped even though it lives in this repo.
+Keep the engine library-shaped in its standalone repository.

@@ -29,7 +29,7 @@ It does **not** read game memory or inject into the client.
 | Host | WPF (`PageSwitcher`, tray, jump list) |
 | Tray / multi-monitor | WinForms (`NotifyIcon`, `Screen`) — reason both WPF and WinForms are enabled |
 | Embedded UI | Blazor Hybrid (`Microsoft.AspNetCore.Components.WebView.Wpf`) + MudBlazor |
-| Scan engine | In-repo `src/ScanEngine` (assembly/namespaces `RatEye`) |
+| Scan engine | Standalone `tarkovtracker-org/RatEye` submodule at `src/ScanEngine` |
 | Item DB for matching | RatStash database built from tarkov.dev item projections |
 | OCR | Tesseract (+ traineddata under `Data/`) |
 | Vision | OpenCvSharp (ScanEngine) |
@@ -61,7 +61,7 @@ License: root `LICENSE` (Elastic License 2.0–based). Redistribution must inclu
 
 - Not a memory cheat / ESP / aim aid.
 - Not an x86, Linux, or cross-platform client.
-- Not a re-publish of the scan engine as a separate NuGet from this monorepo (`IsPackable=false` on ScanEngine).
+- Not a NuGet consumer of RatEye. RatScanner references the checked-out submodule source; RatEye owns its package/version independently.
 - Not GraphQL-first bulk catalog (json documents are primary; maps are the intentional slim GraphQL exception).
 - Not day-to-day use of `publish.bat` for iteration.
 - Not tracking historical upstream version numbers for this project's releases.

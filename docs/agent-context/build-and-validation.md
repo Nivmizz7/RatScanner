@@ -30,7 +30,7 @@ dotnet test RatScanner.sln -c Release --no-restore
 
 CI builds and tests Release on `windows-latest` with .NET 10.x.
 
-Current test project: `tests/RatScanner.Tests` (xUnit v3). It covers selected pure logic and reliability contracts, configuration migration, localization fallback/key parity, and synthetic OpenCV/native-loading smoke. **Not** a full UI or live-scan accuracy suite. Scoped rules: `tests/AGENTS.md`.
+Current App test project: `tests/RatScanner.Tests` (xUnit v3). It covers App logic and reliability contracts, configuration migration, localization fallback/key parity, and the optional App-owned capture/crop harness. RatEye's submodule owns engine/OpenCV/cache tests and fixture replay. **Neither** is a substitute for full UI or live-scan verification. Scoped rules: `tests/AGENTS.md`.
 
 ### Formatting
 
@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-agent-docs.ps1
 ```
 
-The integrity check validates required paths, context routing, local Markdown links, structurally parsed MSBuild references/package versions, ScanEngine packaging guards, and primary-branch consistency while excluding generated output. The adversarial test builds a disposable path-with-spaces fixture and proves representative failures are non-zero and actionable. Both run in CI.
+The integrity check validates required paths, context routing, local Markdown links, structurally parsed MSBuild references/package versions, RatEye submodule wiring, and primary-branch consistency while excluding generated output. The adversarial test builds a disposable path-with-spaces fixture and proves representative failures are non-zero and actionable. Both run in CI.
 
 ### Analyzers / warnings
 
@@ -149,7 +149,7 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | Pure logic / helpers | build + tests for covered code | csharpier |
 | API client / cache | build + unit tests | manual warm/cold start smoke |
 | UI Razor/CSS | build | WebView smoke |
-| ScanEngine processing | build + relevant tests | scan smoke if behaviorally risking accuracy |
+| RatEye processing | standalone RatEye build/tests + integrated App build | fixture replay + scan smoke if accuracy-sensitive |
 | Config paths / display | build + tests | manual multi-monitor if possible |
 | i18n | build | all locale files updated; UI language switch |
 | CI / scripts | build (or script dry-run) | publish path once if packaging changed |
@@ -164,7 +164,8 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | Unit tests | Pure functions, contracts, regressions that were encoded | Real OCR accuracy, WebView rendering, end-user scan UX |
 | Build | Compiles against current TFMs/packages | Runtime asset presence beyond compile |
 | Manual UI | WebView wiring, CSS, navigation | Automated coverage |
-| Manual scan | End-to-end recognition path | Continuous regression without a fixture harness |
+| RatEye fixture replay | Recorded accuracy/latency for versioned captures | Every display/game configuration |
+| Manual scan | End-to-end recognition path | Continuous regression by itself |
 | Doc integrity script | Structural doc + packaging constraints | Narrative accuracy of every sentence |
 
 Do not claim “fully tested” when only `dotnet build` succeeded.

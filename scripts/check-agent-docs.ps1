@@ -7,8 +7,8 @@
   - Required AGENTS.md, context, tooling, project, and workflow files exist
   - Root AGENTS.md and the context index route every context document
   - Local Markdown links resolve
-  - App structurally ProjectReferences the in-tree ScanEngine (no NuGet RatEye)
-  - ScanEngine remains non-packable
+  - App structurally ProjectReferences standalone RatEye source (no NuGet RatEye)
+  - RatEye submodule path and URL remain explicit
   - MSBuild XML is valid and package versions are not floating or open-ended
   - Branch-policy documents identify master as the integration branch
   - CI pull requests and branch pushes target master
@@ -325,10 +325,12 @@ $requiredFiles = @(
     'CONTRIBUTING.md',
     'README.md',
     'LICENSE',
+    '.gitmodules',
     'RatScanner.sln',
     'dev.bat',
     'publish.bat',
     'dotnet-tools.json',
+    'Directory.Build.targets',
     '.csharpierrc.json',
     'scripts\dev.ps1',
     'scripts\setup-data.ps1',
@@ -341,8 +343,7 @@ $requiredFiles = @(
     '.markdownlint-cli2.jsonc',
     '.markdownlint.json',
     'src\App\RatScanner.csproj',
-    'src\ScanEngine\RatEye.csproj',
-    'src\ScanEngine\VENDOR.md',
+    'src\ScanEngine\RatEye\RatEye.csproj',
     'tests\RatScanner.Tests\RatScanner.Tests.csproj',
     'src\App\AGENTS.md',
     'src\ScanEngine\AGENTS.md',
@@ -366,6 +367,17 @@ $requiredFiles = @(
 
 foreach ($relative in $requiredFiles) {
     [void](Assert-PathExists -RelativePath $relative -Reason 'Required path')
+}
+
+$gitmodulesPath = Join-Path $RepoRoot '.gitmodules'
+if (Test-Path -LiteralPath $gitmodulesPath) {
+    $gitmodulesText = Get-Content -LiteralPath $gitmodulesPath -Raw
+    if ($gitmodulesText -notmatch '(?m)^\s*path\s*=\s*src/ScanEngine\s*$') {
+        Add-Failure '.gitmodules must map RatEye to src/ScanEngine'
+    }
+    if ($gitmodulesText -notmatch '(?m)^\s*url\s*=\s*https://github\.com/tarkovtracker-org/RatEye\.git\s*$') {
+        Add-Failure '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git'
+    }
 }
 
 $agentsPath = Join-Path $RepoRoot 'AGENTS.md'
@@ -419,7 +431,7 @@ foreach ($projectFile in $projectFiles) {
             $package.GetAttribute('Update').Trim()
         }
         if ($packageId -eq 'RatEye') {
-            Add-Failure ('NuGet RatEye PackageReference found in ' + $relative + ' - use the in-tree ProjectReference')
+            Add-Failure ('NuGet RatEye PackageReference found in ' + $relative + ' - use the submodule ProjectReference')
         }
         $rawVersion = Get-ItemVersion -Item $package
         $resolvedVersion = Resolve-MsBuildProperties -Value $rawVersion -Properties $properties
@@ -452,7 +464,7 @@ foreach ($centralFile in $centralPackageFiles) {
 }
 
 $appCsprojPath = Join-Path $RepoRoot 'src\App\RatScanner.csproj'
-$scanCsprojPath = Join-Path $RepoRoot 'src\ScanEngine\RatEye.csproj'
+$scanCsprojPath = Join-Path $RepoRoot 'src\ScanEngine\RatEye\RatEye.csproj'
 if ($projectDocuments.ContainsKey($appCsprojPath)) {
     $appDocument = $projectDocuments[$appCsprojPath]
     $expectedScanPath = [System.IO.Path]::GetFullPath($scanCsprojPath)
@@ -473,22 +485,10 @@ if ($projectDocuments.ContainsKey($appCsprojPath)) {
         }
     }
     if (-not $hasScanProjectReference) {
-        Add-Failure 'App must ProjectReference src\ScanEngine\RatEye.csproj'
+        Add-Failure 'App must ProjectReference src\ScanEngine\RatEye\RatEye.csproj'
     }
     if ($appDocument.SelectNodes("//*[local-name()='Version']").Count -eq 0) {
         Add-Failure 'App csproj missing Version element'
-    }
-}
-
-if ($projectDocuments.ContainsKey($scanCsprojPath)) {
-    $scanDocument = $projectDocuments[$scanCsprojPath]
-    $isPackable = $scanDocument.SelectSingleNode("//*[local-name()='IsPackable']")
-    $generatePackage = $scanDocument.SelectSingleNode("//*[local-name()='GeneratePackageOnBuild']")
-    if ($null -eq $isPackable -or $isPackable.InnerText.Trim() -ne 'false') {
-        Add-Failure 'ScanEngine must set IsPackable=false'
-    }
-    if ($null -eq $generatePackage -or $generatePackage.InnerText.Trim() -ne 'false') {
-        Add-Failure 'ScanEngine must set GeneratePackageOnBuild=false'
     }
 }
 
@@ -498,6 +498,11 @@ foreach ($branchDocument in @('AGENTS.md', 'CONTRIBUTING.md', 'README.md', 'docs
 
 $ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
 if (Test-Path -LiteralPath $ciPath) {
+    $ciText = Get-Content -LiteralPath $ciPath -Raw
+    if ($ciText -notmatch '(?m)^\s*submodules:\s*recursive\s*$') {
+        Add-Failure 'CI checkout must initialize RatEye with submodules: recursive'
+    }
+
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')
     if ($pullRequestBranches.Count -eq 0) {
         Add-Failure 'CI workflow must declare an explicit pull_request branches list containing master'
