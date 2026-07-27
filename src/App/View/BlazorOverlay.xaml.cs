@@ -38,6 +38,7 @@ public partial class BlazorOverlay : Window
 
     private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
     {
+        WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
 
