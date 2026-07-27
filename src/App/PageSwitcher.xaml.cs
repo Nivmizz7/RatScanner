@@ -216,22 +216,9 @@ public partial class PageSwitcher : Window
             ApplicationPath = Environment.ProcessPath,
         };
 
-        JumpTask showOverlayTask = new()
-        {
-            Title = Presentation.PresentationText.T("JumpShowOverlay", "Show Overlay"),
-            Arguments = "/showOverlay",
-            Description = Presentation.PresentationText.T(
-                "JumpShowOverlayDescription",
-                "Opens the interactive overlay of RatScanner"
-            ),
-            IconResourcePath = Environment.ProcessPath,
-            ApplicationPath = Environment.ProcessPath,
-        };
-
         JumpList jumpList = new();
         jumpList.JumpItems.Add(showUITask);
         jumpList.JumpItems.Add(showMinimalUITask);
-        jumpList.JumpItems.Add(showOverlayTask);
         jumpList.ShowFrequentCategory = false;
         jumpList.ShowRecentCategory = false;
 
@@ -259,11 +246,6 @@ public partial class PageSwitcher : Window
             OnContextMenuShowMinimalUI
         );
         _contextMenuStrip.Items.Add(
-            Presentation.PresentationText.T("JumpShowOverlay", "Show Overlay"),
-            null,
-            OnContextMenuShowOverlay
-        );
-        _contextMenuStrip.Items.Add(
             Presentation.PresentationText.T("TrayExit", "Exit"),
             null,
             OnContextMenuExitApplication
@@ -277,8 +259,6 @@ public partial class PageSwitcher : Window
                 RestoreWindow();
         };
     }
-
-    private void OnContextMenuShowOverlay(object? sender, EventArgs e) => ShowOverlay();
 
     private void OnContextMenuShowUI(object? sender, EventArgs e)
     {
@@ -302,11 +282,6 @@ public partial class PageSwitcher : Window
     }
 
     private void OnContextMenuExitApplication(object? sender, EventArgs e) => ExitApplication();
-
-    internal void ShowOverlay()
-    {
-        BlazorUI.BlazorInteractableOverlay.ShowOverlay();
-    }
 
     internal void ShowUI()
     {

@@ -35,7 +35,6 @@ App sets `<ImplicitUsings>disable</ImplicitUsings>`. Keep explicit `using` direc
 | `BlazorUI` | Primary Blazor shell (`wwwroot/index.html` → `RazorApp`) |
 | `MinimalMenu` | Compact WPF UI mode |
 | `BlazorOverlay` | Click-through scan tooltip window (`overlay.html`) |
-| `BlazorInteractableOverlay` | Full-screen interactive overlay (`interactableOverlay.html`) |
 | `App` resources | Native title bar brushes; light/dark from Windows personalize key |
 
 WPF does **not** implement most product UI; Blazor does.
@@ -45,7 +44,7 @@ WPF does **not** implement most product UI; Blazor does.
 - Package: `Microsoft.AspNetCore.Components.WebView.Wpf` on the **.NET 10** line (see App `.csproj`). App TFM already targets Windows 10+ (`net10.0-windows10.0.22621.0`) as required for the .NET 10 composition control. App also pins `Microsoft.Web.WebView2` directly so composition-control fixes do not lag the Blazor package's transitive SDK.
 - .NET 10 `BlazorWebView.WebView` is a `WebView2CompositionControl` (WPF airspace-friendly). Existing code that touches `blazorWebView.WebView` for transparent background, virtual host mapping, and settings remains valid.
 - Each host refreshes the composition control's layout on a WPF DPI transition (`WebView2DpiWorkaround`) so its physical-pixel rendering and input transform follow the destination monitor. The main window retains layered transparency for Minimal UI, and transparent overlays retain composition hosting.
-- Three host HTML pages under `src/App/wwwroot/`.
+- Two host HTML pages under `src/App/wwwroot/`: the main app and passive scan tooltip.
 - Root components: `RazorApp` (main), overlay Razor roots in XAML.
 - Virtual host mapping: `local.data` → on-disk `Data/` for icons/assets in WebView (`SetVirtualHostNameToFolderMapping`).
 - Debugger: DevTools open when a debugger is attached.
@@ -62,7 +61,7 @@ DI is **not** the full app composition root for domain services. Critical domain
 - `AddWpfBlazorWebView()`, `AddMudServices()`
 - Singletons: `MenuVM`, `SessionHistoryService`, `LocalizationService`, `SettingsVM`, `VirtualScreenOffset`, `TarkovTrackerDB` (from `RatScannerMain`)
 
-Overlays receive the **same** `ServiceProvider` instance.
+The passive overlay receives the **same** `ServiceProvider` instance.
 
 ## Application lifecycle (logical)
 
@@ -75,7 +74,7 @@ flowchart TD
   D -->|fail| E[Error shutdown]
   D -->|ok| F[PageSwitcher]
   F --> G[LoadConfig]
-  G --> H[BlazorUI + overlays]
+  G --> H[BlazorUI + passive overlay]
   H --> I[RatScannerMain init]
   I --> J[Offline API cache]
   I --> K[SetupRatEye]

@@ -109,7 +109,6 @@ With `dev.bat` or `-Once`:
 - Item search autocomplete returns results when catalog cache is warm.
 - Scanner status chip shows ready/degraded appropriately.
 - Theme/CSS changes: visual check for layout regressions (search bar, sidebar).
-- Optional: interactable overlay hotkey opens search UI.
 - DPI / window resize: compact header and sidebar remain usable.
 
 ### Scan regression (manual / environment)

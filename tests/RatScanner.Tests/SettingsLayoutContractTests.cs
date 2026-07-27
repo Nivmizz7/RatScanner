@@ -42,10 +42,6 @@ public sealed class SettingsLayoutContractTests
             ContainsApplyRuntimeRegisterHotkeys(settingsVm, "SetEnableIconScanAsync"),
             "SetEnableIconScanAsync must call HotkeyManager.RegisterHotkeys via applyRuntime."
         );
-        Assert.True(
-            ContainsApplyRuntimeRegisterHotkeys(settingsVm, "SetOverlayEnabledAsync"),
-            "SetOverlayEnabledAsync must keep calling HotkeyManager.RegisterHotkeys via applyRuntime."
-        );
     }
 
     private static bool ContainsApplyRuntimeRegisterHotkeys(string source, string methodName)

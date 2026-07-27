@@ -154,17 +154,6 @@ internal static class RatConfig
         }
     }
 
-    // Overlay options
-    internal static class Overlay
-    {
-        internal static class Search
-        {
-            internal static bool Enable = true;
-            internal static bool BlurBehind = true;
-            internal static Hotkey Hotkey = new([Key.N, Key.M]);
-        }
-    }
-
     // Other
 #if DEBUG
     internal static bool LogDebug
@@ -371,13 +360,6 @@ internal static class RatConfig
             Tracking.TarkovTracker.ShowTeam
         );
 
-        config.Section = nameof(Overlay);
-
-        config.Section = nameof(Overlay.Search);
-        Overlay.Search.Enable = config.ReadBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
-        Overlay.Search.BlurBehind = config.ReadBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
-        Overlay.Search.Hotkey = config.ReadHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
-
         config.Section = "Other";
         ScreenWidth = config.ReadInt(nameof(ScreenWidth), ScreenWidth);
         ScreenHeight = config.ReadInt(nameof(ScreenHeight), ScreenHeight);
@@ -502,13 +484,6 @@ internal static class RatConfig
             config.WriteSecureString(nameof(Tracking.TarkovTracker.IoToken), Tracking.TarkovTracker.IoToken);
             config.WriteInt(nameof(Tracking.TarkovTracker.PvpSource), (int)Tracking.TarkovTracker.PvpSource);
             config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
-
-            config.Section = nameof(Overlay);
-
-            config.Section = nameof(Overlay.Search);
-            config.WriteBool(nameof(Overlay.Search.Enable), Overlay.Search.Enable);
-            config.WriteBool(nameof(Overlay.Search.BlurBehind), Overlay.Search.BlurBehind);
-            config.WriteHotkey(nameof(Overlay.Search.Hotkey), Overlay.Search.Hotkey);
 
             config.Section = "Other";
             config.WriteInt(nameof(ScreenWidth), ScreenWidth);
