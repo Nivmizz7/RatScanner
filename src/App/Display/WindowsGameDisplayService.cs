@@ -78,7 +78,7 @@ internal sealed class WindowsGameDisplayService
         );
     }
 
-    private static (double Scale, bool IsReliable) GetDpiScale(Rectangle bounds)
+    internal static (double Scale, bool IsReliable) GetDpiScale(Rectangle bounds)
     {
         try
         {

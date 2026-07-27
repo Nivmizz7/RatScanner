@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Automation;
@@ -8,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
+using RatScanner.Display;
 using RatScanner.View;
 using ContextMenuStrip = System.Windows.Forms.ContextMenuStrip;
 using NotifyIcon = System.Windows.Forms.NotifyIcon;
@@ -42,6 +45,8 @@ public partial class PageSwitcher : Window
 
     private UserControl? activeControl;
     private bool _isMinimalUi;
+    private bool _isExiting;
+    private bool _hasPersistedWindowBounds;
     private WindowState _restoreWindowState = WindowState.Normal;
     private Rect _restoreBounds;
 
@@ -80,11 +85,7 @@ public partial class PageSwitcher : Window
             AddJumpList();
             AddTrayIcon();
 
-            if (RatConfig.LastWindowPositionX != int.MinValue && RatConfig.LastWindowPositionY != int.MinValue)
-            {
-                Left = RatConfig.LastWindowPositionX;
-                Top = RatConfig.LastWindowPositionY;
-            }
+            RestoreWindowBounds();
             Topmost = RatConfig.AlwaysOnTop;
             if (RatConfig.LastWindowMode == RatConfig.WindowMode.Minimal)
                 ShowMinimalUI();
@@ -110,6 +111,143 @@ public partial class PageSwitcher : Window
         Width = DefaultWidth;
         Height = DefaultHeight;
     }
+
+    /// <summary>
+    /// Restores the persisted normal-mode window size and position from the
+    /// previous session. Saved bounds are validated against the currently
+    /// attached displays: a monitor layout change since the last run must not
+    /// resurrect the window on a screen that no longer exists.
+    /// </summary>
+    private void RestoreWindowBounds()
+    {
+        if (
+            !TryGetRestorableBounds(
+                RatConfig.LastWindowPositionX,
+                RatConfig.LastWindowPositionY,
+                RatConfig.LastWindowWidth,
+                RatConfig.LastWindowHeight,
+                Width,
+                Height,
+                GetLogicalWorkingAreas(),
+                out Rect bounds
+            )
+        )
+            return;
+
+        Width = bounds.Width;
+        Height = bounds.Height;
+        Left = bounds.Left;
+        Top = bounds.Top;
+    }
+
+    /// <summary>
+    /// True when enough of the window (roughly the caption strip) intersects
+    /// the working area of at least one attached display for the user to grab it.
+    /// </summary>
+    internal static bool IsVisibleOnAnyScreen(double left, double top, double width, double height)
+    {
+        return IsVisibleOnAnyScreen(left, top, width, height, GetLogicalWorkingAreas());
+    }
+
+    internal static bool IsVisibleOnAnyScreen(
+        double left,
+        double top,
+        double width,
+        double height,
+        IReadOnlyList<LogicalWorkingArea> workingAreas
+    )
+    {
+        // The title bar is the reliable grab strip; require most of it plus a
+        // minimal slice of the window body to land on some screen.
+        double grabLeft = left + Math.Min(40, width / 4);
+        double grabRight = left + width - Math.Min(40, width / 4);
+        double grabTop = top;
+        double grabBottom = top + Math.Min(48, height);
+
+        foreach (LogicalWorkingArea area in workingAreas)
+        {
+            bool intersects =
+                grabRight > area.Left && grabLeft < area.Right && grabBottom > area.Top && grabTop < area.Bottom;
+            if (intersects)
+                return true;
+        }
+        return false;
+    }
+
+    internal static bool TryGetRestorableBounds(
+        int savedLeft,
+        int savedTop,
+        int savedWidth,
+        int savedHeight,
+        double defaultWidth,
+        double defaultHeight,
+        IReadOnlyList<LogicalWorkingArea> workingAreas,
+        out Rect bounds
+    )
+    {
+        bounds = Rect.Empty;
+        if (savedLeft == int.MinValue || savedTop == int.MinValue)
+            return false;
+
+        bool hasValidSavedSize = savedWidth >= MinimumWidth && savedHeight >= MinimumHeight;
+        double width = hasValidSavedSize ? savedWidth : defaultWidth;
+        double height = hasValidSavedSize ? savedHeight : defaultHeight;
+        if (
+            !double.IsFinite(width)
+            || !double.IsFinite(height)
+            || width < MinimumWidth
+            || height < MinimumHeight
+            || !IsVisibleOnAnyScreen(savedLeft, savedTop, width, height, workingAreas)
+        )
+            return false;
+
+        bounds = new Rect(savedLeft, savedTop, width, height);
+        return true;
+    }
+
+    internal static bool TryPhysicalToLogicalWorkingArea(
+        System.Drawing.Rectangle physicalArea,
+        double dpiScale,
+        bool isDpiReliable,
+        out LogicalWorkingArea workingArea
+    )
+    {
+        workingArea = default;
+        if (!isDpiReliable || !double.IsFinite(dpiScale) || dpiScale <= 0)
+            return false;
+
+        workingArea = new LogicalWorkingArea(
+            physicalArea.Left / dpiScale,
+            physicalArea.Top / dpiScale,
+            physicalArea.Right / dpiScale,
+            physicalArea.Bottom / dpiScale
+        );
+        return true;
+    }
+
+    private static IReadOnlyList<LogicalWorkingArea> GetLogicalWorkingAreas()
+    {
+        System.Windows.Forms.Screen[] screens = System.Windows.Forms.Screen.AllScreens;
+        List<LogicalWorkingArea> workingAreas = new(screens.Length);
+        foreach (System.Windows.Forms.Screen screen in screens)
+        {
+            (double dpiScale, bool isDpiReliable) = WindowsGameDisplayService.GetDpiScale(screen.Bounds);
+            // WinForms exposes physical pixels while WPF persists window
+            // coordinates in device-independent units.
+            if (
+                TryPhysicalToLogicalWorkingArea(
+                    screen.WorkingArea,
+                    dpiScale,
+                    isDpiReliable,
+                    out LogicalWorkingArea workingArea
+                )
+            )
+                workingAreas.Add(workingArea);
+        }
+        return workingAreas;
+    }
+
+    internal readonly record struct LogicalWorkingArea(double Left, double Top, double Right, double Bottom);
 
     internal void Navigate(UserControl nextControl, object? state = null)
     {
@@ -138,6 +276,13 @@ public partial class PageSwitcher : Window
             Hide();
 
         base.OnStateChanged(e);
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (!e.Cancel)
+            PersistWindowBoundsOnce();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -375,6 +520,14 @@ public partial class PageSwitcher : Window
                     Top = minimalTop - chromeMargin;
                 }
             }
+            else
+            {
+                // Entered minimal UI straight from startup (LastWindowMode =
+                // Minimal), so no in-session restore bounds exist. Fall back
+                // to the persisted normal-mode bounds.
+                WindowState = WindowState.Normal;
+                RestoreWindowBounds();
+            }
 
             // The offset is only valid for one exit; clear it so a subsequent
             // tray-menu exit doesn't use a stale value.
@@ -488,10 +641,70 @@ public partial class PageSwitcher : Window
 
     internal void ExitApplication()
     {
-        RatConfig.LastWindowPositionX = (int)Left;
-        RatConfig.LastWindowPositionY = (int)Top;
-        RatConfig.SaveConfig();
+        if (_isExiting)
+            return;
+
+        _isExiting = true;
+        PersistWindowBoundsOnce();
         Application.Current.Shutdown();
+    }
+
+    private void PersistWindowBoundsOnce()
+    {
+        if (_hasPersistedWindowBounds)
+            return;
+
+        PersistWindowBounds();
+        RatConfig.SaveConfig();
+        _hasPersistedWindowBounds = true;
+    }
+
+    /// <summary>
+    /// Persists the normal-mode window bounds so the next launch restores the
+    /// user's size and position. When closing from minimal UI or a maximized
+    /// window, the pre-minimal / pre-maximize restore bounds are what the user
+    /// actually arranged, so those are saved instead of the live geometry.
+    /// </summary>
+    private void PersistWindowBounds()
+    {
+        if (
+            !TryGetPersistableBounds(
+                _isMinimalUi,
+                WindowState,
+                _restoreBounds,
+                RestoreBounds,
+                new Rect(Left, Top, Width, Height),
+                out Rect bounds
+            )
+        )
+            return;
+
+        RatConfig.LastWindowPositionX = (int)bounds.X;
+        RatConfig.LastWindowPositionY = (int)bounds.Y;
+        RatConfig.LastWindowWidth = (int)bounds.Width;
+        RatConfig.LastWindowHeight = (int)bounds.Height;
+    }
+
+    internal static bool TryGetPersistableBounds(
+        bool isMinimalUi,
+        WindowState windowState,
+        Rect minimalRestoreBounds,
+        Rect stateRestoreBounds,
+        Rect liveBounds,
+        out Rect bounds
+    )
+    {
+        bounds =
+            isMinimalUi ? minimalRestoreBounds
+            : windowState != WindowState.Normal ? stateRestoreBounds
+            : liveBounds;
+        return !bounds.IsEmpty
+            && double.IsFinite(bounds.X)
+            && double.IsFinite(bounds.Y)
+            && double.IsFinite(bounds.Width)
+            && double.IsFinite(bounds.Height)
+            && bounds.Width >= MinimumWidth
+            && bounds.Height >= MinimumHeight;
     }
 
     private void OnToggleSidebar(object? sender, RoutedEventArgs e)
