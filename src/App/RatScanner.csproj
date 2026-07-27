@@ -50,6 +50,8 @@
 	<ItemGroup>
 		<!-- Bulk catalog/tasks/hideout/maps come from json.tarkov.dev (no GraphQL generator). -->
 		<PackageReference Include="Microsoft.AspNetCore.Components.WebView.Wpf" Version="10.0.80" />
+		<!-- Pin the composition-control SDK directly instead of accepting the older transitive version. -->
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4078.44" />
 		<PackageReference Include="MudBlazor" Version="9.7.0" />
 		<PackageReference Include="Microsoft.Windows.Compatibility" Version="10.0.10" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
