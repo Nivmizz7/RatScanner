@@ -1,5 +1,4 @@
 @page "/app/credits"
-@using System.Diagnostics
 @inject MenuVM MenuVM
 @inject LocalizationService Localizer
 
@@ -73,19 +72,5 @@
 </div>
 
 @code {
-    private static void OpenURL(string url)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception ex)
-        {
-            RatScanner.Logger.LogWarning("Unable to open external URL: " + url, ex);
-        }
-    }
+    private static void OpenURL(string url) => ExternalLinkLauncher.Open(url);
 }
