@@ -666,6 +666,7 @@ public partial class PageSwitcher : Window
                 _isMinimalUi,
                 WindowState,
                 _restoreBounds,
+                RestoreBounds,
                 new Rect(Left, Top, Width, Height),
                 out Rect bounds
             )
@@ -681,12 +682,16 @@ public partial class PageSwitcher : Window
     internal static bool TryGetPersistableBounds(
         bool isMinimalUi,
         WindowState windowState,
-        Rect restoreBounds,
+        Rect minimalRestoreBounds,
+        Rect stateRestoreBounds,
         Rect liveBounds,
         out Rect bounds
     )
     {
-        bounds = isMinimalUi || windowState != WindowState.Normal ? restoreBounds : liveBounds;
+        bounds =
+            isMinimalUi ? minimalRestoreBounds
+            : windowState != WindowState.Normal ? stateRestoreBounds
+            : liveBounds;
         return !bounds.IsEmpty
             && double.IsFinite(bounds.X)
             && double.IsFinite(bounds.Y)

@@ -157,6 +157,7 @@ public sealed class WindowBoundsPersistenceTests
         bool persisted = PageSwitcher.TryGetPersistableBounds(
             isMinimalUi: false,
             WindowState.Minimized,
+            Rect.Empty,
             restoreBounds,
             iconicBounds,
             out Rect bounds
@@ -173,6 +174,7 @@ public sealed class WindowBoundsPersistenceTests
             isMinimalUi: true,
             WindowState.Normal,
             Rect.Empty,
+            new Rect(120, 80, 900, 640),
             new Rect(1700, 20, 260, 90),
             out Rect bounds
         );
