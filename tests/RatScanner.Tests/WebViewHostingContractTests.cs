@@ -41,6 +41,7 @@ public sealed class WebViewHostingContractTests
         string interactablePages = Path.Combine(appRoot, "Pages", "InteractableOverlay");
 
         Assert.False(File.Exists(Path.Combine(appRoot, "View", "BlazorInteractableOverlay.xaml")));
+        Assert.False(File.Exists(Path.Combine(appRoot, "wwwroot", "interactableOverlay.html")));
         if (Directory.Exists(interactablePages))
             Assert.Empty(Directory.GetFiles(interactablePages, "*", SearchOption.AllDirectories));
         Assert.DoesNotContain("/showOverlay", File.ReadAllText(Path.Combine(appRoot, "App.xaml.cs")));
