@@ -190,8 +190,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     private void HyperlinkRequestNavigate(object? sender, RequestNavigateEventArgs e)
     {
-        ProcessStartInfo psi = new() { FileName = e.Uri.ToString(), UseShellExecute = true };
-        Process.Start(psi);
+        ExternalLinkLauncher.Open(e.Uri.ToString());
         e.Handled = true;
     }
 

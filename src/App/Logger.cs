@@ -293,11 +293,7 @@ internal static class Logger
         return input[..Math.Min(length, input.Length)];
     }
 
-    private static void OpenURL(string url)
-    {
-        ProcessStartInfo psi = new() { FileName = url, UseShellExecute = true };
-        Process.Start(psi);
-    }
+    private static void OpenURL(string url) => ExternalLinkLauncher.Open(url);
 
     private static string ReadAll()
     {

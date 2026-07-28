@@ -3,7 +3,6 @@
 @using RatScanner.Presentation
 @using RatScanner.Scan
 @using RatScanner.TarkovDev
-@using System.Diagnostics
 @using System.ComponentModel
 @using System.Threading
 @using System.Globalization
@@ -583,11 +582,7 @@
     private void OpenMarket() => OpenUrl(_result?.Item.MarketUrl);
     private void OpenWiki() => OpenUrl(_result?.Item.WikiUrl);
 
-    private static void OpenUrl(string? url)
-    {
-        if (!string.IsNullOrWhiteSpace(url))
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-    }
+    private static void OpenUrl(string? url) => ExternalLinkLauncher.Open(url);
 
     public void Dispose()
     {
