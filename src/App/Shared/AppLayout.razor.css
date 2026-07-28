@@ -95,6 +95,13 @@ nav ::deep a.active {
 		background: rgba(0, 0, 0, .62);
 	}
 
+	/* The overlay drawer is docked to the window edge; keep it usable even on
+	   very narrow windows (min window width is 360px) without covering the
+	   whole viewport. */
+	.sidebar.overlay {
+		width: min(var(--rs-sidebar-width), 82vw);
+	}
+
 	.main-content,
 	.main-content.sidebar-docked {
 		margin-left: 0;
