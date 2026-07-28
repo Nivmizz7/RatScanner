@@ -689,10 +689,10 @@ label {
     }
 }
 
-/* Narrow window (sidebar becomes an overlay drawer at 680px). Keep the whole
-   scan result visible without scrolling: shrink art/type, let long names and
-   prices wrap instead of forcing a single row, and keep the market columns
-   side-by-side until the very smallest width. */
+/* Narrow window (sidebar becomes an overlay drawer at 680px). Compact the
+   scan result while keeping all content accessible: shrink art/type, let long
+   names and prices wrap, and keep the market columns side-by-side until the
+   very smallest width. */
 @media (max-width: 680px) {
     .scan-page {
         padding: 10px;
@@ -703,7 +703,7 @@ label {
         grid-template-columns: minmax(0, 1fr) auto;
     }
 
-    .utility-bar .scanner-status-root {
+    .utility-bar ::deep .scanner-status-root {
         grid-column: 1 / -1;
         justify-self: start;
         height: 26px;
@@ -873,21 +873,6 @@ label {
 
     .empty-state strong {
         font-size: 15px;
-    }
-
-    .actions {
-        flex-wrap: nowrap;
-    }
-
-    .action-links {
-        flex-wrap: nowrap;
-        overflow: hidden;
-    }
-
-    .link-btn {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 }
 
