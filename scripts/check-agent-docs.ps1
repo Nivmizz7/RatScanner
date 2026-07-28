@@ -190,61 +190,97 @@ function Test-CheckoutUsesRecursiveSubmodules {
 
     $lines = [regex]::Split($WorkflowText, '\r?\n')
     $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
-    for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($lines[$index] -notmatch $stepStarterPattern) {
+    for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
+        if ($lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$') {
             continue
         }
 
-        $stepIndent = $Matches['indent'].Length
-        $stepEnd = $lines.Count
-        for ($candidate = $index + 1; $candidate -lt $lines.Count; $candidate++) {
-            if ($lines[$candidate] -match $stepStarterPattern -and $Matches['indent'].Length -eq $stepIndent) {
-                $stepEnd = $candidate
+        $stepsIndent = $Matches['indent'].Length
+        $stepsEnd = $lines.Count
+        for ($candidate = $stepsIndex + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($lines[$candidate] -match '^\s*(?:#.*)?$') {
+                continue
+            }
+            $candidateIndent = ([regex]::Match($lines[$candidate], '^[ ]*')).Value.Length
+            if ($candidateIndent -le $stepsIndent) {
+                $stepsEnd = $candidate
                 break
             }
         }
 
-        $usesCheckout = $false
-        for ($candidate = $index; $candidate -lt $stepEnd; $candidate++) {
-            if ($lines[$candidate] -match '^\s*uses\s*:\s*actions/checkout@') {
-                $usesCheckout = $true
-                break
+        $stepIndent = -1
+        for ($index = $stepsIndex + 1; $index -lt $stepsEnd; $index++) {
+            if ($lines[$index] -notmatch $stepStarterPattern) {
+                continue
             }
-        }
-        if (-not $usesCheckout) {
-            $index = $stepEnd - 1
-            continue
-        }
 
-        for ($candidate = $index; $candidate -lt $stepEnd; $candidate++) {
-            if ($lines[$candidate] -match '^(?<indent>\s*)with\s*:\s*$') {
-                $withIndent = $Matches['indent'].Length
-                $directEntryIndent = -1
-                for ($entry = $candidate + 1; $entry -lt $stepEnd; $entry++) {
-                    if ($lines[$entry] -match '^\s*(#.*)?$') {
+            $candidateStepIndent = $Matches['indent'].Length
+            if ($stepIndent -lt 0) {
+                $stepIndent = $candidateStepIndent
+            }
+            if ($candidateStepIndent -ne $stepIndent) {
+                continue
+            }
+
+            $stepEnd = $stepsEnd
+            for ($candidate = $index + 1; $candidate -lt $stepsEnd; $candidate++) {
+                if (
+                    $lines[$candidate] -match $stepStarterPattern -and
+                    $Matches['indent'].Length -eq $stepIndent
+                ) {
+                    $stepEnd = $candidate
+                    break
+                }
+            }
+
+            $propertyIndent = $stepIndent + 2
+            $usesCheckout = $lines[$index] -match '^[ ]*-\s+uses\s*:\s*actions/checkout@'
+            if (-not $usesCheckout) {
+                for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                    if ($lines[$candidate] -notmatch '^(?<indent>[ ]*)uses\s*:\s*actions/checkout@') {
                         continue
                     }
-                    if ($lines[$entry] -notmatch '^(?<indent>\s*)') {
+                    if ($Matches['indent'].Length -eq $propertyIndent) {
+                        $usesCheckout = $true
                         break
-                    }
-
-                    $entryIndent = $Matches['indent'].Length
-                    if ($entryIndent -le $withIndent) {
-                        break
-                    }
-                    if ($directEntryIndent -lt 0) {
-                        $directEntryIndent = $entryIndent
-                    }
-                    if (
-                        $entryIndent -eq $directEntryIndent -and
-                        $lines[$entry] -match '^\s*submodules\s*:\s*recursive\s*$'
-                    ) {
-                        return $true
                     }
                 }
             }
+            if (-not $usesCheckout) {
+                $index = $stepEnd - 1
+                continue
+            }
+
+            for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                if (
+                    $lines[$candidate] -match '^(?<indent>[ ]*)with\s*:\s*$' -and
+                    $Matches['indent'].Length -eq $propertyIndent
+                ) {
+                    $withIndent = $Matches['indent'].Length
+                    $directEntryIndent = -1
+                    for ($entry = $candidate + 1; $entry -lt $stepEnd; $entry++) {
+                        if ($lines[$entry] -match '^\s*(#.*)?$') {
+                            continue
+                        }
+                        $entryIndent = ([regex]::Match($lines[$entry], '^[ ]*')).Value.Length
+                        if ($entryIndent -le $withIndent) {
+                            break
+                        }
+                        if ($directEntryIndent -lt 0) {
+                            $directEntryIndent = $entryIndent
+                        }
+                        if (
+                            $entryIndent -eq $directEntryIndent -and
+                            $lines[$entry] -match '^\s*submodules\s*:\s*recursive\s*$'
+                        ) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            $index = $stepEnd - 1
         }
-        $index = $stepEnd - 1
+        $stepsIndex = $stepsEnd - 1
     }
     return $false
 }

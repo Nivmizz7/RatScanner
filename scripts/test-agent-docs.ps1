@@ -299,6 +299,32 @@ try {
     }
 
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $matrixListSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $matrixListSubmodules = [regex]::Replace(
+        $matrixListSubmodules,
+        '(?m)(^    runs-on:\s*windows-latest\s*$)',
+        "`$1`r`n    strategy:`r`n      matrix:`r`n        include:`r`n          - os: windows-latest",
+        1
+    )
+    $matrixListSubmodules = [regex]::Replace(
+        $matrixListSubmodules,
+        '(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)',
+        "`$1`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $matrixListSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'matrix list entries cannot merge checkout with a later action'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
     $conditionalStepSubmodules = [regex]::Replace(
         $workflow,
         '(?m)^\s*submodules:\s*recursive\r?\n',
