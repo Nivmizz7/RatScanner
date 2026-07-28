@@ -42,6 +42,11 @@ public class ScanDiagnosticStoreTests
                     InventoryConfig = new RatEye.Config.Processing.Inventory { OptimizeHighlighted = true },
                 },
             };
+            GameDisplayConfiguration display = GameDisplayConfiguration.Empty with
+            {
+                CaptureBounds = new Rectangle(100, 200, 32, 24),
+                DisplayScale = 1.5,
+            };
             store.Record(
                 "inventory",
                 capture,
@@ -50,7 +55,7 @@ public class ScanDiagnosticStoreTests
                 [new("item-id", "Fixture item", 0.95f)],
                 new Dictionary<string, double> { ["inventory.grid_parse"] = 4.5 },
                 config,
-                GameDisplayConfiguration.Empty,
+                display,
                 "v4-test"
             );
 
@@ -69,6 +74,11 @@ public class ScanDiagnosticStoreTests
             Assert.Contains("\"schemaVersion\": 1", manifest, StringComparison.Ordinal);
             Assert.Contains("\"item-id\"", manifest, StringComparison.Ordinal);
             Assert.Contains("\"inventory.grid_parse\": 4.5", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"displayX\": 100", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"displayY\": 200", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"displayWidth\": 32", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"displayHeight\": 24", manifest, StringComparison.Ordinal);
+            Assert.Contains("\"dpiScale\": 1.5", manifest, StringComparison.Ordinal);
         }
         finally
         {

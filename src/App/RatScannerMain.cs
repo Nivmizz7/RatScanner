@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using RatEye;
+using RatScanner.Display;
 using RatScanner.Scan;
 using RatStash;
 using GameMode = RatScanner.TarkovDev.GameMode;
@@ -536,7 +537,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             Logger.LogDebug("Name scanning screen");
             Rectangle bounds = RatConfig.GameDisplayConfiguration.CaptureBounds;
-            if (bounds.Width <= 0 || bounds.Height <= 0)
+            bool usedFallbackBounds = bounds.Width <= 0 || bounds.Height <= 0;
+            if (usedFallbackBounds)
             {
                 Vector2 mousePosition = UserActivityHelper.GetMousePosition();
                 Screen? screen =
@@ -547,6 +549,14 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                     return;
                 bounds = screen.Bounds;
             }
+            double displayScale = RatConfig.GameDisplayConfiguration.DisplayScale;
+            if (usedFallbackBounds)
+                displayScale = WindowsGameDisplayService.GetDpiScale(bounds).Scale;
+            GameDisplayConfiguration diagnosticDisplay = RatConfig.GameDisplayConfiguration with
+            {
+                CaptureBounds = bounds,
+                DisplayScale = displayScale,
+            };
 
             Vector2 position = new(bounds.X, bounds.Y);
             using Bitmap screenshot = GetScreenshot(position, bounds.Size);
@@ -571,7 +581,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 detections,
                 stageMilliseconds,
                 RatEyeEngine.Config,
-                RatConfig.GameDisplayConfiguration,
+                diagnosticDisplay,
                 RatConfig.VersionDisplay
             );
 

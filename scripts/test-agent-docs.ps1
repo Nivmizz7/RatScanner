@@ -177,6 +177,24 @@ try {
         Restore-FixtureFile -RelativePath '.gitmodules'
     }
 
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        @"
+[submodule "RatEye"]
+	path = src/ScanEngine
+	url = https://example.invalid/RatEye.git
+[submodule "Decoy"]
+	path = src/Decoy
+	url = https://github.com/tarkovtracker-org/RatEye.git
+"@
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'RatEye path and URL must belong to the same submodule stanza'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
     [xml]$appProject = Get-Content -LiteralPath $appProjectPath -Raw
     foreach ($reference in @($appProject.SelectNodes("//*[local-name()='ProjectReference']"))) {
         [void]$reference.ParentNode.RemoveChild($reference)
@@ -219,6 +237,26 @@ try {
     )
     try {
         Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'CI omits RatEye submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $nonCheckoutSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $nonCheckoutSubmodules = [regex]::Replace(
+        $nonCheckoutSubmodules,
+        '(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)',
+        "`$1`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $nonCheckoutSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'recursive submodules on a non-checkout action do not satisfy checkout'
     }
     finally {
         Restore-FixtureFile -RelativePath '.github\workflows\build.yml'

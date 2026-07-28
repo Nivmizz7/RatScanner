@@ -51,6 +51,8 @@ internal sealed class ScanDiagnosticStore : IDisposable
                 OptimizeHighlighted = ratEyeConfig.ProcessingConfig.InventoryConfig.OptimizeHighlighted,
                 UseStaticIcons = ratEyeConfig.ProcessingConfig.IconConfig.UseStaticIcons,
                 ScanRotatedIcons = ratEyeConfig.ProcessingConfig.IconConfig.ScanRotatedIcons,
+                MarkerThreshold = ratEyeConfig.ProcessingConfig.InspectionConfig.MarkerThreshold,
+                MinItemConfidence = ratEyeConfig.ProcessingConfig.InspectionConfig.MinItemConfidence,
             },
             Context = new ScanReplayContext
             {

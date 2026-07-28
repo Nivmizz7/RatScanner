@@ -157,6 +157,72 @@ function Test-IsFloatingPackageVersion {
     return $false
 }
 
+function Get-GitSubmoduleSections {
+    param([string]$Text)
+
+    $sections = New-Object System.Collections.Generic.List[hashtable]
+    $current = $null
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        if ($line -match '^\s*\[submodule\s+"(?<name>[^"]+)"\]\s*$') {
+            $current = @{
+                Name = $Matches['name']
+                Path = ''
+                Url  = ''
+            }
+            $sections.Add($current) | Out-Null
+            continue
+        }
+        if ($null -eq $current -or $line -notmatch '^\s*(?<key>path|url)\s*=\s*(?<value>.*?)\s*$') {
+            continue
+        }
+
+        $current[$Matches['key'].Substring(0, 1).ToUpperInvariant() + $Matches['key'].Substring(1)] = $Matches['value']
+    }
+    return $sections
+}
+
+function Test-CheckoutUsesRecursiveSubmodules {
+    param([string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -notmatch '^(?<indent>\s*)-\s+(name|uses)\s*:') {
+            continue
+        }
+
+        $stepIndent = $Matches['indent'].Length
+        $stepEnd = $lines.Count
+        for ($candidate = $index + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($lines[$candidate] -match '^(?<indent>\s*)-\s+(name|uses)\s*:' -and $Matches['indent'].Length -eq $stepIndent) {
+                $stepEnd = $candidate
+                break
+            }
+        }
+
+        $usesCheckout = $false
+        $withIndent = -1
+        for ($candidate = $index; $candidate -lt $stepEnd; $candidate++) {
+            if ($lines[$candidate] -match '^\s*uses\s*:\s*actions/checkout@') {
+                $usesCheckout = $true
+            }
+            if ($lines[$candidate] -match '^(?<indent>\s*)with\s*:\s*$') {
+                $withIndent = $Matches['indent'].Length
+                continue
+            }
+            if (
+                $usesCheckout -and
+                $withIndent -ge 0 -and
+                $lines[$candidate] -match '^(?<indent>\s*)submodules\s*:\s*recursive\s*$' -and
+                $Matches['indent'].Length -gt $withIndent
+            ) {
+                return $true
+            }
+        }
+        $index = $stepEnd - 1
+    }
+    return $false
+}
+
 function Get-ItemVersion {
     param([System.Xml.XmlElement]$Item)
 
@@ -372,10 +438,14 @@ foreach ($relative in $requiredFiles) {
 $gitmodulesPath = Join-Path $RepoRoot '.gitmodules'
 if (Test-Path -LiteralPath $gitmodulesPath) {
     $gitmodulesText = Get-Content -LiteralPath $gitmodulesPath -Raw
-    if ($gitmodulesText -notmatch '(?m)^\s*path\s*=\s*src/ScanEngine\s*$') {
+    $ratEyeSubmodules = @(
+        Get-GitSubmoduleSections -Text $gitmodulesText |
+            Where-Object { $_.Path.Replace('\', '/') -eq 'src/ScanEngine' }
+    )
+    if ($ratEyeSubmodules.Count -ne 1) {
         Add-Failure '.gitmodules must map RatEye to src/ScanEngine'
     }
-    if ($gitmodulesText -notmatch '(?m)^\s*url\s*=\s*https://github\.com/tarkovtracker-org/RatEye\.git\s*$') {
+    elseif ($ratEyeSubmodules[0].Url -ne 'https://github.com/tarkovtracker-org/RatEye.git') {
         Add-Failure '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git'
     }
 }
@@ -499,7 +569,7 @@ foreach ($branchDocument in @('AGENTS.md', 'CONTRIBUTING.md', 'README.md', 'docs
 $ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
 if (Test-Path -LiteralPath $ciPath) {
     $ciText = Get-Content -LiteralPath $ciPath -Raw
-    if ($ciText -notmatch '(?m)^\s*submodules:\s*recursive\s*$') {
+    if (-not (Test-CheckoutUsesRecursiveSubmodules -WorkflowText $ciText)) {
         Add-Failure 'CI checkout must initialize RatEye with submodules: recursive'
     }
 

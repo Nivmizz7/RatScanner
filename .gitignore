@@ -6,6 +6,7 @@ RatScanner/[Dd]ata/*
 
 # publish folder
 publish/
+RatScanner.zip
 
 # Local smoke-test / agent watch captures (never commit)
 watch-verify-*.txt
