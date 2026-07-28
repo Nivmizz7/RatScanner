@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using Newtonsoft.Json;
+using RatEye.Diagnostics;
 using RatScanner.Display;
 using Xunit;
 
@@ -52,7 +54,7 @@ public class ScanDiagnosticStoreTests
                 capture,
                 new RatEye.Vector2(100, 200),
                 new RatEye.Vector2(16, 12),
-                [new("item-id", "Fixture item", 0.95f)],
+                [new("item-id", "Fixture item", 0.95f), new(null, null, 0.25f)],
                 new Dictionary<string, double> { ["inventory.grid_parse"] = 4.5 },
                 config,
                 display,
@@ -71,6 +73,7 @@ public class ScanDiagnosticStoreTests
             string manifestPath = Path.Combine(result.Directory, "scan.ratdiag.json");
             Assert.True(File.Exists(manifestPath));
             string manifest = File.ReadAllText(manifestPath);
+            ScanReplayManifest exportedManifest = JsonConvert.DeserializeObject<ScanReplayManifest>(manifest)!;
             Assert.Contains("\"schemaVersion\": 1", manifest, StringComparison.Ordinal);
             Assert.Contains("\"item-id\"", manifest, StringComparison.Ordinal);
             Assert.Contains("\"inventory.grid_parse\": 4.5", manifest, StringComparison.Ordinal);
@@ -79,6 +82,9 @@ public class ScanDiagnosticStoreTests
             Assert.Contains("\"displayWidth\": 32", manifest, StringComparison.Ordinal);
             Assert.Contains("\"displayHeight\": 24", manifest, StringComparison.Ordinal);
             Assert.Contains("\"dpiScale\": 1.5", manifest, StringComparison.Ordinal);
+            Assert.Equal(new[] { "item-id", string.Empty }, exportedManifest.Observed.ItemIds);
+            Assert.Equal(new[] { "Fixture item", string.Empty }, exportedManifest.Observed.ItemNames);
+            Assert.Equal(new[] { 0.95f, 0.25f }, exportedManifest.Observed.Confidences);
         }
         finally
         {

@@ -109,7 +109,7 @@
             <MudButton Variant="Variant.Outlined"
                        Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.FileDownload"
-                       OnClick="ExportScanDiagnostics"
+                       OnClick="ExportScanDiagnosticsAsync"
                        Class="mt-3">
                 @Localizer["ExportScanDiagnostics"]
             </MudButton>
@@ -187,9 +187,9 @@
         await PersistDisplayAsync();
     }
 
-    private void ExportScanDiagnostics()
+    private async Task ExportScanDiagnosticsAsync()
     {
-        ScanDiagnosticExportResult result = RatScannerMain.Instance.ExportLastScanDiagnostics();
+        ScanDiagnosticExportResult result = await Task.Run(RatScannerMain.Instance.ExportLastScanDiagnostics);
         if (result.Succeeded)
         {
             Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);

@@ -72,14 +72,8 @@ internal sealed class ScanDiagnosticStore : IDisposable
             },
             Observed = new ScanReplayObservedResult
             {
-                ItemIds = detections
-                    .Where(detection => !string.IsNullOrWhiteSpace(detection.ItemId))
-                    .Select(detection => detection.ItemId!)
-                    .ToList(),
-                ItemNames = detections
-                    .Where(detection => !string.IsNullOrWhiteSpace(detection.ItemName))
-                    .Select(detection => detection.ItemName!)
-                    .ToList(),
+                ItemIds = detections.Select(detection => detection.ItemId ?? string.Empty).ToList(),
+                ItemNames = detections.Select(detection => detection.ItemName ?? string.Empty).ToList(),
                 Confidences = detections.Select(detection => detection.Confidence).ToList(),
                 StageMilliseconds = new Dictionary<string, double>(stageMilliseconds),
             },
