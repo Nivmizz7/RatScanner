@@ -1,6 +1,6 @@
 # RatScanner — Agent Control Plane
 
-**Authority:** implementation and project files override this document when they disagree. Keep this file and `docs/agent-context/` synchronized when architecture, commands, packages, workflows, or behavior change.
+**Authority:** explicit maintainer decisions are authoritative for architecture and repository ownership, even when the current checkout or generated guidance still reflects an older or transitional layout. Implementation and project files are authoritative for current behavior. If those sources conflict, stop and surface the conflict instead of choosing one silently. Never close or supersede architecture PRs, delete source-bearing work, or reverse a repository boundary based only on inferred documentation precedence. Keep this file and `docs/agent-context/` synchronized when architecture, commands, packages, workflows, or behavior change.
 
 ## Product (one paragraph)
 
@@ -11,7 +11,7 @@ Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor U
 ## Non-negotiable constraints
 
 1. **Windows x64 only** — the OpenCvSharp native runtime is x64-only. Do not design, build, test, or document x86, Linux/WSL, or macOS runs.
-2. **Scan engine is standalone** — `src/ScanEngine/` is the `tarkovtracker-org/RatEye` submodule. Engine changes belong in RatEye and RatEye must never reference RatScanner. Never add a NuGet `PackageReference` for `RatEye`; App uses a source `ProjectReference`.
+2. **Scan engine is standalone** — `src/ScanEngine/` is the `tarkovtracker-org/RatEye` submodule. Engine changes belong in RatEye and RatEye must never reference RatScanner. Never add a NuGet `PackageReference` for `RatEye`; App uses a source `ProjectReference`. A temporary vendored or in-tree checkout during migration is not authority to collapse the repositories or abandon the standalone boundary.
 3. **Bulk catalog via json.tarkov.dev** — use `TarkovDevAPI` (rate limit, dedup, offline cache, backoff). Do not bypass with ad-hoc HTTP for items/tasks/hideout/crafts/barters. Do not reintroduce a GraphQL schema generator for bulk catalog. Slim maps GraphQL is intentional; keep maps off cold-start critical path.
 4. **Product version only in** `src/App/RatScanner.csproj` `<Version>`. Independent 4.x line; do not mirror historical upstream 3.x tags.
 5. **No secrets in git** — tokens live in user `config.cfg` (DPAPI-protected fields where used).
@@ -130,4 +130,4 @@ Index and maintenance rules for the context set: [docs/agent-context/README.md](
 
 ## Source-of-truth reminder
 
-**Code, `.csproj`, scripts, and CI win over docs.** If you discover drift, fix the docs in the same change set when you touch the related system.
+**Explicit maintainer architecture decisions win over stale or generated guidance. Code, `.csproj`, scripts, and CI define current behavior but may represent a transitional migration state.** If sources disagree, preserve active work, report the conflict, and obtain direction before changing repository ownership or PR state. Fix confirmed documentation drift in the same change set when you touch the related system.

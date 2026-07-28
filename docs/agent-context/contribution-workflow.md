@@ -34,6 +34,8 @@ Build CI runs for PRs targeting `master` and pushes to `master`. Releases use a 
 - PRs target **`tarkovtracker-org/RatScanner`**.
 - Bare `#NNN` issue refs resolve on the **fork**. Prefer full URLs for upstream history.
 - Do not push unless asked (agents); do not force-push shared branches without explicit instruction.
+- Explicit maintainer decisions control architecture and repository ownership. Current files or generated guidance may describe a transitional state; surface conflicts instead of silently choosing a direction.
+- Never close or supersede architecture PRs, remove their remote branches, or delete source-bearing worktrees solely because another branch currently implements a different layout. Preserve the work until the maintainer-directed path is reconciled.
 
 ### Commit quality and pre-merge validation
 
