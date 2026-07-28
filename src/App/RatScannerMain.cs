@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using RatEye;
+using RatScanner.Display;
 using RatScanner.Scan;
 using RatStash;
 using GameMode = RatScanner.TarkovDev.GameMode;
@@ -63,6 +64,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     private readonly object _ratEyeSetupLock = new();
     private readonly object _trackerConfigurationLock = new();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
+    private readonly ScanDiagnosticStore _scanDiagnostics = new();
     private int _trackerRefreshInProgress;
     private bool _ratEyeReady;
     private bool _disposed;
@@ -483,8 +485,20 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             // Scan the item
             RatEye.Processing.Inspection inspection = RatEyeEngine.NewInspection(screenshot);
+            Item? detectedItem = inspection.Item;
+            _scanDiagnostics.Record(
+                "inspection",
+                screenshot,
+                position,
+                new Vector2(markerScanSize / 2, markerScanSize / 2),
+                [new(detectedItem?.Id, detectedItem?.Name, inspection.ItemConfidence)],
+                inspection.Timings.Snapshot(),
+                RatEyeEngine.Config,
+                RatConfig.GameDisplayConfiguration,
+                RatConfig.VersionDisplay
+            );
 
-            if (!inspection.ContainsMarker || inspection.Item == null)
+            if (!inspection.ContainsMarker || detectedItem == null)
             {
                 Logger.LogDebug(
                     $"NameScan: no marker or item (ContainsMarker={inspection.ContainsMarker} Item={inspection.Item != null})"
@@ -523,7 +537,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             Logger.LogDebug("Name scanning screen");
             Rectangle bounds = RatConfig.GameDisplayConfiguration.CaptureBounds;
-            if (bounds.Width <= 0 || bounds.Height <= 0)
+            bool usedFallbackBounds = bounds.Width <= 0 || bounds.Height <= 0;
+            if (usedFallbackBounds)
             {
                 Vector2 mousePosition = UserActivityHelper.GetMousePosition();
                 Screen? screen =
@@ -534,17 +549,46 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                     return;
                 bounds = screen.Bounds;
             }
+            double displayScale = RatConfig.GameDisplayConfiguration.DisplayScale;
+            if (usedFallbackBounds)
+                displayScale = WindowsGameDisplayService.GetDpiScale(bounds).Scale;
+            GameDisplayConfiguration diagnosticDisplay = RatConfig.GameDisplayConfiguration with
+            {
+                CaptureBounds = bounds,
+                DisplayScale = displayScale,
+            };
 
             Vector2 position = new(bounds.X, bounds.Y);
             using Bitmap screenshot = GetScreenshot(position, bounds.Size);
 
             // Scan the item
             RatEye.Processing.MultiInspection multiInspection = RatEyeEngine.NewMultiInspection(screenshot);
+            List<RatEye.Processing.Inspection> inspections = multiInspection.Inspections;
+            List<ScanDiagnosticDetection> detections = [];
+            Dictionary<string, double> stageMilliseconds = new(multiInspection.Timings.Snapshot());
+            for (int index = 0; index < inspections.Count; index++)
+            {
+                RatEye.Processing.Inspection inspection = inspections[index];
+                Item? detectedItem = inspection.Item;
+                detections.Add(new(detectedItem?.Id, detectedItem?.Name, inspection.ItemConfidence));
+                AddTimings(stageMilliseconds, inspection.Timings.Snapshot(), $"inspection[{index}].");
+            }
+            _scanDiagnostics.Record(
+                "multi-inspection",
+                screenshot,
+                position,
+                null,
+                detections,
+                stageMilliseconds,
+                RatEyeEngine.Config,
+                diagnosticDisplay,
+                RatConfig.VersionDisplay
+            );
 
-            if (multiInspection.Inspections.Count == 0)
+            if (inspections.Count == 0)
                 return;
 
-            foreach (RatEye.Processing.Inspection? inspection in multiInspection.Inspections)
+            foreach (RatEye.Processing.Inspection? inspection in inspections)
             {
                 if (inspection.Item is null)
                     continue;
@@ -593,8 +637,23 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             // Scan the item
             using RatEye.Processing.Inventory inventory = RatEyeEngine.NewInventory(screenshot);
             RatEye.Processing.Icon? icon = inventory.LocateIcon();
+            Item? detectedItem = icon?.Item;
+            Dictionary<string, double> stageMilliseconds = new(inventory.Timings.Snapshot());
+            if (icon is not null)
+                AddTimings(stageMilliseconds, icon.Timings.Snapshot());
+            _scanDiagnostics.Record(
+                "inventory",
+                screenshot,
+                screenshotPosition,
+                new Vector2(size.Width / 2, size.Height / 2),
+                icon is null ? [] : [new(detectedItem?.Id, detectedItem?.Name, icon.DetectionConfidence)],
+                stageMilliseconds,
+                RatEyeEngine.Config,
+                RatConfig.GameDisplayConfiguration,
+                RatConfig.VersionDisplay
+            );
 
-            if (icon?.Item == null || icon.DetectionConfidence < RatConfig.IconScan.MinAcceptConfidence)
+            if (detectedItem == null || icon!.DetectionConfidence < RatConfig.IconScan.MinAcceptConfidence)
             {
                 if (icon?.Item != null)
                 {
@@ -626,6 +685,18 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             );
         }
         Logger.LogDebug("IconScan: EXIT (lock released)");
+    }
+
+    internal ScanDiagnosticExportResult ExportLastScanDiagnostics() => _scanDiagnostics.Export();
+
+    private static void AddTimings(
+        IDictionary<string, double> destination,
+        IReadOnlyDictionary<string, double> source,
+        string prefix = ""
+    )
+    {
+        foreach ((string stage, double milliseconds) in source)
+            destination[prefix + stage] = milliseconds;
     }
 
     // Returns the ruff screenshot
@@ -757,6 +828,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                     _ratEyeReady = false;
                 }
             }
+            _scanDiagnostics.Dispose();
             _lifetimeCancellation.Dispose();
         }
     }

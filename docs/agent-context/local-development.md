@@ -6,6 +6,7 @@
 - [.NET 10 SDK](https://dotnet.microsoft.com/download) matching CI (`10.0.x`).
 - Network for first-time NuGet restore and RatScannerData download.
 - WebView2: installed automatically at runtime if missing; manual install still fine.
+- Initialized RatEye submodule (`git submodule update --init --recursive`).
 - Optional: 7-Zip on PATH for publish zipping (`publish.bat` falls back to `Compress-Archive`).
 - Optional for markdown lint/auto-fix: [Node.js LTS](https://nodejs.org/) (npm). Used only by `scripts\lint-markdown.ps1` / CI — not required to run the app.
 
@@ -16,7 +17,7 @@ Do not run or document the app under x86 Windows, WSL, or Linux. Targeting and n
 ## SDK / runtime expectations
 
 - App TFM: see `src/App/RatScanner.csproj` (`net10.0-windows10.0.22621.0`).
-- ScanEngine: `netstandard2.0` (consumed by App).
+- RatEye library: `netstandard2.0` (consumed from the submodule by App).
 - Tests: same Windows TFM family as App.
 - App and tests target x64 in every configuration; x86 solution configurations are intentionally absent.
 - App disables implicit usings — code must keep explicit `using` directives.
@@ -114,4 +115,4 @@ dotnet run --project src\App\RatScanner.csproj
 
 - Do not use `publish.bat` as the everyday loop (slow; packages single-file).
 - Do not commit `src/App/Data` or `publish/`.
-- Do not assume NuGet RatEye is a valid fix for scan bugs — edit `src/ScanEngine/`.
+- Do not assume NuGet RatEye is a valid fix for scan bugs. Make engine changes in the RatEye submodule, commit RatEye first, then update RatScanner's gitlink.

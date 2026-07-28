@@ -1,0 +1,3 @@
+[submodule "RatEye"]
+	path = src/ScanEngine
+	url = https://github.com/tarkovtracker-org/RatEye.git

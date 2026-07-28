@@ -90,11 +90,13 @@ try {
         'CONTRIBUTING.md',
         'FAQ.md',
         'LICENSE',
+        '.gitmodules',
         'README.md',
         'RatScanner.sln',
         'dev.bat',
         'publish.bat',
         'dotnet-tools.json',
+        'Directory.Build.targets',
         '.csharpierrc.json',
         '.markdownlint-cli2.jsonc',
         '.markdownlint.json',
@@ -103,8 +105,7 @@ try {
         'src\App\AGENTS.md',
         'src\App\RatScanner.csproj',
         'src\ScanEngine\AGENTS.md',
-        'src\ScanEngine\RatEye.csproj',
-        'src\ScanEngine\VENDOR.md',
+        'src\ScanEngine\RatEye\RatEye.csproj',
         'tests\AGENTS.md',
         'tests\RatScanner.Tests\RatScanner.Tests.csproj'
     )) {
@@ -164,13 +165,59 @@ try {
         Restore-FixtureFile -RelativePath 'src\App\RatScanner.csproj'
     }
 
+    $gitmodulesPath = Join-Path $fixtureRoot '.gitmodules'
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        "[submodule `"RatEye`"]`r`n`tpath = src/ScanEngine`r`n`turl = https://example.invalid/RatEye.git`r`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'RatEye submodule points at an unexpected repository'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        @"
+[submodule "RatEye"]
+	path = src/ScanEngine
+[core]
+	url = https://github.com/tarkovtracker-org/RatEye.git
+"@
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'non-submodule section cannot supply the RatEye URL'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        @"
+[submodule "RatEye"]
+	path = src/ScanEngine
+	url = https://example.invalid/RatEye.git
+[submodule "Decoy"]
+	path = src/Decoy
+	url = https://github.com/tarkovtracker-org/RatEye.git
+"@
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'RatEye path and URL must belong to the same submodule stanza'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
     [xml]$appProject = Get-Content -LiteralPath $appProjectPath -Raw
     foreach ($reference in @($appProject.SelectNodes("//*[local-name()='ProjectReference']"))) {
         [void]$reference.ParentNode.RemoveChild($reference)
     }
     $appProject.Save($appProjectPath)
     try {
-        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'App must ProjectReference src\ScanEngine\RatEye.csproj' -Scenario 'missing in-tree ScanEngine ProjectReference'
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'App must ProjectReference src\ScanEngine\RatEye\RatEye.csproj' -Scenario 'missing RatEye submodule ProjectReference'
     }
     finally {
         Restore-FixtureFile -RelativePath 'src\App\RatScanner.csproj'
@@ -199,6 +246,146 @@ try {
     }
 
     $workflowPath = Join-Path $fixtureRoot '.github\workflows\build.yml'
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        [regex]::Replace($workflow, '(?m)^\s*submodules:\s*recursive\r?\n', '')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'CI omits RatEye submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $nestedSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $nestedSubmodules = ([regex]'(?m)(^\s*persist-credentials:\s*false\s*$)').Replace(
+        $nestedSubmodules,
+        "`$1`r`n          sparse-checkout: |`r`n            submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $nestedSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'nested YAML text cannot impersonate a direct checkout input'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $nonCheckoutSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $nonCheckoutSubmodules = ([regex]'(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)').Replace(
+        $nonCheckoutSubmodules,
+        "`$1`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $nonCheckoutSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'recursive submodules on a non-checkout action do not satisfy checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $matrixListSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $matrixListSubmodules = ([regex]'(?m)(^    runs-on:\s*windows-latest\s*$)').Replace(
+        $matrixListSubmodules,
+        "`$1`r`n    strategy:`r`n      matrix:`r`n        include:`r`n          - os: windows-latest",
+        1
+    )
+    $matrixListSubmodules = ([regex]'(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)').Replace(
+        $matrixListSubmodules,
+        "`$1`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $matrixListSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'matrix list entries cannot merge checkout with a later action'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $conditionalStepSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $conditionalStepSubmodules = ([regex]'(?m)(^\s*persist-credentials:\s*false\s*$)').Replace(
+        $conditionalStepSubmodules,
+        "`$1`r`n      - if: `${{ always() }}`r`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1`r`n        with:`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $conditionalStepSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'conditional non-checkout step cannot supply recursive submodules for checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $conditionalCheckout = ([regex]'(?m)(^      - name:\s*Checkout\s*$)').Replace(
+        $workflow,
+        "`$1`r`n        if: false",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $conditionalCheckout)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'a statically false checkout does not guarantee submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $blockScalarCheckout = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $blockScalarCheckout = ([regex]'(?m)^jobs:\s*$').Replace(
+        $blockScalarCheckout,
+        "env:`r`n  EXAMPLE_WORKFLOW: |`r`n    steps:`r`n      - uses: actions/checkout@example`r`n        with:`r`n          submodules: recursive`r`njobs:",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $blockScalarCheckout)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'workflow text inside a block scalar cannot impersonate checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $commentedSubmodules = ([regex]'(?m)(^\s*submodules:\s*recursive)\s*$').Replace(
+        $workflow,
+        '$1 # initialize RatEye',
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $commentedSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $true -ExpectedText 'All documentation integrity checks passed.' -Scenario 'recursive submodules allow an inline YAML comment'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
     $wrongPushWorkflow = [regex]::Replace(
         $workflow,

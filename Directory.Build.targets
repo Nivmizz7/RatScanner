@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RatEye'">
+    <!-- RatEye remains independently packable, but RatScanner integration builds
+         should not create a package as a side effect. -->
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+  </PropertyGroup>
+</Project>

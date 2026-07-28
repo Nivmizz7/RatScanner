@@ -5,9 +5,10 @@
 **Project files are the source of truth** for package versions and project references:
 
 - `src/App/RatScanner.csproj`
-- `src/ScanEngine/RatEye.csproj`
+- `src/ScanEngine/RatEye/RatEye.csproj` (RatEye submodule)
 - `tests/RatScanner.Tests/RatScanner.Tests.csproj`
 - `NuGet.Config` / nuget.org
+- `Directory.Build.targets` (disables RatEye package generation in RatScanner builds)
 - `dotnet-tools.json` (CSharpier)
 
 Do not document “current version is X” in prose. Read the csproj.
@@ -21,11 +22,11 @@ Do not document “current version is X” in prose. Read the csproj.
 | RatStash, Tesseract, Newtonsoft.Json | Shared across App/ScanEngine as needed |
 | xUnit, test SDK | Tests only |
 
-ScanEngine is **not** packable for NuGet release from this repo.
+RatEye remains independently packable from its own repository. RatScanner does not publish or consume that package during development.
 
 ## Hard constraints
 
-1. **No NuGet RatEye** — App uses `<ProjectReference Include="..\ScanEngine\RatEye.csproj" />`.
+1. **No NuGet RatEye** — App uses `<ProjectReference Include="..\ScanEngine\RatEye\RatEye.csproj" />`.
 2. Keep **RatStash major** aligned between App and ScanEngine so one assembly loads.
 3. Prefer existing libraries already in the graph over new packages.
 4. Prefer versions published ≥ ~7 days; avoid floating `*` / open-ended ranges / `latest`.
@@ -62,7 +63,7 @@ When upgrades **are** requested:
 ## Framework alignment
 
 - App: `net10.0-windows10.0.22621.0` with `EnableWindowsTargeting`.
-- ScanEngine: `netstandard2.0` + LangVersion 9.
+- RatEye library: `netstandard2.0`; confirm language settings in the submodule project.
 - App/tests: x64-only in all configurations to match the OpenCvSharp Windows native runtime; do not restore x86 solution configurations.
 - Tests: same Windows TFM family as App.
 - CI installs .NET `10.0.x`.

@@ -15,7 +15,8 @@ xUnit unit tests under `tests/RatScanner.Tests` that reference the App project. 
 5. Unit tests do **not** replace manual UI or scan verification; do not claim they do.
 6. Prefer realistic coverage of parsers, projections, presentation helpers, display config, and reliability guards over excessive mocking of the full scan path.
 7. Assertions must make the regression clear (expected ids, keys, TTLs, status codes), not only “no exception”.
-8. Implementation and this project file override stale docs; update this file when test policy changes.
+8. Root authority rules apply: explicit maintainer architecture and repository-ownership decisions outrank transitional implementation or generated guidance. If sources conflict, stop and surface the conflict instead of choosing silently; update this file when test policy changes.
+9. RatEye engine internals, OpenCV processing, cache behavior, and replay benchmarks are tested in the RatEye submodule. Keep this project focused on App-owned capture geometry, integration, and presentation contracts.
 
 ## Prefer
 
@@ -23,6 +24,7 @@ xUnit unit tests under `tests/RatScanner.Tests` that reference the App project. 
 - Small focused facts with clear arrange/act/assert names matching current style.
 - When adding App APIs that are pure, add regression tests in the same PR.
 - Name files and types after the unit under test.
+- Keep `ScanPipelineImageHarnessTests` here because it mirrors RatScanner capture/crop behavior; use RatEye replay manifests for engine-only fixture assertions.
 
 ## Validate
 

@@ -34,6 +34,8 @@ Build CI runs for PRs targeting `master` and pushes to `master`. Releases use a 
 - PRs target **`tarkovtracker-org/RatScanner`**.
 - Bare `#NNN` issue refs resolve on the **fork**. Prefer full URLs for upstream history.
 - Do not push unless asked (agents); do not force-push shared branches without explicit instruction.
+- Explicit maintainer decisions control architecture and repository ownership. Current files or generated guidance may describe a transitional state; surface conflicts instead of silently choosing a direction.
+- Never close or supersede architecture PRs, remove their remote branches, or delete source-bearing worktrees solely because another branch currently implements a different layout. Preserve the work until the maintainer-directed path is reconciled.
 
 ### Commit quality and pre-merge validation
 
@@ -64,10 +66,11 @@ When a PR changes architecture, commands, packages, CI, config paths, or behavio
 2. Update the matching `docs/agent-context/*.md`.
 3. Update nested `AGENTS.md` if scoped rules changed.
 4. Update `README.md` / `CONTRIBUTING.md` when user-facing workflow changes.
-5. Never leave agent docs claiming GraphQL bulk catalog, NuGet RatEye, or Linux support.
+5. Never leave agent docs claiming GraphQL bulk catalog, NuGet RatEye consumption, vendored RatEye, or Linux support.
 
 ## License and attribution
 
 - Keep `LICENSE` in published output.
 - Preserve “software has been modified” notices (README, Credits).
-- Scan engine provenance note: `src/ScanEngine/VENDOR.md`.
+- Scan engine source: `src/ScanEngine` submodule from `tarkovtracker-org/RatEye`.
+- When both repositories change, push the RatEye commit before any RatScanner branch that references its gitlink.

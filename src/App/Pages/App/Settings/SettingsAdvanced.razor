@@ -106,6 +106,15 @@
                                     ValueChanged="@(_ => StateHasChanged())"
                                     Label="@Localizer["LogDebugInfo"]"
                                     Persist="SettingsVM.SetLogDebugAsync" />
+            <MudButton Variant="Variant.Outlined"
+                       Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.FileDownload"
+                       OnClick="ExportScanDiagnosticsAsync"
+                       Disabled="_exportingScanDiagnostics"
+                       Class="mt-3">
+                @Localizer["ExportScanDiagnostics"]
+            </MudButton>
+            <p class="settings-help mt-2">@Localizer["ExportScanDiagnosticsDescription"]</p>
         </section>
 
         <section class="settings-section">
@@ -129,6 +138,7 @@
 
     private bool _savingDisplay;
     private int _displaySaveOperations;
+    private bool _exportingScanDiagnostics;
 
     protected override async Task OnInitializedAsync()
     {
@@ -177,6 +187,32 @@
     {
         SettingsVM.ResetDisplayDraftToDetected();
         await PersistDisplayAsync();
+    }
+
+    private async Task ExportScanDiagnosticsAsync()
+    {
+        if (_exportingScanDiagnostics)
+            return;
+
+        _exportingScanDiagnostics = true;
+        try
+        {
+            ScanDiagnosticExportResult result = await Task.Run(RatScannerMain.Instance.ExportLastScanDiagnostics);
+            if (result.Succeeded)
+            {
+                Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);
+                return;
+            }
+
+            string message = result.Error is null
+                ? Localizer["NoScanDiagnostics"]
+                : string.Format(Localizer["ScanDiagnosticsExportFailed"], result.Error);
+            Snackbar.Add(message, Severity.Error);
+        }
+        finally
+        {
+            _exportingScanDiagnostics = false;
+        }
     }
 
     private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);

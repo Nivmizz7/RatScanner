@@ -1,17 +1,17 @@
 # RatScanner — Agent Control Plane
 
-**Authority:** implementation and project files override this document when they disagree. Keep this file and `docs/agent-context/` synchronized when architecture, commands, packages, workflows, or behavior change.
+**Authority:** explicit maintainer decisions are authoritative for architecture and repository ownership, even when the current checkout or generated guidance still reflects an older or transitional layout. Implementation and project files are authoritative for current behavior. If those sources conflict, stop and surface the conflict instead of choosing one silently. Never close or supersede architecture PRs, delete source-bearing work, or reverse a repository boundary based only on inferred documentation precedence. Keep this file and `docs/agent-context/` synchronized when architecture, commands, packages, workflows, or behavior change.
 
 ## Product (one paragraph)
 
-Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed an in-repo scan engine (vendored RatEye sources under `src/ScanEngine/`). Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. Maintained at `tarkovtracker-org/RatScanner`, semver **4.x** (`v4.x.x`).
+Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed standalone RatEye source checked out as a Git submodule under `src/ScanEngine/`. Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. Maintained at `tarkovtracker-org/RatScanner`, semver **4.x** (`v4.x.x`).
 
 **Stack snapshot:** `net10.0-windows10.0.22621.0` · WPF + WinForms · Blazor WebView · MudBlazor · RatStash · OpenCvSharp · Tesseract · Newtonsoft.Json. Package versions live in `.csproj` files — do not copy versions into docs.
 
 ## Non-negotiable constraints
 
 1. **Windows x64 only** — the OpenCvSharp native runtime is x64-only. Do not design, build, test, or document x86, Linux/WSL, or macOS runs.
-2. **Scan engine is in-tree** — edit `src/ScanEngine/`. Never re-add a NuGet `PackageReference` for `RatEye`. App references it via `ProjectReference`. Namespaces remain `RatEye`; assembly remains RatEye.
+2. **Scan engine is standalone** — `src/ScanEngine/` is the `tarkovtracker-org/RatEye` submodule. Engine changes belong in RatEye and RatEye must never reference RatScanner. Never add a NuGet `PackageReference` for `RatEye`; App uses a source `ProjectReference`. A temporary vendored or in-tree checkout during migration is not authority to collapse the repositories or abandon the standalone boundary.
 3. **Bulk catalog via json.tarkov.dev** — use `TarkovDevAPI` (rate limit, dedup, offline cache, backoff). Do not bypass with ad-hoc HTTP for items/tasks/hideout/crafts/barters. Do not reintroduce a GraphQL schema generator for bulk catalog. Slim maps GraphQL is intentional; keep maps off cold-start critical path.
 4. **Product version only in** `src/App/RatScanner.csproj` `<Version>`. Independent 4.x line; do not mirror historical upstream 3.x tags.
 5. **No secrets in git** — tokens live in user `config.cfg` (DPAPI-protected fields where used).
@@ -37,6 +37,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
 publish.bat                      :: release package only (not day-to-day)
+```
+
+Initialize source dependencies after cloning:
+
+```bat
+git submodule update --init --recursive
 ```
 
 Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package) plus `.github/workflows/release.yml` (manual promotion of the exact successful `master` build artifact to either the opt-in `testing` pre-release channel or broad `latest` channel). Build CI runs on PRs and `master` pushes; releases are manual only.
@@ -119,9 +125,9 @@ Index and maintenance rules for the context set: [docs/agent-context/README.md](
 | Path | Scope |
 | --- | --- |
 | `src/App/AGENTS.md` | App UI, hosting, data clients owned by App |
-| `src/ScanEngine/AGENTS.md` | Vendored scan engine |
+| `src/ScanEngine/AGENTS.md` | Standalone RatEye submodule |
 | `tests/AGENTS.md` | Unit tests |
 
 ## Source-of-truth reminder
 
-**Code, `.csproj`, scripts, and CI win over docs.** If you discover drift, fix the docs in the same change set when you touch the related system.
+**Explicit maintainer architecture decisions win over stale or generated guidance. Code, `.csproj`, scripts, and CI define current behavior but may represent a transitional migration state.** If sources disagree, preserve active work, report the conflict, and obtain direction before changing repository ownership or PR state. Fix confirmed documentation drift in the same change set when you touch the related system.

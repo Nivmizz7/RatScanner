@@ -49,9 +49,12 @@ Defined under `RatConfig.Paths` (base = exe directory):
 | `I18nDir` | `i18n` under base (UI strings) |
 | `ConfigFile` | `config.cfg` |
 | `LogFile` | `Log.txt` |
+| `Debug` | Explicitly exported scan-diagnostic bundles under `Debug/ScanDiagnostics` |
 | Dynamic EFT icon cache | Battlestate Games temp `Icon Cache` |
 
 When code assumes paths, prefer these constants over string literals.
+
+The Advanced settings page exports only the most recent in-memory scan when the user explicitly requests it. Each bundle contains the exact captured PNG and a versioned `scan.ratdiag.json` sidecar with capture/display geometry, RatEye configuration, observed results, confidence, and stage timings. Users should review screenshots before sharing them.
 
 ## API offline cache
 

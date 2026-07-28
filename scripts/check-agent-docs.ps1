@@ -7,8 +7,8 @@
   - Required AGENTS.md, context, tooling, project, and workflow files exist
   - Root AGENTS.md and the context index route every context document
   - Local Markdown links resolve
-  - App structurally ProjectReferences the in-tree ScanEngine (no NuGet RatEye)
-  - ScanEngine remains non-packable
+  - App structurally ProjectReferences standalone RatEye source (no NuGet RatEye)
+  - RatEye submodule path and URL remain explicit
   - MSBuild XML is valid and package versions are not floating or open-ended
   - Branch-policy documents identify master as the integration branch
   - CI pull requests and branch pushes target master
@@ -153,6 +153,202 @@ function Test-IsFloatingPackageVersion {
     }
     if ($value -match '^[\[\(]\s*,' -or $value -match ',\s*[\]\)]$') {
         return $true
+    }
+    return $false
+}
+
+function Get-GitSubmoduleSections {
+    param([string]$Text)
+
+    $sections = New-Object System.Collections.Generic.List[hashtable]
+    $current = $null
+    foreach ($line in [regex]::Split($Text, '\r?\n')) {
+        if ($line -match '^\s*\[submodule\s+"(?<name>[^"]+)"\]\s*$') {
+            $current = @{
+                Name = $Matches['name']
+                Path = ''
+                Url  = ''
+            }
+            $sections.Add($current) | Out-Null
+            continue
+        }
+        if ($line -match '^\s*\[.+\]\s*$') {
+            $current = $null
+            continue
+        }
+        if ($null -eq $current -or $line -notmatch '^\s*(?<key>path|url)\s*=\s*(?<value>.*?)\s*$') {
+            continue
+        }
+
+        $current[$Matches['key'].Substring(0, 1).ToUpperInvariant() + $Matches['key'].Substring(1)] = $Matches['value']
+    }
+    return $sections
+}
+
+function Test-CheckoutUsesRecursiveSubmodules {
+    param([string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = [bool[]]::new($lines.Count)
+    for ($header = 0; $header -lt $lines.Count; $header++) {
+        if ($blockScalarLines[$header]) {
+            continue
+        }
+        if (
+            $lines[$header] -notmatch
+            '^(?<indent>[ ]*)(?:-\s+)?[^#].*:\s*[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$'
+        ) {
+            continue
+        }
+
+        $headerIndent = $Matches['indent'].Length
+        for ($content = $header + 1; $content -lt $lines.Count; $content++) {
+            if ($lines[$content] -match '^\s*$') {
+                $blockScalarLines[$content] = $true
+                continue
+            }
+            $contentIndent = ([regex]::Match($lines[$content], '^[ ]*')).Value.Length
+            if ($contentIndent -le $headerIndent) {
+                break
+            }
+            $blockScalarLines[$content] = $true
+        }
+    }
+
+    $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
+    for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
+        if (
+            $blockScalarLines[$stepsIndex] -or
+            $lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$'
+        ) {
+            continue
+        }
+
+        $stepsIndent = $Matches['indent'].Length
+        $stepsEnd = $lines.Count
+        for ($candidate = $stepsIndex + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($blockScalarLines[$candidate]) {
+                continue
+            }
+            if ($lines[$candidate] -match '^\s*(?:#.*)?$') {
+                continue
+            }
+            $candidateIndent = ([regex]::Match($lines[$candidate], '^[ ]*')).Value.Length
+            if ($candidateIndent -le $stepsIndent) {
+                $stepsEnd = $candidate
+                break
+            }
+        }
+
+        $stepIndent = -1
+        for ($index = $stepsIndex + 1; $index -lt $stepsEnd; $index++) {
+            if ($blockScalarLines[$index] -or $lines[$index] -notmatch $stepStarterPattern) {
+                continue
+            }
+
+            $candidateStepIndent = $Matches['indent'].Length
+            if ($stepIndent -lt 0) {
+                $stepIndent = $candidateStepIndent
+            }
+            if ($candidateStepIndent -ne $stepIndent) {
+                continue
+            }
+
+            $stepEnd = $stepsEnd
+            for ($candidate = $index + 1; $candidate -lt $stepsEnd; $candidate++) {
+                if (
+                    -not $blockScalarLines[$candidate] -and
+                    $lines[$candidate] -match $stepStarterPattern -and
+                    $Matches['indent'].Length -eq $stepIndent
+                ) {
+                    $stepEnd = $candidate
+                    break
+                }
+            }
+
+            $propertyIndent = $stepIndent + 2
+            $usesCheckout = $lines[$index] -match '^[ ]*-\s+uses\s*:\s*actions/checkout@'
+            if (-not $usesCheckout) {
+                for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                    if ($blockScalarLines[$candidate]) {
+                        continue
+                    }
+                    if ($lines[$candidate] -notmatch '^(?<indent>[ ]*)uses\s*:\s*actions/checkout@') {
+                        continue
+                    }
+                    if ($Matches['indent'].Length -eq $propertyIndent) {
+                        $usesCheckout = $true
+                        break
+                    }
+                }
+            }
+            if (-not $usesCheckout) {
+                $index = $stepEnd - 1
+                continue
+            }
+
+            $checkoutCondition = $null
+            if ($lines[$index] -match '^[ ]*-\s+if\s*:\s*(?<condition>.*?)\s*$') {
+                $checkoutCondition = $Matches['condition']
+            }
+            for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                if ($blockScalarLines[$candidate]) {
+                    continue
+                }
+                if (
+                    $lines[$candidate] -match '^(?<indent>[ ]*)if\s*:\s*(?<condition>.*?)\s*$' -and
+                    $Matches['indent'].Length -eq $propertyIndent
+                ) {
+                    $checkoutCondition = $Matches['condition']
+                    break
+                }
+            }
+            if (
+                $null -ne $checkoutCondition -and
+                $checkoutCondition -notmatch
+                '(?i)^(?:true|\$\{\{\s*true\s*\}\})(?:\s+#.*)?\s*$'
+            ) {
+                $index = $stepEnd - 1
+                continue
+            }
+
+            for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                if ($blockScalarLines[$candidate]) {
+                    continue
+                }
+                if (
+                    $lines[$candidate] -match '^(?<indent>[ ]*)with\s*:\s*$' -and
+                    $Matches['indent'].Length -eq $propertyIndent
+                ) {
+                    $withIndent = $Matches['indent'].Length
+                    $directEntryIndent = -1
+                    for ($entry = $candidate + 1; $entry -lt $stepEnd; $entry++) {
+                        if ($blockScalarLines[$entry]) {
+                            continue
+                        }
+                        if ($lines[$entry] -match '^\s*(#.*)?$') {
+                            continue
+                        }
+                        $entryIndent = ([regex]::Match($lines[$entry], '^[ ]*')).Value.Length
+                        if ($entryIndent -le $withIndent) {
+                            break
+                        }
+                        if ($directEntryIndent -lt 0) {
+                            $directEntryIndent = $entryIndent
+                        }
+                        if (
+                            $entryIndent -eq $directEntryIndent -and
+                            $lines[$entry] -match
+                            '^\s*submodules\s*:\s*recursive(?:\s+#.*)?\s*$'
+                        ) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            $index = $stepEnd - 1
+        }
+        $stepsIndex = $stepsEnd - 1
     }
     return $false
 }
@@ -325,10 +521,12 @@ $requiredFiles = @(
     'CONTRIBUTING.md',
     'README.md',
     'LICENSE',
+    '.gitmodules',
     'RatScanner.sln',
     'dev.bat',
     'publish.bat',
     'dotnet-tools.json',
+    'Directory.Build.targets',
     '.csharpierrc.json',
     'scripts\dev.ps1',
     'scripts\setup-data.ps1',
@@ -341,8 +539,7 @@ $requiredFiles = @(
     '.markdownlint-cli2.jsonc',
     '.markdownlint.json',
     'src\App\RatScanner.csproj',
-    'src\ScanEngine\RatEye.csproj',
-    'src\ScanEngine\VENDOR.md',
+    'src\ScanEngine\RatEye\RatEye.csproj',
     'tests\RatScanner.Tests\RatScanner.Tests.csproj',
     'src\App\AGENTS.md',
     'src\ScanEngine\AGENTS.md',
@@ -366,6 +563,21 @@ $requiredFiles = @(
 
 foreach ($relative in $requiredFiles) {
     [void](Assert-PathExists -RelativePath $relative -Reason 'Required path')
+}
+
+$gitmodulesPath = Join-Path $RepoRoot '.gitmodules'
+if (Test-Path -LiteralPath $gitmodulesPath) {
+    $gitmodulesText = Get-Content -LiteralPath $gitmodulesPath -Raw
+    $ratEyeSubmodules = @(
+        Get-GitSubmoduleSections -Text $gitmodulesText |
+            Where-Object { $_.Path.Replace('\', '/') -eq 'src/ScanEngine' }
+    )
+    if ($ratEyeSubmodules.Count -ne 1) {
+        Add-Failure '.gitmodules must map RatEye to src/ScanEngine'
+    }
+    elseif ($ratEyeSubmodules[0].Url -ne 'https://github.com/tarkovtracker-org/RatEye.git') {
+        Add-Failure '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git'
+    }
 }
 
 $agentsPath = Join-Path $RepoRoot 'AGENTS.md'
@@ -419,7 +631,7 @@ foreach ($projectFile in $projectFiles) {
             $package.GetAttribute('Update').Trim()
         }
         if ($packageId -eq 'RatEye') {
-            Add-Failure ('NuGet RatEye PackageReference found in ' + $relative + ' - use the in-tree ProjectReference')
+            Add-Failure ('NuGet RatEye PackageReference found in ' + $relative + ' - use the submodule ProjectReference')
         }
         $rawVersion = Get-ItemVersion -Item $package
         $resolvedVersion = Resolve-MsBuildProperties -Value $rawVersion -Properties $properties
@@ -452,7 +664,7 @@ foreach ($centralFile in $centralPackageFiles) {
 }
 
 $appCsprojPath = Join-Path $RepoRoot 'src\App\RatScanner.csproj'
-$scanCsprojPath = Join-Path $RepoRoot 'src\ScanEngine\RatEye.csproj'
+$scanCsprojPath = Join-Path $RepoRoot 'src\ScanEngine\RatEye\RatEye.csproj'
 if ($projectDocuments.ContainsKey($appCsprojPath)) {
     $appDocument = $projectDocuments[$appCsprojPath]
     $expectedScanPath = [System.IO.Path]::GetFullPath($scanCsprojPath)
@@ -473,22 +685,10 @@ if ($projectDocuments.ContainsKey($appCsprojPath)) {
         }
     }
     if (-not $hasScanProjectReference) {
-        Add-Failure 'App must ProjectReference src\ScanEngine\RatEye.csproj'
+        Add-Failure 'App must ProjectReference src\ScanEngine\RatEye\RatEye.csproj'
     }
     if ($appDocument.SelectNodes("//*[local-name()='Version']").Count -eq 0) {
         Add-Failure 'App csproj missing Version element'
-    }
-}
-
-if ($projectDocuments.ContainsKey($scanCsprojPath)) {
-    $scanDocument = $projectDocuments[$scanCsprojPath]
-    $isPackable = $scanDocument.SelectSingleNode("//*[local-name()='IsPackable']")
-    $generatePackage = $scanDocument.SelectSingleNode("//*[local-name()='GeneratePackageOnBuild']")
-    if ($null -eq $isPackable -or $isPackable.InnerText.Trim() -ne 'false') {
-        Add-Failure 'ScanEngine must set IsPackable=false'
-    }
-    if ($null -eq $generatePackage -or $generatePackage.InnerText.Trim() -ne 'false') {
-        Add-Failure 'ScanEngine must set GeneratePackageOnBuild=false'
     }
 }
 
@@ -498,6 +698,11 @@ foreach ($branchDocument in @('AGENTS.md', 'CONTRIBUTING.md', 'README.md', 'docs
 
 $ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
 if (Test-Path -LiteralPath $ciPath) {
+    $ciText = Get-Content -LiteralPath $ciPath -Raw
+    if (-not (Test-CheckoutUsesRecursiveSubmodules -WorkflowText $ciText)) {
+        Add-Failure 'CI checkout must initialize RatEye with submodules: recursive'
+    }
+
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')
     if ($pullRequestBranches.Count -eq 0) {
         Add-Failure 'CI workflow must declare an explicit pull_request branches list containing master'
