@@ -9,7 +9,7 @@ using Xunit;
 
 namespace RatScanner.Tests;
 
-[Collection("RatConfig")]
+[Collection(RatConfigCollection.Name)]
 public class ScanDiagnosticStoreTests
 {
     [Fact]

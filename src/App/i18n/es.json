@@ -236,7 +236,7 @@
   "DiagnosticsSection": "Diagnósticos",
   "DiagnosticsDescription": "Registro técnico para solución de problemas. Mantenga esto desactivado durante el uso normal.",
   "ExportScanDiagnostics": "Exportar diagnósticos del escaneo",
-  "ExportScanDiagnosticsDescription": "Guarda la captura, el resultado, la configuración y los tiempos de la etapa del escaneo más reciente para reproducirlos localmente. Revise la captura antes de compartirla.",
+  "ExportScanDiagnosticsDescription": "Guarda la captura, el resultado, la configuración y los tiempos de las etapas del escaneo más reciente para reproducirlos localmente. Revise la captura antes de compartirla.",
   "ScanDiagnosticsExported": "Diagnósticos del escaneo guardados en {0}.",
   "NoScanDiagnostics": "Realice un escaneo de nombre o icono antes de exportar diagnósticos.",
   "ScanDiagnosticsExportFailed": "RatScanner no pudo exportar los diagnósticos del escaneo: {0}",

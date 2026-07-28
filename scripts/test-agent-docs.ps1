@@ -182,6 +182,22 @@ try {
         @"
 [submodule "RatEye"]
 	path = src/ScanEngine
+[core]
+	url = https://github.com/tarkovtracker-org/RatEye.git
+"@
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git' -Scenario 'non-submodule section cannot supply the RatEye URL'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.gitmodules'
+    }
+
+    [System.IO.File]::WriteAllText(
+        $gitmodulesPath,
+        @"
+[submodule "RatEye"]
+	path = src/ScanEngine
 	url = https://example.invalid/RatEye.git
 [submodule "Decoy"]
 	path = src/Decoy
@@ -237,6 +253,26 @@ try {
     )
     try {
         Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'CI omits RatEye submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $nestedSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $nestedSubmodules = [regex]::Replace(
+        $nestedSubmodules,
+        '(?m)(^\s*persist-credentials:\s*false\s*$)',
+        "`$1`r`n          sparse-checkout: |`r`n            submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $nestedSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'nested YAML text cannot impersonate a direct checkout input'
     }
     finally {
         Restore-FixtureFile -RelativePath '.github\workflows\build.yml'

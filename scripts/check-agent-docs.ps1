@@ -172,6 +172,10 @@ function Get-GitSubmoduleSections {
             $sections.Add($current) | Out-Null
             continue
         }
+        if ($line -match '^\s*\[.+\]\s*$') {
+            $current = $null
+            continue
+        }
         if ($null -eq $current -or $line -notmatch '^\s*(?<key>path|url)\s*=\s*(?<value>.*?)\s*$') {
             continue
         }
@@ -200,22 +204,43 @@ function Test-CheckoutUsesRecursiveSubmodules {
         }
 
         $usesCheckout = $false
-        $withIndent = -1
         for ($candidate = $index; $candidate -lt $stepEnd; $candidate++) {
             if ($lines[$candidate] -match '^\s*uses\s*:\s*actions/checkout@') {
                 $usesCheckout = $true
+                break
             }
+        }
+        if (-not $usesCheckout) {
+            $index = $stepEnd - 1
+            continue
+        }
+
+        for ($candidate = $index; $candidate -lt $stepEnd; $candidate++) {
             if ($lines[$candidate] -match '^(?<indent>\s*)with\s*:\s*$') {
                 $withIndent = $Matches['indent'].Length
-                continue
-            }
-            if (
-                $usesCheckout -and
-                $withIndent -ge 0 -and
-                $lines[$candidate] -match '^(?<indent>\s*)submodules\s*:\s*recursive\s*$' -and
-                $Matches['indent'].Length -gt $withIndent
-            ) {
-                return $true
+                $directEntryIndent = -1
+                for ($entry = $candidate + 1; $entry -lt $stepEnd; $entry++) {
+                    if ($lines[$entry] -match '^\s*(#.*)?$') {
+                        continue
+                    }
+                    if ($lines[$entry] -notmatch '^(?<indent>\s*)') {
+                        break
+                    }
+
+                    $entryIndent = $Matches['indent'].Length
+                    if ($entryIndent -le $withIndent) {
+                        break
+                    }
+                    if ($directEntryIndent -lt 0) {
+                        $directEntryIndent = $entryIndent
+                    }
+                    if (
+                        $entryIndent -eq $directEntryIndent -and
+                        $lines[$entry] -match '^\s*submodules\s*:\s*recursive\s*$'
+                    ) {
+                        return $true
+                    }
+                }
             }
         }
         $index = $stepEnd - 1

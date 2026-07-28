@@ -110,6 +110,7 @@
                        Size="Size.Small"
                        StartIcon="@Icons.Material.Filled.FileDownload"
                        OnClick="ExportScanDiagnosticsAsync"
+                       Disabled="_exportingScanDiagnostics"
                        Class="mt-3">
                 @Localizer["ExportScanDiagnostics"]
             </MudButton>
@@ -137,6 +138,7 @@
 
     private bool _savingDisplay;
     private int _displaySaveOperations;
+    private bool _exportingScanDiagnostics;
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,17 +191,28 @@
 
     private async Task ExportScanDiagnosticsAsync()
     {
-        ScanDiagnosticExportResult result = await Task.Run(RatScannerMain.Instance.ExportLastScanDiagnostics);
-        if (result.Succeeded)
-        {
-            Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);
+        if (_exportingScanDiagnostics)
             return;
-        }
 
-        string message = result.Error is null
-            ? Localizer["NoScanDiagnostics"]
-            : string.Format(Localizer["ScanDiagnosticsExportFailed"], result.Error);
-        Snackbar.Add(message, Severity.Error);
+        _exportingScanDiagnostics = true;
+        try
+        {
+            ScanDiagnosticExportResult result = await Task.Run(RatScannerMain.Instance.ExportLastScanDiagnostics);
+            if (result.Succeeded)
+            {
+                Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);
+                return;
+            }
+
+            string message = result.Error is null
+                ? Localizer["NoScanDiagnostics"]
+                : string.Format(Localizer["ScanDiagnosticsExportFailed"], result.Error);
+            Snackbar.Add(message, Severity.Error);
+        }
+        finally
+        {
+            _exportingScanDiagnostics = false;
+        }
     }
 
     private void PropertyChangeHandler(object? sender, EventArgs e) => _ = InvokeAsync(StateHasChanged);

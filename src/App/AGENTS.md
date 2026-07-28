@@ -18,7 +18,7 @@ WPF host, Blazor WebView UI, configuration, tarkov.dev/TarkovTracker clients, sc
 8. **Data assets:** `Data/**` is downloaded (gitignored). Do not commit icons/OCR dumps. Keep `Watch=false` on Data content items.
 9. Dispose / single-instance lifecycle: honor existing `DisposeInstance` paths on exit; do not create unbounded WebView/service leaks.
 10. Implicit usings are disabled — keep explicit `using` directives.
-11. Implementation overrides this file; update it when App-scoped rules change.
+11. Root authority rules apply: explicit maintainer architecture and repository-ownership decisions outrank transitional implementation or generated guidance. If sources conflict, stop and surface the conflict instead of choosing silently; update this file when App-scoped rules change.
 
 ## Prefer
 

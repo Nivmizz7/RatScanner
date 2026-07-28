@@ -11,7 +11,7 @@ Root `AGENTS.md` is the **control plane**: short universal rules, default comman
 | **Mandatory instructions** | Root `AGENTS.md`, nested `**/AGENTS.md` | Always or path-scoped rules that must be followed |
 | **Explanatory context** | Files in this directory | How systems work, where code lives, what to verify |
 
-Context docs are not a second source of product truth. If prose disagrees with code, scripts, `.csproj`, or CI, **implementation wins** — then update the prose.
+Context docs are not a second source of product truth. Explicit maintainer decisions control architecture and repository ownership, while code, scripts, `.csproj`, and CI describe current behavior and may reflect a transitional state. If those sources conflict, stop and surface the conflict instead of choosing one silently; once resolved, update the stale source.
 
 ## Files and when to read them
 
