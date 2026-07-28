@@ -189,15 +189,47 @@ function Test-CheckoutUsesRecursiveSubmodules {
     param([string]$WorkflowText)
 
     $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = [bool[]]::new($lines.Count)
+    for ($header = 0; $header -lt $lines.Count; $header++) {
+        if ($blockScalarLines[$header]) {
+            continue
+        }
+        if (
+            $lines[$header] -notmatch
+            '^(?<indent>[ ]*)(?:-\s+)?[^#].*:\s*[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$'
+        ) {
+            continue
+        }
+
+        $headerIndent = $Matches['indent'].Length
+        for ($content = $header + 1; $content -lt $lines.Count; $content++) {
+            if ($lines[$content] -match '^\s*$') {
+                $blockScalarLines[$content] = $true
+                continue
+            }
+            $contentIndent = ([regex]::Match($lines[$content], '^[ ]*')).Value.Length
+            if ($contentIndent -le $headerIndent) {
+                break
+            }
+            $blockScalarLines[$content] = $true
+        }
+    }
+
     $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
     for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
-        if ($lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$') {
+        if (
+            $blockScalarLines[$stepsIndex] -or
+            $lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$'
+        ) {
             continue
         }
 
         $stepsIndent = $Matches['indent'].Length
         $stepsEnd = $lines.Count
         for ($candidate = $stepsIndex + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($blockScalarLines[$candidate]) {
+                continue
+            }
             if ($lines[$candidate] -match '^\s*(?:#.*)?$') {
                 continue
             }
@@ -210,7 +242,7 @@ function Test-CheckoutUsesRecursiveSubmodules {
 
         $stepIndent = -1
         for ($index = $stepsIndex + 1; $index -lt $stepsEnd; $index++) {
-            if ($lines[$index] -notmatch $stepStarterPattern) {
+            if ($blockScalarLines[$index] -or $lines[$index] -notmatch $stepStarterPattern) {
                 continue
             }
 
@@ -225,6 +257,7 @@ function Test-CheckoutUsesRecursiveSubmodules {
             $stepEnd = $stepsEnd
             for ($candidate = $index + 1; $candidate -lt $stepsEnd; $candidate++) {
                 if (
+                    -not $blockScalarLines[$candidate] -and
                     $lines[$candidate] -match $stepStarterPattern -and
                     $Matches['indent'].Length -eq $stepIndent
                 ) {
@@ -237,6 +270,9 @@ function Test-CheckoutUsesRecursiveSubmodules {
             $usesCheckout = $lines[$index] -match '^[ ]*-\s+uses\s*:\s*actions/checkout@'
             if (-not $usesCheckout) {
                 for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                    if ($blockScalarLines[$candidate]) {
+                        continue
+                    }
                     if ($lines[$candidate] -notmatch '^(?<indent>[ ]*)uses\s*:\s*actions/checkout@') {
                         continue
                     }
@@ -251,7 +287,35 @@ function Test-CheckoutUsesRecursiveSubmodules {
                 continue
             }
 
+            $checkoutCondition = $null
+            if ($lines[$index] -match '^[ ]*-\s+if\s*:\s*(?<condition>.*?)\s*$') {
+                $checkoutCondition = $Matches['condition']
+            }
             for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                if ($blockScalarLines[$candidate]) {
+                    continue
+                }
+                if (
+                    $lines[$candidate] -match '^(?<indent>[ ]*)if\s*:\s*(?<condition>.*?)\s*$' -and
+                    $Matches['indent'].Length -eq $propertyIndent
+                ) {
+                    $checkoutCondition = $Matches['condition']
+                    break
+                }
+            }
+            if (
+                $null -ne $checkoutCondition -and
+                $checkoutCondition -notmatch
+                '(?i)^(?:true|\$\{\{\s*true\s*\}\})(?:\s+#.*)?\s*$'
+            ) {
+                $index = $stepEnd - 1
+                continue
+            }
+
+            for ($candidate = $index + 1; $candidate -lt $stepEnd; $candidate++) {
+                if ($blockScalarLines[$candidate]) {
+                    continue
+                }
                 if (
                     $lines[$candidate] -match '^(?<indent>[ ]*)with\s*:\s*$' -and
                     $Matches['indent'].Length -eq $propertyIndent
@@ -259,6 +323,9 @@ function Test-CheckoutUsesRecursiveSubmodules {
                     $withIndent = $Matches['indent'].Length
                     $directEntryIndent = -1
                     for ($entry = $candidate + 1; $entry -lt $stepEnd; $entry++) {
+                        if ($blockScalarLines[$entry]) {
+                            continue
+                        }
                         if ($lines[$entry] -match '^\s*(#.*)?$') {
                             continue
                         }
@@ -271,7 +338,8 @@ function Test-CheckoutUsesRecursiveSubmodules {
                         }
                         if (
                             $entryIndent -eq $directEntryIndent -and
-                            $lines[$entry] -match '^\s*submodules\s*:\s*recursive\s*$'
+                            $lines[$entry] -match
+                            '^\s*submodules\s*:\s*recursive(?:\s+#.*)?\s*$'
                         ) {
                             return $true
                         }

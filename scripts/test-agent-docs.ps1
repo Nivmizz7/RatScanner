@@ -264,9 +264,8 @@ try {
         '(?m)^\s*submodules:\s*recursive\r?\n',
         ''
     )
-    $nestedSubmodules = [regex]::Replace(
+    $nestedSubmodules = ([regex]'(?m)(^\s*persist-credentials:\s*false\s*$)').Replace(
         $nestedSubmodules,
-        '(?m)(^\s*persist-credentials:\s*false\s*$)',
         "`$1`r`n          sparse-checkout: |`r`n            submodules: recursive",
         1
     )
@@ -284,9 +283,8 @@ try {
         '(?m)^\s*submodules:\s*recursive\r?\n',
         ''
     )
-    $nonCheckoutSubmodules = [regex]::Replace(
+    $nonCheckoutSubmodules = ([regex]'(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)').Replace(
         $nonCheckoutSubmodules,
-        '(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)',
         "`$1`r`n          submodules: recursive",
         1
     )
@@ -304,15 +302,13 @@ try {
         '(?m)^\s*submodules:\s*recursive\r?\n',
         ''
     )
-    $matrixListSubmodules = [regex]::Replace(
+    $matrixListSubmodules = ([regex]'(?m)(^    runs-on:\s*windows-latest\s*$)').Replace(
         $matrixListSubmodules,
-        '(?m)(^    runs-on:\s*windows-latest\s*$)',
         "`$1`r`n    strategy:`r`n      matrix:`r`n        include:`r`n          - os: windows-latest",
         1
     )
-    $matrixListSubmodules = [regex]::Replace(
+    $matrixListSubmodules = ([regex]'(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)').Replace(
         $matrixListSubmodules,
-        '(?m)(^\s*dotnet-version:\s*10\.0\.x\s*$)',
         "`$1`r`n          submodules: recursive",
         1
     )
@@ -330,15 +326,61 @@ try {
         '(?m)^\s*submodules:\s*recursive\r?\n',
         ''
     )
-    $conditionalStepSubmodules = [regex]::Replace(
+    $conditionalStepSubmodules = ([regex]'(?m)(^\s*persist-credentials:\s*false\s*$)').Replace(
         $conditionalStepSubmodules,
-        '(?m)(^\s*persist-credentials:\s*false\s*$)',
         "`$1`r`n      - if: `${{ always() }}`r`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1`r`n        with:`r`n          submodules: recursive",
         1
     )
     [System.IO.File]::WriteAllText($workflowPath, $conditionalStepSubmodules)
     try {
         Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'conditional non-checkout step cannot supply recursive submodules for checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $conditionalCheckout = ([regex]'(?m)(^      - name:\s*Checkout\s*$)').Replace(
+        $workflow,
+        "`$1`r`n        if: false",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $conditionalCheckout)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'a statically false checkout does not guarantee submodule initialization'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $blockScalarCheckout = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $blockScalarCheckout = ([regex]'(?m)^jobs:\s*$').Replace(
+        $blockScalarCheckout,
+        "env:`r`n  EXAMPLE_WORKFLOW: |`r`n    steps:`r`n      - uses: actions/checkout@example`r`n        with:`r`n          submodules: recursive`r`njobs:",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $blockScalarCheckout)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'workflow text inside a block scalar cannot impersonate checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $commentedSubmodules = ([regex]'(?m)(^\s*submodules:\s*recursive)\s*$').Replace(
+        $workflow,
+        '$1 # initialize RatEye',
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $commentedSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $true -ExpectedText 'All documentation integrity checks passed.' -Scenario 'recursive submodules allow an inline YAML comment'
     }
     finally {
         Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
