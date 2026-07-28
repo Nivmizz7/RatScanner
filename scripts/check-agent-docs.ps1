@@ -189,15 +189,16 @@ function Test-CheckoutUsesRecursiveSubmodules {
     param([string]$WorkflowText)
 
     $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
     for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ($lines[$index] -notmatch '^(?<indent>\s*)-\s+(name|uses)\s*:') {
+        if ($lines[$index] -notmatch $stepStarterPattern) {
             continue
         }
 
         $stepIndent = $Matches['indent'].Length
         $stepEnd = $lines.Count
         for ($candidate = $index + 1; $candidate -lt $lines.Count; $candidate++) {
-            if ($lines[$candidate] -match '^(?<indent>\s*)-\s+(name|uses)\s*:' -and $Matches['indent'].Length -eq $stepIndent) {
+            if ($lines[$candidate] -match $stepStarterPattern -and $Matches['indent'].Length -eq $stepIndent) {
                 $stepEnd = $candidate
                 break
             }

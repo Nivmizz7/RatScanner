@@ -299,6 +299,26 @@ try {
     }
 
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $conditionalStepSubmodules = [regex]::Replace(
+        $workflow,
+        '(?m)^\s*submodules:\s*recursive\r?\n',
+        ''
+    )
+    $conditionalStepSubmodules = [regex]::Replace(
+        $conditionalStepSubmodules,
+        '(?m)(^\s*persist-credentials:\s*false\s*$)',
+        "`$1`r`n      - if: `${{ always() }}`r`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1`r`n        with:`r`n          submodules: recursive",
+        1
+    )
+    [System.IO.File]::WriteAllText($workflowPath, $conditionalStepSubmodules)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI checkout must initialize RatEye with submodules: recursive' -Scenario 'conditional non-checkout step cannot supply recursive submodules for checkout'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
     $wrongPushWorkflow = [regex]::Replace(
         $workflow,
         '(?m)(^  push:\r?\n    branches:\r?\n      - )master',
