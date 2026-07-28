@@ -73,7 +73,8 @@ public class ScanDiagnosticStoreTests
             string manifestPath = Path.Combine(result.Directory, "scan.ratdiag.json");
             Assert.True(File.Exists(manifestPath));
             string manifest = File.ReadAllText(manifestPath);
-            ScanReplayManifest exportedManifest = JsonConvert.DeserializeObject<ScanReplayManifest>(manifest)!;
+            var exportedManifest = JsonConvert.DeserializeObject<ScanReplayManifest>(manifest);
+            Assert.NotNull(exportedManifest);
             Assert.Contains("\"schemaVersion\": 1", manifest, StringComparison.Ordinal);
             Assert.Contains("\"item-id\"", manifest, StringComparison.Ordinal);
             Assert.Contains("\"inventory.grid_parse\": 4.5", manifest, StringComparison.Ordinal);
@@ -84,7 +85,11 @@ public class ScanDiagnosticStoreTests
             Assert.Contains("\"dpiScale\": 1.5", manifest, StringComparison.Ordinal);
             Assert.Equal(new[] { "item-id", string.Empty }, exportedManifest.Observed.ItemIds);
             Assert.Equal(new[] { "Fixture item", string.Empty }, exportedManifest.Observed.ItemNames);
-            Assert.Equal(new[] { 0.95f, 0.25f }, exportedManifest.Observed.Confidences);
+            Assert.Collection(
+                exportedManifest.Observed.Confidences,
+                confidence => Assert.Equal(0.95f, confidence, precision: 4),
+                confidence => Assert.Equal(0.25f, confidence, precision: 4)
+            );
         }
         finally
         {
