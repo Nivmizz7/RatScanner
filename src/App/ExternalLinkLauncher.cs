@@ -63,10 +63,10 @@ internal static class ExternalLinkLauncher
 
     private static string GetSafeLogTarget(string? url)
     {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
-            return string.IsNullOrWhiteSpace(url) ? "<null-or-empty>" : "<invalid>";
+        if (!TryGetSafeWebUri(url, out Uri? uri))
+            return string.IsNullOrWhiteSpace(url) ? "<null-or-empty>" : "<non-web-or-invalid>";
 
-        string host = uri.HostNameType == UriHostNameType.IPv6 ? $"[{uri.IdnHost}]" : uri.IdnHost;
+        string host = uri!.HostNameType == UriHostNameType.IPv6 ? $"[{uri.IdnHost}]" : uri.IdnHost;
         string port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
         string path = uri.GetComponents(UriComponents.Path, UriFormat.UriEscaped);
         string sanitized = $"{uri.Scheme}://{host}{port}/{path}";

@@ -67,8 +67,42 @@ public sealed class ExternalLinkLauncherTests
         );
 
         Assert.False(launched);
-        Assert.Single(warnings);
-        Assert.DoesNotContain(@"C:\Windows", warnings[0], StringComparison.Ordinal);
+        string warning = Assert.Single(warnings);
+        Assert.Contains("<non-web-or-invalid>", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("Windows", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cmd.exe", warning, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(@"C:\Users\Alice\Secrets.txt")]
+    [InlineData("file:///C:/Users/Alice/Secrets.txt")]
+    [InlineData(@"\\attacker-share\private\payload.exe")]
+    [InlineData("ms-msdt:/id PCWDiagnostic")]
+    [InlineData("not a url")]
+    public void Open_does_not_log_rejected_target_details(string url)
+    {
+        bool launched = false;
+        List<string> warnings = [];
+
+        ExternalLinkLauncher.Open(
+            url,
+            _ =>
+            {
+                launched = true;
+                return null;
+            },
+            warnings.Add
+        );
+
+        Assert.False(launched);
+        string warning = Assert.Single(warnings);
+        Assert.Contains("<non-web-or-invalid>", warning, StringComparison.Ordinal);
+        Assert.DoesNotContain("Alice", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Secrets", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("attacker-share", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("payload", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ms-msdt", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not a url", warning, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
