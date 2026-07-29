@@ -96,14 +96,21 @@ try {
     Get-ChildItem -LiteralPath $validation.DataRoot -Force | Copy-Item -Destination $stagingPath -Recurse -Force
 
     $hadDestination = Test-Path -LiteralPath $destination
+    $swapSucceeded = $false
     try {
         if ($hadDestination) {
             Move-Item -LiteralPath $destination -Destination $backupPath
         }
         Move-Item -LiteralPath $stagingPath -Destination $destination
+        $swapSucceeded = $true
     }
     catch {
-        if (-not (Test-Path -LiteralPath $destination) -and (Test-Path -LiteralPath $backupPath)) {
+        if (Test-Path -LiteralPath $backupPath) {
+            if (Test-Path -LiteralPath $destination) {
+                throw ("RatScanner data installation failed after the previous installation was backed up. " +
+                    "The unexpected destination was left in place and the backup was preserved at $backupPath. " +
+                    "Original error: $($_.Exception.Message)")
+            }
             Move-Item -LiteralPath $backupPath -Destination $destination
         }
         throw
@@ -124,7 +131,9 @@ finally {
         Remove-Item -LiteralPath $resolvedWorkRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
     foreach ($temporaryInstallPath in @($stagingPath, $backupPath)) {
+        $isBackup = $temporaryInstallPath -eq $backupPath
         if ((Test-Path -LiteralPath $temporaryInstallPath) -and
+            (-not $isBackup -or $swapSucceeded) -and
             [System.IO.Path]::GetFullPath($temporaryInstallPath).StartsWith([System.IO.Path]::GetFullPath($destinationParent), [StringComparison]::OrdinalIgnoreCase)) {
             Remove-Item -LiteralPath $temporaryInstallPath -Recurse -Force -ErrorAction SilentlyContinue
         }

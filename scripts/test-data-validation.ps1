@@ -180,6 +180,18 @@ try {
         if ($result.IconCount -ne 2) { throw 'Unexpected icon count.' }
     }
 
+    $extraPayloadFixture = Join-Path $fixtureRoot 'extra-payload-file'
+    $extraPayloadRoot = New-DataFixture -Path $extraPayloadFixture
+    [System.IO.File]::WriteAllText((Join-Path $extraPayloadRoot 'unlisted.json'), '{}')
+    Copy-Item -LiteralPath (Join-Path $extraPayloadRoot 'manifest.json') -Destination $publishedManifest -Force
+    Assert-Throws -Scenario 'payload rejects files not listed in the manifest' -ExpectedText 'file not listed in manifest.json: unlisted.json' -Action {
+        Assert-RatScannerDataPayload `
+            -DataRoot $extraPayloadRoot `
+            -PublishedManifestPath $publishedManifest `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
     $nestedFixture = Join-Path $fixtureRoot 'nested'
     $nestedRoot = New-DataFixture -Path $nestedFixture -Nested
     Copy-Item -LiteralPath (Join-Path $nestedRoot 'manifest.json') -Destination $publishedManifest -Force
@@ -307,7 +319,17 @@ try {
             -MinimumIconCount 1
     }
 
-    Assert-Throws -Scenario 'package carries an unlisted extra icon' -ExpectedText 'icon count does not match manifest.json' -Action {
+    Assert-Throws -Scenario 'package carries an unlisted extra data file' -ExpectedText 'data file not listed in manifest.json: Data/unlisted.json' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'extra-data-file' -Mutate {
+                param($Path)
+                [System.IO.File]::WriteAllText((Join-Path $Path 'Data\unlisted.json'), '{}')
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package carries an unlisted extra icon' -ExpectedText 'data file not listed in manifest.json: Data/icons/stray.png' -Action {
         Assert-RatScannerDataPackage `
             -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'extra-icon' -Mutate {
                 param($Path)
@@ -373,18 +395,16 @@ try {
         }
     }
 
-    Assert-Passes -Scenario 'nested icon subdirectories do not inflate the packaged icon count' -Action {
-        $result = Assert-RatScannerDataPackage `
+    Assert-Throws -Scenario 'nested unlisted icon files are rejected' -ExpectedText 'data file not listed in manifest.json: Data/icons/thumbs/nested.png' -Action {
+        Assert-RatScannerDataPackage `
             -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'nested-icons' -Mutate {
                 param($Path)
-                # Not manifest-listed and not a direct child: must not count toward the icon total.
                 $sub = Join-Path $Path 'Data\icons\thumbs'
                 New-Item -ItemType Directory -Force -Path $sub | Out-Null
                 [System.IO.File]::WriteAllBytes((Join-Path $sub 'nested.png'), [byte[]](137, 80, 78, 71))
             }) `
             -ExpectedSchema 1 `
             -MinimumIconCount 1
-        if ($result.IconCount -ne 2) { throw "Nested icons changed the count: $($result.IconCount)" }
     }
 
     $collidePackage = Join-Path $fixtureRoot 'case-collide.zip'

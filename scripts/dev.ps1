@@ -175,7 +175,7 @@ function Stop-AppProcess {
 
 function Start-App {
     param([string]$ProjectPath, [string]$Config)
-    $runArgs = "run --project `"$ProjectPath`" -c $Config --no-build --no-restore"
+    $runArgs = @('run', '--project', $ProjectPath, '-c', $Config, '--no-build', '--no-restore')
     $proc = Start-Process -FilePath 'dotnet' -ArgumentList $runArgs -PassThru -NoNewWindow
     Write-Host "  App launched (PID $($proc.Id))." -ForegroundColor Green
     return $proc

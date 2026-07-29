@@ -204,12 +204,17 @@ function Assert-RatScannerDataFiles {
         [Parameter(Mandatory = $true)]$Manifest
     )
 
+    $expectedFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    [void]$expectedFiles.Add('manifest.json')
     foreach ($entry in @($Manifest.files | Sort-Object -Property path)) {
-        $relativePath = [string]$entry.path
+        $relativePath = ([string]$entry.path).Replace('\', '/')
         $expectedHash = ([string]$entry.sha256).ToLowerInvariant()
         $expectedSize = [long]$entry.size
-        if ([string]::IsNullOrWhiteSpace($relativePath) -or $relativePath -match '(^|[\\/])\.\.([\\/]|$)' -or [System.IO.Path]::IsPathRooted($relativePath)) {
+        if ([string]::IsNullOrWhiteSpace($relativePath) -or $relativePath -match '(^|/)\.\.(/|$)' -or [System.IO.Path]::IsPathRooted($relativePath)) {
             throw "RatScanner data manifest contains an unsafe file path: $relativePath"
+        }
+        if (-not $expectedFiles.Add($relativePath)) {
+            throw "RatScanner data manifest contains a duplicate file path: $relativePath"
         }
         if ($expectedHash -notmatch '^[0-9a-f]{64}$' -or $expectedSize -lt 0) {
             throw "RatScanner data manifest has invalid metadata for: $relativePath"
@@ -223,13 +228,25 @@ function Assert-RatScannerDataFiles {
         if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
             throw "Data archive is missing manifest file: $relativePath"
         }
-        $actualSize = (Get-Item -LiteralPath $fullPath).Length
+        $item = Get-Item -LiteralPath $fullPath
+        if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Data archive manifest file is a reparse point: $relativePath"
+        }
+        $actualSize = $item.Length
         if ($actualSize -ne $expectedSize) {
             throw "Data archive file size mismatch for $relativePath. Actual: $actualSize; manifest: $expectedSize"
         }
         $actualHash = Get-RatScannerDataFileSha256 -Path $fullPath
         if ($actualHash -ne $expectedHash) {
             throw "Data archive file checksum mismatch for $relativePath. Actual: $actualHash; manifest: $expectedHash"
+        }
+    }
+
+    $rootPrefix = [System.IO.Path]::GetFullPath($DataRoot).TrimEnd('\') + '\'
+    foreach ($item in Get-ChildItem -LiteralPath $DataRoot -File -Recurse) {
+        $relativePath = $item.FullName.Substring($rootPrefix.Length).Replace('\', '/')
+        if (-not $expectedFiles.Contains($relativePath)) {
+            throw "Data archive contains a file not listed in manifest.json: $relativePath"
         }
     }
 
@@ -392,7 +409,8 @@ function Assert-RatScannerDataPackage {
             # A well-formed package never contains such names, so reject them outright.
             foreach ($segment in $normalizedName.Split('/')) {
                 if ([string]::IsNullOrEmpty($segment) -or $segment -eq '.' -or $segment -eq '..' -or
-                    $segment -ne $segment.TrimEnd('.', ' ') -or $segment.Contains(':')) {
+                    $segment -ne $segment.TrimEnd('.', ' ') -or $segment.Contains(':') -or
+                    $segment.IndexOfAny([System.IO.Path]::GetInvalidFileNameChars()) -ge 0) {
                     throw ("Release package contains a non-canonical entry name that can alias " +
                         "another file on Windows: $normalizedName")
                 }
@@ -471,9 +489,14 @@ function Assert-RatScannerDataPackage {
             Assert-RatScannerDataContentPin -Manifest $manifest -ContentSha256Prefix $ContentSha256Prefix
         }
 
+        $manifestFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+        [void]$manifestFiles.Add($manifestEntryName)
         foreach ($manifestEntry in @($manifest.files)) {
             $relativePath = ([string]$manifestEntry.path).Replace('\', '/')
             $entryName = $DataPrefix + $relativePath
+            if (-not $manifestFiles.Add($entryName)) {
+                throw "Release package manifest contains a duplicate file path: $relativePath"
+            }
             if (-not $files.ContainsKey($entryName)) {
                 throw "Release package is missing manifest file: $relativePath"
             }
@@ -486,6 +509,13 @@ function Assert-RatScannerDataPackage {
             $actualHash = Get-RatScannerDataEntrySha256 -Entry $packagedEntry
             if ($actualHash -ne $expectedHash) {
                 throw "Release package file checksum mismatch for $relativePath. Actual: $actualHash; manifest: $expectedHash"
+            }
+        }
+
+        foreach ($entryName in $files.Keys) {
+            if ($entryName.StartsWith($DataPrefix, [System.StringComparison]::Ordinal) -and
+                -not $manifestFiles.Contains($entryName)) {
+                throw "Release package contains a data file not listed in manifest.json: $entryName"
             }
         }
 

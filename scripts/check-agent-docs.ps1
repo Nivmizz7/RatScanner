@@ -193,26 +193,56 @@ function Get-GitSubmoduleSections {
   FindAll walks unreachable code too, so an assertion parked in `if ($false) { ... }` or in the
   `else` of `if ($true) { ... }` would otherwise satisfy a presence guard while never running.
 #>
+function Test-AstIsTopLevelStatement {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Node)
+
+    for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
+        if ($parent -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
+            $parent -is [System.Management.Automation.Language.IfStatementAst] -or
+            $parent -is [System.Management.Automation.Language.LoopStatementAst] -or
+            $parent -is [System.Management.Automation.Language.SwitchStatementAst] -or
+            $parent -is [System.Management.Automation.Language.TryStatementAst] -or
+            $parent -is [System.Management.Automation.Language.TrapStatementAst]) {
+            return $false
+        }
+    }
+    return $true
+}
+
 function Test-AstIsUnreachable {
     param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Node)
 
     for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
+        if ($parent -is [System.Management.Automation.Language.WhileStatementAst] -or
+            $parent -is [System.Management.Automation.Language.ForStatementAst]) {
+            $condition = $parent.Condition
+            if ($null -ne $condition -and
+                $condition.Extent.Text.Trim() -match '(?i)^\(*\s*\$false\s*\)*$') {
+                return $true
+            }
+            continue
+        }
         if ($parent -isnot [System.Management.Automation.Language.IfStatementAst]) {
             continue
         }
+        $precedingClauseIsStaticallyTrue = $false
         foreach ($clause in $parent.Clauses) {
             $conditionText = $clause.Item1.Extent.Text.Trim()
-            if ($conditionText -match '(?i)^\(?\s*\$false\s*\)?$' -and
+            $nodeIsInClause =
                 $clause.Item2.Extent.StartOffset -le $Node.Extent.StartOffset -and
-                $clause.Item2.Extent.EndOffset -ge $Node.Extent.EndOffset) {
+                $clause.Item2.Extent.EndOffset -ge $Node.Extent.EndOffset
+            if ($nodeIsInClause -and
+                ($precedingClauseIsStaticallyTrue -or
+                    $conditionText -match '(?i)^\(*\s*\$false\s*\)*$')) {
                 return $true
+            }
+            if ($conditionText -match '(?i)^\(*\s*\$true\s*\)*$') {
+                $precedingClauseIsStaticallyTrue = $true
             }
         }
         # An else body is dead when any preceding clause is statically true.
         if ($null -ne $parent.ElseClause -and
-            @($parent.Clauses | Where-Object {
-                $_.Item1.Extent.Text.Trim() -match '(?i)^\(?\s*\$true\s*\)?$'
-            }).Count -gt 0 -and
+            $precedingClauseIsStaticallyTrue -and
             $parent.ElseClause.Extent.StartOffset -le $Node.Extent.StartOffset -and
             $parent.ElseClause.Extent.EndOffset -ge $Node.Extent.EndOffset) {
             return $true
@@ -221,17 +251,17 @@ function Test-AstIsUnreachable {
     return $false
 }
 
-function Test-DataContractRepositoryAssignment {
+function Test-DataContractStringAssignment {
     param(
         [Parameter(Mandatory = $true)][string]$ContractPath,
-        [Parameter(Mandatory = $true)][string]$ExpectedRepository
+        [Parameter(Mandatory = $true)][string]$VariableName,
+        [Parameter(Mandatory = $true)][scriptblock]$ValuePredicate
     )
 
     $parseErrors = $null
     $contractAst = [System.Management.Automation.Language.Parser]::ParseFile(
         $ContractPath, [ref]$null, [ref]$parseErrors)
     if (@($parseErrors).Count -gt 0) {
-        # Reported separately so a syntax error is not misread as a pinning problem.
         return [pscustomobject]@{ Parsed = $false; Matches = $false }
     }
 
@@ -242,7 +272,7 @@ function Test-DataContractRepositoryAssignment {
         if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) {
             continue
         }
-        if ($assignment.Left.VariablePath.UserPath -ne 'script:RatScannerDataRepository') {
+        if ($assignment.Left.VariablePath.UserPath -ne $VariableName) {
             continue
         }
         if (Test-AstIsUnreachable -Node $assignment) {
@@ -253,11 +283,23 @@ function Test-DataContractRepositoryAssignment {
             $right = $right.Expression
         }
         if ($right -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
-            $right.Value -eq $ExpectedRepository) {
+            (& $ValuePredicate $right.Value)) {
             return [pscustomobject]@{ Parsed = $true; Matches = $true }
         }
     }
     return [pscustomobject]@{ Parsed = $true; Matches = $false }
+}
+
+function Test-DataContractRepositoryAssignment {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContractPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedRepository
+    )
+
+    return Test-DataContractStringAssignment `
+        -ContractPath $ContractPath `
+        -VariableName 'script:RatScannerDataRepository' `
+        -ValuePredicate { param($value) $value -eq $ExpectedRepository }
 }
 
 function Get-WorkflowBlockScalarMap {
@@ -767,7 +809,11 @@ if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $set
     elseif (-not $repositoryAssignment.Matches) {
         Add-Failure 'RatScannerData contract must use tarkovtracker-org/RatScannerData'
     }
-    if ($dataContractText -notmatch "RatScannerDataReleaseTag\s*=\s*'data-[0-9a-f]{16}'") {
+    $releaseTagAssignment = Test-DataContractStringAssignment `
+        -ContractPath $dataContractPath `
+        -VariableName 'script:RatScannerDataReleaseTag' `
+        -ValuePredicate { param($value) $value -match '^data-[0-9a-f]{16}$' }
+    if ($releaseTagAssignment.Parsed -and -not $releaseTagAssignment.Matches) {
         Add-Failure 'RatScannerData contract must pin a content-addressed data release tag'
     }
     if ($setupDataText -notlike '*RatScannerData.ps1*') {
@@ -812,6 +858,7 @@ if (Test-Path -LiteralPath $verifyPackagePath) {
         $invokesAssertion = @($commandAsts | Where-Object {
             $_.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -and
             $_.GetCommandName() -eq 'Assert-RatScannerDataPackage' -and
+            (Test-AstIsTopLevelStatement -Node $_) -and
             -not (Test-AstIsUnreachable -Node $_)
         }).Count -gt 0
         # Accept both idioms in use here: a literal dot-source, and setup-data.ps1's
@@ -823,6 +870,7 @@ if (Test-Path -LiteralPath $verifyPackagePath) {
         }, $true)).Count -gt 0
         $dotSourcesContract = $referencesContractFile -and @($commandAsts | Where-Object {
             $_.InvocationOperator -eq [System.Management.Automation.Language.TokenKind]::Dot -and
+            (Test-AstIsTopLevelStatement -Node $_) -and
             -not (Test-AstIsUnreachable -Node $_)
         }).Count -gt 0
         if (-not $invokesAssertion -or -not $dotSourcesContract) {
@@ -965,7 +1013,8 @@ if (Test-Path -LiteralPath $ciPath) {
     $uploadStepIndex = -1
     for ($stepIndex = 0; $stepIndex -lt $ciSteps.Count; $stepIndex++) {
         $stepText = $ciSteps[$stepIndex].EffectiveText
-        if ($verifyStepIndex -lt 0 -and $stepText -like '*scripts/verify-package.ps1*') {
+        if ($verifyStepIndex -lt 0 -and
+            $stepText -match '(?im)^\s*(?:&\s*)?(?:powershell(?:\.exe)?\s+.*?-File\s+)?scripts[\\/]verify-package\.ps1(?:\s|$)') {
             $verifyStepIndex = $stepIndex
         }
         if ($uploadStepIndex -lt 0 -and $stepText -match 'uses\s*:\s*\S*upload-artifact') {

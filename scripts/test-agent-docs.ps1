@@ -507,6 +507,24 @@ try {
     }
 
     $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $namedButNotInvoked = $workflow.Replace(
+        '      - name: Verify release package',
+        '      - name: Prepare scripts/verify-package.ps1')
+    $namedButNotInvoked = $namedButNotInvoked.Replace(
+        '          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-package.ps1 -PackagePath (Join-Path $PWD ''RatScanner.zip'')',
+        '          powershell -NoProfile -ExecutionPolicy Bypass -Command "Write-Host skipped"')
+    if ($namedButNotInvoked -eq $workflow) {
+        throw 'Fixture mutation did not apply: the package verification step was not found.'
+    }
+    [System.IO.File]::WriteAllText($workflowPath, $namedButNotInvoked)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'before upload' -Scenario 'a step name mentioning the verifier does not count as invoking it'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
     $zipStepLine = '      - name: Zip Content'
     $prematureUpload = @(
         '      - name: Premature upload',
@@ -587,10 +605,88 @@ try {
     [System.IO.File]::WriteAllText(
         $verifyPackageFixture,
         $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nif ((`$false)) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'nested parentheses around a false condition do not make an unreachable assertion count'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nwhile (`$false) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion in a literal-false while loop does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nswitch (`$false) { `$true { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 } }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion inside a switch does not satisfy the top-level package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nfor (`$index = 0; `$false; `$index++) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion in a literal-false for loop does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
         "`nif (`$true) { `$null = 1 } else { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
     )
     try {
         Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion in a dead else branch does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nif (`$true) { `$null = 1 } elseif (`$false) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion in an elseif after a literal-true clause does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nif ((`$true)) { `$null = 1 } elseif (`$false) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'nested parentheses around a true condition leave later elseif clauses unreachable'
     }
     finally {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
@@ -610,6 +706,37 @@ try {
     }
 
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
+    $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
+    $releaseTagLiteralOnly = $dataContract.Replace(
+        '$script:RatScannerDataReleaseTag = ''data-f1f047dc5d38ee43''',
+        '$script:RatScannerDataReleaseTag = ''latest''')
+    if ($releaseTagLiteralOnly -eq $dataContract) {
+        throw 'Fixture mutation did not apply: the release tag assignment was not found.'
+    }
+    [System.IO.File]::WriteAllText(
+        $dataContractPath,
+        $releaseTagLiteralOnly + "`n`$unused = 'RatScannerDataReleaseTag = ''data-f1f047dc5d38ee43'''`n")
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must pin a content-addressed data release tag' -Scenario 'a string literal cannot authorize the data release tag'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\RatScannerData.ps1'
+    }
+
+    $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
+    $releaseTagCommentOnly = $dataContract.Replace(
+        '$script:RatScannerDataReleaseTag = ''data-f1f047dc5d38ee43''',
+        '$script:RatScannerDataReleaseTag = ''latest''')
+    [System.IO.File]::WriteAllText(
+        $dataContractPath,
+        $releaseTagCommentOnly + "`n# RatScannerDataReleaseTag = 'data-f1f047dc5d38ee43'`n")
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must pin a content-addressed data release tag' -Scenario 'a comment cannot authorize the data release tag'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\RatScannerData.ps1'
+    }
+
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     $literalOnly = $dataContract.Replace(
         '$script:RatScannerDataRepository = ''tarkovtracker-org/RatScannerData''',
