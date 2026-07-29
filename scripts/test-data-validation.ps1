@@ -419,6 +419,14 @@ try {
         Assert-RatScannerDataPackage -PackagePath $trailingPackage -ExpectedSchema 1 -MinimumIconCount 1
     }
 
+    # Reserved device names cannot be extracted on Windows even with an extension.
+    $reservedPackage = Join-Path $fixtureRoot 'reserved-name.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'reserved-source') -Destination $reservedPackage -Force
+    Add-ZipEntry -PackagePath $reservedPackage -EntryName 'Data/NUL.txt' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('x'))
+    Assert-Throws -Scenario 'reserved Windows device names are rejected' -ExpectedText 'reserved Windows device name' -Action {
+        Assert-RatScannerDataPackage -PackagePath $reservedPackage -ExpectedSchema 1 -MinimumIconCount 1
+    }
+
     $duplicatePackage = Join-Path $fixtureRoot 'duplicate.zip'
     Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'dupe-source') -Destination $duplicatePackage -Force
     # The zip format permits repeated names; the verifier must not pick one and move on.

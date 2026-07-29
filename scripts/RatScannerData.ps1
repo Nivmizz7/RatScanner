@@ -396,6 +396,12 @@ function Assert-RatScannerDataPackage {
                     throw ("Release package contains a non-canonical entry name that can alias " +
                         "another file on Windows: $normalizedName")
                 }
+                # Reserved device names cannot be materialized even with an extension, so such an
+                # entry would fail extraction on a user machine after passing verification here.
+                if ($segment.Split('.')[0] -match '(?i)^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$') {
+                    throw ("Release package contains a reserved Windows device name that cannot be " +
+                        "extracted: $normalizedName")
+                }
             }
             if ($files.ContainsKey($normalizedName)) {
                 throw "Release package contains a duplicate entry: $normalizedName"
