@@ -67,10 +67,10 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         serviceCollection.AddMudServices();
 
         serviceCollection.AddSingleton<MenuVM>(s => new MenuVM(RatScannerMain.Instance));
-        serviceCollection.AddSingleton<SessionHistoryService>(services =>
+        serviceCollection.AddSingleton<RecentScansService>(services =>
         {
             MenuVM menu = services.GetRequiredService<MenuVM>();
-            return new SessionHistoryService(menu.ItemScans, scan => ScanResultAdapter.Map(scan, menu, false));
+            return new RecentScansService(menu.ItemScans, scan => ScanResultAdapter.Map(scan, menu, false));
         });
 
         LocalizationService localizationService = new();

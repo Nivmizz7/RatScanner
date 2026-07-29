@@ -8,8 +8,10 @@ namespace RatScanner.Scan;
 
 public class ItemQueue : IEnumerable<ItemScan>
 {
+    private readonly object enqueueSync = new();
     private readonly ConcurrentQueue<ItemScan> queue = new();
     public event EventHandler? Changed;
+    internal event Action<IReadOnlyList<ItemScan>>? ItemsEnqueued;
 
     protected virtual void OnChanged()
     {
@@ -34,14 +36,22 @@ public class ItemQueue : IEnumerable<ItemScan>
 
     public virtual void Enqueue(ItemScan item)
     {
-        queue.Enqueue(item);
+        lock (enqueueSync)
+        {
+            queue.Enqueue(item);
+            ItemsEnqueued?.Invoke([item]);
+        }
         OnChanged();
     }
 
     public void EnqueueRange<T>(List<T> items)
         where T : ItemScan
     {
-        items.ForEach(queue.Enqueue);
+        lock (enqueueSync)
+        {
+            items.ForEach(queue.Enqueue);
+            ItemsEnqueued?.Invoke(items);
+        }
         OnChanged();
     }
 
