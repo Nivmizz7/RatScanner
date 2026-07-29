@@ -9,6 +9,7 @@ Scoped mandatory rules also live in `src/App/AGENTS.md`.
 - Host pages:
   - Main: `wwwroot/index.html` → `RazorApp` → routes under `/app`
   - Overlay tooltip: `wwwroot/overlay.html` → `/overlay`
+- The passive overlay WebView initializes in a small, non-topmost bootstrap window. After initialization, its native window is hidden whenever no unexpired tooltip exists and expands into the topmost virtual-screen overlay only for the configured tooltip lifetime, so startup and idle operation do not leave a monitor-sized topmost surface above the Windows taskbar or game.
 - Each `BlazorWebView` sets its route with `StartPath`. Do not replace this with `NavigateTo` from a root component: all routers scan the same assembly, so an initial `/` render leaks the main app page into transparent overlay windows.
 - Icons/static Data files are exposed to WebView via virtual host `local.data` → `Data/`.
 

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Components.WebView;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using RatScanner.ViewModel;
 
 namespace RatScanner.View;
 
@@ -18,12 +19,17 @@ public partial class BlazorOverlay : Window
 {
     private WebView2CompositionControl? _initializedWebView;
     private DispatcherOperation? _pendingDpiRefresh;
+    private readonly MenuVM _menuViewModel;
+    private bool _webViewReady;
+    private bool _closing;
 
     public BlazorOverlay(ServiceProvider serviceProvider)
     {
         Resources.Add("services", serviceProvider);
+        _menuViewModel = serviceProvider.GetRequiredService<MenuVM>();
 
         InitializeComponent();
+        _menuViewModel.PropertyChanged += MenuViewModel_PropertyChanged;
         DpiChanged += HostWindow_DpiChanged;
     }
 
@@ -43,7 +49,6 @@ public partial class BlazorOverlay : Window
 
         _initializedWebView = e.WebView;
         _initializedWebView.DefaultBackgroundColor = System.Drawing.Color.Transparent;
-        SetSize();
         SetWindowStyle();
         _initializedWebView.NavigationCompleted += WebView_Loaded;
 
@@ -144,10 +149,43 @@ public partial class BlazorOverlay : Window
         // re-apply click-through so a late-created input window cannot start
         // swallowing desktop/taskbar clicks.
         SetWindowStyle();
+        _webViewReady = true;
+        UpdateWindowVisibility();
 
         // If we are running in a development/debugger mode, open dev tools to help out
         if (Debugger.IsAttached)
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
+    }
+
+    private void MenuViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        _ = Dispatcher.BeginInvoke(UpdateWindowVisibility);
+    }
+
+    private void UpdateWindowVisibility()
+    {
+        if (!_webViewReady || _closing)
+            return;
+
+        bool hasVisibleTooltip =
+            _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
+        if (hasVisibleTooltip)
+        {
+            // Only enter the topmost band while the overlay has content. A permanently
+            // topmost virtual-screen window suppresses the taskbar and interferes with
+            // fullscreen-aware features such as variable refresh rate.
+            if (!IsVisible)
+                SetSize();
+            Topmost = true;
+            if (!IsVisible)
+                Show();
+        }
+        else
+        {
+            Topmost = false;
+            if (IsVisible)
+                Hide();
+        }
     }
 
     private void HostWindow_DpiChanged(object sender, System.Windows.DpiChangedEventArgs e)
@@ -158,6 +196,8 @@ public partial class BlazorOverlay : Window
 
     protected override void OnClosed(System.EventArgs e)
     {
+        _closing = true;
+        _menuViewModel.PropertyChanged -= MenuViewModel_PropertyChanged;
         DpiChanged -= HostWindow_DpiChanged;
         WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
         if (_initializedWebView is not null)

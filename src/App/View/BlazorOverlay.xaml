@@ -13,7 +13,7 @@
         ResizeMode="NoResize"
         ScrollViewer.VerticalScrollBarVisibility="Disabled"
         ShowInTaskbar="False"
-        Topmost="True"
+        Topmost="False"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"

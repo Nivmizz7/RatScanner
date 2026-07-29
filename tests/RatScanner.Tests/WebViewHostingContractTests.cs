@@ -28,6 +28,18 @@ public sealed class WebViewHostingContractTests
     }
 
     [Fact]
+    public void Passive_overlay_bootstraps_small_and_not_topmost()
+    {
+        string root = FindRepositoryRoot();
+        XDocument overlay = XDocument.Load(Path.Combine(root, "src", "App", "View", "BlazorOverlay.xaml"));
+        XElement window = Assert.IsType<XElement>(overlay.Root);
+
+        Assert.Equal("False", window.Attribute("Topmost")?.Value);
+        Assert.Equal("100", window.Attribute("Width")?.Value);
+        Assert.Equal("100", window.Attribute("Height")?.Value);
+    }
+
+    [Fact]
     public void Frame_refresh_preserves_geometry_z_order_and_activation()
     {
         Assert.Equal((uint)0x0037, OverlayNativeMethods.SwpFrameChangedFlags);
