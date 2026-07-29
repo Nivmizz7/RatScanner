@@ -606,7 +606,9 @@ foreach ($activePath in @($setupDataPath, $publishPath, $ciPath)) {
         continue
     }
     $activeText = Get-Content -LiteralPath $activePath -Raw
-    if ($activeText -like '*github.com/RatScanner/RatScannerData/releases/latest*') {
+    # Match the path segment, not an owner-qualified URL: reintroducing the unpinned latest release
+    # is a regression regardless of which org it points at.
+    if ($activeText -like '*RatScannerData/releases/latest*') {
         Add-Failure ((Get-RepoRelativePath -FullName $activePath) + ' must not download the old unpinned RatScannerData latest release')
     }
 }

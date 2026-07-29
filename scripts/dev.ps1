@@ -57,6 +57,8 @@ $solution = Join-Path $repositoryRoot 'RatScanner.sln'
 $setupScript = Join-Path $PSScriptRoot 'setup-data.ps1'
 $dataDir = Join-Path $repositoryRoot 'src\App\Data'
 
+. (Join-Path $PSScriptRoot 'RatScannerData.ps1')
+
 function Assert-Command {
     param([string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -66,21 +68,14 @@ function Assert-Command {
 
 function Test-DataReady {
     param([string]$DataDir)
-    $required = @(
-        'maps.json',
-        'unknown.png',
-        'traineddata\eng.traineddata'
-    )
-    foreach ($relativePath in $required) {
-        if (-not (Test-Path -LiteralPath (Join-Path $DataDir $relativePath))) {
-            return $false
-        }
-    }
-    $iconsDir = Join-Path $DataDir 'icons'
-    if (-not (Test-Path -LiteralPath $iconsDir)) {
-        return $false
-    }
-    return (@(Get-ChildItem -LiteralPath $iconsDir -Filter '*.png' -File -ErrorAction SilentlyContinue).Count -gt 0)
+    # Use the shared contract so the watch loop cannot keep running against a payload from a
+    # previously pinned release, which a loose file-presence check would happily accept.
+    $contract = Get-RatScannerDataReleaseContract
+    return Test-RatScannerDataInstallation `
+        -DataRoot $DataDir `
+        -ExpectedSchema $contract.ManifestSchema `
+        -MinimumIconCount $contract.MinimumIconCount `
+        -ContentSha256Prefix $contract.ContentSha256Prefix
 }
 
 Write-Host ""

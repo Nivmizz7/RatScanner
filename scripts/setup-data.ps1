@@ -49,7 +49,8 @@ function Invoke-DataDownload {
 if (-not $Force -and (Test-RatScannerDataInstallation `
     -DataRoot $destination `
     -ExpectedSchema $contract.ManifestSchema `
-    -MinimumIconCount $contract.MinimumIconCount)) {
+    -MinimumIconCount $contract.MinimumIconCount `
+    -ContentSha256Prefix $contract.ContentSha256Prefix)) {
     $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
     Write-Host "Data already installed ($($manifest.iconCount) icons, content $($manifest.contentSha256)) at $destination"
     Write-Host 'Pass -Force to re-download.'
@@ -89,15 +90,17 @@ try {
             Move-Item -LiteralPath $destination -Destination $backupPath
         }
         Move-Item -LiteralPath $stagingPath -Destination $destination
-        if ($hadDestination) {
-            Remove-Item -LiteralPath $backupPath -Recurse -Force
-        }
     }
     catch {
         if (-not (Test-Path -LiteralPath $destination) -and (Test-Path -LiteralPath $backupPath)) {
             Move-Item -LiteralPath $backupPath -Destination $destination
         }
         throw
+    }
+    if ($hadDestination) {
+        # The swap already succeeded, so a locked backup directory must not fail the install.
+        # The finally block below removes it on a best-effort basis.
+        Remove-Item -LiteralPath $backupPath -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "Installed $($validation.IconCount) icons and OCR data to $destination"
     Write-Host "RatScannerData content: $($validation.ContentSha256)"

@@ -5,12 +5,14 @@ $script:RatScannerDataManifestSchema = 1
 $script:RatScannerDataMinimumIconCount = 4000
 
 function Get-RatScannerDataReleaseContract {
-    if ($script:RatScannerDataReleaseTag -notmatch '^data-(?<prefix>[0-9a-f]{16})$') {
+    # RatScannerData names releases after the first 16 hex characters of the payload contentSha256,
+    # so the tag alone is enough to prove a built package carries the pinned payload. Capture the
+    # group explicitly rather than relying on $Matches from a negated test.
+    $tagMatch = [regex]::Match($script:RatScannerDataReleaseTag, '^data-(?<prefix>[0-9a-f]{16})$')
+    if (-not $tagMatch.Success) {
         throw 'Pinned RatScanner data release tag must use the content-addressed form data-<16 lowercase hex characters>.'
     }
-    # RatScannerData names releases after the first 16 hex characters of the payload contentSha256,
-    # so the tag alone is enough to prove a built package carries the pinned payload.
-    $contentSha256Prefix = $Matches['prefix']
+    $contentSha256Prefix = $tagMatch.Groups['prefix'].Value
     $baseUrl = "https://github.com/$script:RatScannerDataRepository/releases/download/$script:RatScannerDataReleaseTag"
     return [pscustomobject]@{
         Repository          = $script:RatScannerDataRepository
@@ -290,7 +292,8 @@ function Test-RatScannerDataInstallation {
     param(
         [Parameter(Mandatory = $true)][string]$DataRoot,
         [Parameter(Mandatory = $true)][int]$ExpectedSchema,
-        [Parameter(Mandatory = $true)][int]$MinimumIconCount
+        [Parameter(Mandatory = $true)][int]$MinimumIconCount,
+        [string]$ContentSha256Prefix = ''
     )
 
     try {
@@ -298,6 +301,11 @@ function Test-RatScannerDataInstallation {
             -ManifestPath (Join-Path $DataRoot 'manifest.json') `
             -ExpectedSchema $ExpectedSchema `
             -MinimumIconCount $MinimumIconCount
+        # Without this, an installation left over from a previously pinned release satisfies the
+        # skip-when-installed path and development silently continues on stale data.
+        if (-not [string]::IsNullOrWhiteSpace($ContentSha256Prefix)) {
+            Assert-RatScannerDataContentPin -Manifest $manifest -ContentSha256Prefix $ContentSha256Prefix
+        }
         foreach ($relativePath in @('maps.json', 'unknown.png', 'traineddata\eng.traineddata')) {
             if (-not (Test-Path -LiteralPath (Join-Path $DataRoot $relativePath) -PathType Leaf)) {
                 return $false
@@ -449,7 +457,10 @@ function Assert-RatScannerDataPackage {
         }
 
         $iconPrefix = $DataPrefix + 'icons/'
-        $packagedIconCount = @($files.Keys | Where-Object { $_ -like ($iconPrefix + '*.png') }).Count
+        # Count only direct children so this matches the non-recursive install-side count.
+        $packagedIconCount = @($files.Keys | Where-Object {
+            $_ -like ($iconPrefix + '*.png') -and -not ($_.Substring($iconPrefix.Length).Contains('/'))
+        }).Count
         if ($packagedIconCount -ne [int]$manifest.iconCount) {
             throw "Release package icon count does not match manifest.json. Actual: $packagedIconCount; manifest: $($manifest.iconCount)"
         }

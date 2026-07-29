@@ -329,6 +329,42 @@ try {
             -MinimumIconCount 1
     }
 
+    Assert-Passes -Scenario 'installed payload from a stale pin is not treated as ready' -Action {
+        $installed = New-DataFixture -Path (Join-Path $fixtureRoot 'installed')
+        $installedManifest = Get-Content -LiteralPath (Join-Path $installed 'manifest.json') -Raw | ConvertFrom-Json
+        $matchingPrefix = ([string]$installedManifest.contentSha256).Substring(0, 16)
+        if (-not (Test-RatScannerDataInstallation -DataRoot $installed -ExpectedSchema 1 -MinimumIconCount 1 -ContentSha256Prefix $matchingPrefix)) {
+            throw 'A matching pin should report the installation as ready.'
+        }
+        if (Test-RatScannerDataInstallation -DataRoot $installed -ExpectedSchema 1 -MinimumIconCount 1 -ContentSha256Prefix ('a' * 16)) {
+            throw 'A stale pin must not report the installation as ready.'
+        }
+    }
+
+    Assert-Passes -Scenario 'release tag must be content addressed' -Action {
+        $contract = Get-RatScannerDataReleaseContract
+        if ($contract.ContentSha256Prefix.Length -ne 16) {
+            throw "Unexpected content prefix: $($contract.ContentSha256Prefix)"
+        }
+        if (-not $contract.ReleaseTag.EndsWith($contract.ContentSha256Prefix, [System.StringComparison]::Ordinal)) {
+            throw 'Content prefix must be derived from the release tag.'
+        }
+    }
+
+    Assert-Passes -Scenario 'nested icon subdirectories do not inflate the packaged icon count' -Action {
+        $result = Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'nested-icons' -Mutate {
+                param($Path)
+                # Not manifest-listed and not a direct child: must not count toward the icon total.
+                $sub = Join-Path $Path 'Data\icons\thumbs'
+                New-Item -ItemType Directory -Force -Path $sub | Out-Null
+                [System.IO.File]::WriteAllBytes((Join-Path $sub 'nested.png'), [byte[]](137, 80, 78, 71))
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+        if ($result.IconCount -ne 2) { throw "Nested icons changed the count: $($result.IconCount)" }
+    }
+
     Write-Host "`nAll $testCount RatScannerData validation scenarios passed." -ForegroundColor Green
 }
 finally {

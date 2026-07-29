@@ -476,6 +476,21 @@ try {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
     }
 
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        $workflow.Replace(
+            'scripts/setup-data.ps1',
+            'scripts/setup-data.ps1 # https://github.com/tarkovtracker-org/RatScannerData/releases/latest/download/Data.zip'
+        )
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must not download the old unpinned RatScannerData latest release' -Scenario 'CI reintroduces the unpinned latest release under the current org'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     [System.IO.File]::WriteAllText(
