@@ -387,6 +387,16 @@ function Assert-RatScannerDataPackage {
             # 7-Zip writes spec-compliant forward slashes; Compress-Archive on Windows PowerShell
             # writes backslashes. Normalize so either packer produces the same lookup keys.
             $normalizedName = $entry.FullName.Replace('\', '/')
+            # Windows resolves './' segments and strips trailing dots and spaces, so a
+            # non-canonical name can extract over a file that was hashed under its canonical name.
+            # A well-formed package never contains such names, so reject them outright.
+            foreach ($segment in $normalizedName.Split('/')) {
+                if ([string]::IsNullOrEmpty($segment) -or $segment -eq '.' -or $segment -eq '..' -or
+                    $segment -ne $segment.TrimEnd('.', ' ') -or $segment.Contains(':')) {
+                    throw ("Release package contains a non-canonical entry name that can alias " +
+                        "another file on Windows: $normalizedName")
+                }
+            }
             if ($files.ContainsKey($normalizedName)) {
                 throw "Release package contains a duplicate entry: $normalizedName"
             }

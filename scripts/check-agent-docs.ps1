@@ -185,6 +185,71 @@ function Get-GitSubmoduleSections {
     return $sections
 }
 
+<#
+.SYNOPSIS
+  True when a command AST sits inside a statically false conditional.
+
+.DESCRIPTION
+  FindAll walks unreachable code too, so an assertion parked in `if ($false) { ... }` would
+  otherwise satisfy a presence guard while never running.
+#>
+function Test-AstIsUnreachable {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Node)
+
+    for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
+        if ($parent -isnot [System.Management.Automation.Language.IfStatementAst]) {
+            continue
+        }
+        foreach ($clause in $parent.Clauses) {
+            $conditionText = $clause.Item1.Extent.Text.Trim()
+            if ($conditionText -match '(?i)^\(?\s*\$false\s*\)?$' -and
+                $clause.Item2.Extent.StartOffset -le $Node.Extent.StartOffset -and
+                $clause.Item2.Extent.EndOffset -ge $Node.Extent.EndOffset) {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Test-DataContractRepositoryAssignment {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContractPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedRepository
+    )
+
+    $parseErrors = $null
+    $contractAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $ContractPath, [ref]$null, [ref]$parseErrors)
+    if (@($parseErrors).Count -gt 0) {
+        return $false
+    }
+
+    $assignments = @($contractAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+    }, $true))
+    foreach ($assignment in $assignments) {
+        if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) {
+            continue
+        }
+        if ($assignment.Left.VariablePath.UserPath -ne 'script:RatScannerDataRepository') {
+            continue
+        }
+        if (Test-AstIsUnreachable -Node $assignment) {
+            continue
+        }
+        $right = $assignment.Right
+        if ($right -is [System.Management.Automation.Language.CommandExpressionAst]) {
+            $right = $right.Expression
+        }
+        if ($right -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            $right.Value -eq $ExpectedRepository) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-WorkflowBlockScalarMap {
     param([AllowEmptyString()][string[]]$Lines)
 
@@ -681,9 +746,9 @@ $ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
 if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $setupDataPath)) {
     $dataContractText = Get-Content -LiteralPath $dataContractPath -Raw
     $setupDataText = Get-Content -LiteralPath $setupDataPath -Raw
-    # Match the assignment, not arbitrary text: a comment or doc line must not be able to
-    # authorize an unpinned or incorrect data source after the real value changes.
-    if ($dataContractText -notmatch "RatScannerDataRepository\s*=\s*'tarkovtracker-org/RatScannerData'") {
+    # Validate the assignment through the AST: neither a comment nor a string literal elsewhere in
+    # the file may authorize a different data source.
+    if (-not (Test-DataContractRepositoryAssignment -ContractPath $dataContractPath -ExpectedRepository 'tarkovtracker-org/RatScannerData')) {
         Add-Failure 'RatScannerData contract must use tarkovtracker-org/RatScannerData'
     }
     if ($dataContractText -notmatch "RatScannerDataReleaseTag\s*=\s*'data-[0-9a-f]{16}'") {
@@ -730,11 +795,13 @@ if (Test-Path -LiteralPath $verifyPackagePath) {
             { param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
         $invokesAssertion = @($commandAsts | Where-Object {
             $_.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -and
-            $_.GetCommandName() -eq 'Assert-RatScannerDataPackage'
+            $_.GetCommandName() -eq 'Assert-RatScannerDataPackage' -and
+            -not (Test-AstIsUnreachable -Node $_)
         }).Count -gt 0
         $dotSourcesContract = @($commandAsts | Where-Object {
             $_.InvocationOperator -eq [System.Management.Automation.Language.TokenKind]::Dot -and
-            $_.Extent.Text -like '*RatScannerData.ps1*'
+            $_.Extent.Text -like '*RatScannerData.ps1*' -and
+            -not (Test-AstIsUnreachable -Node $_)
         }).Count -gt 0
         if (-not $invokesAssertion -or -not $dotSourcesContract) {
             Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'

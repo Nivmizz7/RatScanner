@@ -570,7 +570,35 @@ try {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
     }
 
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nif (`$false) { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an unreachable assertion does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
+    $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
+    $literalOnly = $dataContract.Replace(
+        '$script:RatScannerDataRepository = ''tarkovtracker-org/RatScannerData''',
+        '$script:RatScannerDataRepository = ''RatScanner/RatScannerData''')
+    if ($literalOnly -eq $dataContract) {
+        throw 'Fixture mutation did not apply: the repository assignment was not found.'
+    }
+    [System.IO.File]::WriteAllText($dataContractPath, $literalOnly + "`n`$unused = 'tarkovtracker-org/RatScannerData'`n")
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'RatScannerData contract must use tarkovtracker-org/RatScannerData' -Scenario 'a string literal cannot authorize the contract repository'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\RatScannerData.ps1'
+    }
+
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     [System.IO.File]::WriteAllText(
         $dataContractPath,

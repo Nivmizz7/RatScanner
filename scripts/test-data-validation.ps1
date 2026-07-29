@@ -387,55 +387,44 @@ try {
         if ($result.IconCount -ne 2) { throw "Nested icons changed the count: $($result.IconCount)" }
     }
 
-    Assert-Passes -Scenario 'case-colliding icon entries are rejected' -Action {
-        # NTFS cannot hold both cases, so the colliding entry is injected into the archive directly.
-        $collidePackage = Join-Path $fixtureRoot 'case-collide.zip'
-        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-source') -Destination $collidePackage -Force
-        Add-ZipEntry -PackagePath $collidePackage -EntryName 'Data/icons/ITEM-0.png' -Bytes ([byte[]](137, 80, 78, 71))
-        try {
-            Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
-        }
-        catch {
-            if ($_.Exception.Message -notlike '*differ only by case*') {
-                throw "Unexpected case-collision error: $($_.Exception.Message)"
-            }
-            return
-        }
-        throw 'A case-colliding icon entry should have been rejected.'
+    $collidePackage = Join-Path $fixtureRoot 'case-collide.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-source') -Destination $collidePackage -Force
+    # NTFS cannot hold both cases, so the colliding entry is injected into the archive directly.
+    Add-ZipEntry -PackagePath $collidePackage -EntryName 'Data/icons/ITEM-0.png' -Bytes ([byte[]](137, 80, 78, 71))
+    Assert-Throws -Scenario 'case-colliding icon entries are rejected' -ExpectedText 'differ only by case' -Action {
+        Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
     }
 
-    Assert-Passes -Scenario 'case-colliding non-icon entries are rejected' -Action {
-        # A collision outside icons/ changes no count, so only explicit detection catches it.
-        $collidePackage = Join-Path $fixtureRoot 'case-collide-maps.zip'
-        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-maps-source') -Destination $collidePackage -Force
-        Add-ZipEntry -PackagePath $collidePackage -EntryName 'Data/MAPS.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[{"spoofed":true}]'))
-        try {
-            Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
-        }
-        catch {
-            if ($_.Exception.Message -notlike '*differ only by case*') {
-                throw "Unexpected case-collision error: $($_.Exception.Message)"
-            }
-            return
-        }
-        throw 'A case-colliding non-icon entry should have been rejected.'
+    # A collision outside icons/ changes no count, so only explicit detection catches it.
+    $collideMapsPackage = Join-Path $fixtureRoot 'case-collide-maps.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-maps-source') -Destination $collideMapsPackage -Force
+    Add-ZipEntry -PackagePath $collideMapsPackage -EntryName 'Data/MAPS.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[{"spoofed":true}]'))
+    Assert-Throws -Scenario 'case-colliding non-icon entries are rejected' -ExpectedText 'differ only by case' -Action {
+        Assert-RatScannerDataPackage -PackagePath $collideMapsPackage -ExpectedSchema 1 -MinimumIconCount 1
     }
 
-    Assert-Passes -Scenario 'duplicate archive entries are rejected' -Action {
-        $duplicatePackage = Join-Path $fixtureRoot 'duplicate.zip'
-        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'dupe-source') -Destination $duplicatePackage -Force
-        # The zip format permits repeated names; the verifier must not pick one and move on.
-        Add-ZipEntry -PackagePath $duplicatePackage -EntryName 'Data/maps.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[]'))
-        try {
-            Assert-RatScannerDataPackage -PackagePath $duplicatePackage -ExpectedSchema 1 -MinimumIconCount 1
-        }
-        catch {
-            if ($_.Exception.Message -notlike '*duplicate entry: Data/maps.json*') {
-                throw "Unexpected duplicate-entry error: $($_.Exception.Message)"
-            }
-            return
-        }
-        throw 'A duplicated archive entry should have been rejected.'
+    # Windows resolves './' on extraction, so this would overwrite the hashed Data/maps.json.
+    $aliasPackage = Join-Path $fixtureRoot 'path-alias.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'alias-source') -Destination $aliasPackage -Force
+    Add-ZipEntry -PackagePath $aliasPackage -EntryName 'Data/./maps.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[{"spoofed":true}]'))
+    Assert-Throws -Scenario 'relative-segment path aliases are rejected' -ExpectedText 'non-canonical entry name' -Action {
+        Assert-RatScannerDataPackage -PackagePath $aliasPackage -ExpectedSchema 1 -MinimumIconCount 1
+    }
+
+    # Windows strips trailing dots and spaces, aliasing this onto Data/maps.json.
+    $trailingPackage = Join-Path $fixtureRoot 'trailing-alias.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'trailing-source') -Destination $trailingPackage -Force
+    Add-ZipEntry -PackagePath $trailingPackage -EntryName 'Data/maps.json.' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[{"spoofed":true}]'))
+    Assert-Throws -Scenario 'trailing-dot path aliases are rejected' -ExpectedText 'non-canonical entry name' -Action {
+        Assert-RatScannerDataPackage -PackagePath $trailingPackage -ExpectedSchema 1 -MinimumIconCount 1
+    }
+
+    $duplicatePackage = Join-Path $fixtureRoot 'duplicate.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'dupe-source') -Destination $duplicatePackage -Force
+    # The zip format permits repeated names; the verifier must not pick one and move on.
+    Add-ZipEntry -PackagePath $duplicatePackage -EntryName 'Data/maps.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[]'))
+    Assert-Throws -Scenario 'duplicate archive entries are rejected' -ExpectedText 'duplicate entry: Data/maps.json' -Action {
+        Assert-RatScannerDataPackage -PackagePath $duplicatePackage -ExpectedSchema 1 -MinimumIconCount 1
     }
 
     Write-Host "`nAll $testCount RatScannerData validation scenarios passed." -ForegroundColor Green
