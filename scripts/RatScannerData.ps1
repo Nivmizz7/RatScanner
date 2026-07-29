@@ -398,7 +398,12 @@ function Assert-RatScannerDataPackage {
                 }
                 # Reserved device names cannot be materialized even with an extension, so such an
                 # entry would fail extraction on a user machine after passing verification here.
-                if ($segment.Split('.')[0] -match '(?i)^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$') {
+                $deviceStem = $segment.Split('.')[0]
+                $hasSuperscriptDeviceSuffix = $deviceStem.Length -eq 4 -and
+                    $deviceStem.Substring(0, 3) -match '(?i)^(?:COM|LPT)$' -and
+                    ([int][char]$deviceStem[3]) -in @(0x00B9, 0x00B2, 0x00B3)
+                if ($deviceStem -match '(?i)^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$' -or
+                    $hasSuperscriptDeviceSuffix) {
                     throw ("Release package contains a reserved Windows device name that cannot be " +
                         "extracted: $normalizedName")
                 }

@@ -208,9 +208,11 @@ function Test-AstIsUnreachable {
                 return $true
             }
         }
-        # A statically true first clause makes the else body dead.
-        if ($null -ne $parent.ElseClause -and $parent.Clauses.Count -gt 0 -and
-            $parent.Clauses[0].Item1.Extent.Text.Trim() -match '(?i)^\(?\s*\$true\s*\)?$' -and
+        # An else body is dead when any preceding clause is statically true.
+        if ($null -ne $parent.ElseClause -and
+            @($parent.Clauses | Where-Object {
+                $_.Item1.Extent.Text.Trim() -match '(?i)^\(?\s*\$true\s*\)?$'
+            }).Count -gt 0 -and
             $parent.ElseClause.Extent.StartOffset -le $Node.Extent.StartOffset -and
             $parent.ElseClause.Extent.EndOffset -ge $Node.Extent.EndOffset) {
             return $true

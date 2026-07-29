@@ -596,6 +596,19 @@ try {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
     }
 
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`nif (`$false) { `$null = 1 } elseif (`$true) { `$null = 2 } else { Assert-RatScannerDataPackage -PackagePath 'x' -ExpectedSchema 1 -MinimumIconCount 1 }`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an assertion in an else after a literal-true elseif does not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     $literalOnly = $dataContract.Replace(

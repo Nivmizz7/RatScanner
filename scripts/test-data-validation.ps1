@@ -427,6 +427,15 @@ try {
         Assert-RatScannerDataPackage -PackagePath $reservedPackage -ExpectedSchema 1 -MinimumIconCount 1
     }
 
+    # Windows also treats ISO-8859-1 superscript digits as COM/LPT device suffixes.
+    $superscriptReservedPackage = Join-Path $fixtureRoot 'superscript-reserved-name.zip'
+    Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'superscript-reserved-source') -Destination $superscriptReservedPackage -Force
+    $superscriptReservedName = 'Data/COM' + [char]0x00B9 + '.log'
+    Add-ZipEntry -PackagePath $superscriptReservedPackage -EntryName $superscriptReservedName -Bytes ([System.Text.Encoding]::UTF8.GetBytes('x'))
+    Assert-Throws -Scenario 'superscript Windows device names are rejected' -ExpectedText 'reserved Windows device name' -Action {
+        Assert-RatScannerDataPackage -PackagePath $superscriptReservedPackage -ExpectedSchema 1 -MinimumIconCount 1
+    }
+
     $duplicatePackage = Join-Path $fixtureRoot 'duplicate.zip'
     Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'dupe-source') -Destination $duplicatePackage -Force
     # The zip format permits repeated names; the verifier must not pick one and move on.
