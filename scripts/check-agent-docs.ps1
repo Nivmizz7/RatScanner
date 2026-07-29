@@ -532,6 +532,7 @@ $requiredFiles = @(
     'scripts\setup-data.ps1',
     'scripts\RatScannerData.ps1',
     'scripts\test-data-validation.ps1',
+    'scripts\verify-package.ps1',
     'scripts\Expand-Zip.ps1',
     'scripts\check-agent-docs.ps1',
     'scripts\test-agent-docs.ps1',
@@ -613,6 +614,17 @@ if (Test-Path -LiteralPath $publishPath) {
     $publishText = Get-Content -LiteralPath $publishPath -Raw
     if ($publishText -notlike '*scripts\setup-data.ps1*') {
         Add-Failure 'publish.bat must delegate RatScannerData installation to scripts\setup-data.ps1'
+    }
+    if ($publishText -notlike '*scripts\verify-package.ps1*') {
+        Add-Failure 'publish.bat must verify the packaged archive with scripts\verify-package.ps1'
+    }
+}
+
+$verifyPackagePath = Join-Path $RepoRoot 'scripts\verify-package.ps1'
+if (Test-Path -LiteralPath $verifyPackagePath) {
+    $verifyPackageText = Get-Content -LiteralPath $verifyPackagePath -Raw
+    if ($verifyPackageText -notlike '*RatScannerData.ps1*' -or $verifyPackageText -notlike '*Assert-RatScannerDataPackage*') {
+        Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
     }
 }
 
@@ -741,6 +753,17 @@ if (Test-Path -LiteralPath $ciPath) {
 
     if ($ciText -notlike '*scripts/setup-data.ps1*') {
         Add-Failure 'CI Include Data must delegate to scripts/setup-data.ps1'
+    }
+
+    if ($ciText -notlike '*scripts/verify-package.ps1*') {
+        Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
+    }
+    else {
+        $verifyIndex = $ciText.IndexOf('scripts/verify-package.ps1', [System.StringComparison]::Ordinal)
+        $uploadIndex = $ciText.IndexOf('upload-artifact', [System.StringComparison]::Ordinal)
+        if ($uploadIndex -ge 0 -and $verifyIndex -gt $uploadIndex) {
+            Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
+        }
     }
 
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')

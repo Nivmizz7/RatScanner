@@ -108,6 +108,10 @@ jobs:
         run: |
           & 7z a -r RatScanner.zip ./publish/*
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path RatScanner.zip)) { throw 'Failed to create RatScanner.zip.' }
+      - name: Verify release package
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-package.ps1 -PackagePath (Join-Path $PWD 'RatScanner.zip')
+          if ($LASTEXITCODE -ne 0) { throw 'RatScanner.zip failed release package verification.' }
       - name: Upload validated release package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

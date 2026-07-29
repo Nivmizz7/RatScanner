@@ -5,16 +5,23 @@ $script:RatScannerDataManifestSchema = 1
 $script:RatScannerDataMinimumIconCount = 4000
 
 function Get-RatScannerDataReleaseContract {
+    if ($script:RatScannerDataReleaseTag -notmatch '^data-(?<prefix>[0-9a-f]{16})$') {
+        throw 'Pinned RatScanner data release tag must use the content-addressed form data-<16 lowercase hex characters>.'
+    }
+    # RatScannerData names releases after the first 16 hex characters of the payload contentSha256,
+    # so the tag alone is enough to prove a built package carries the pinned payload.
+    $contentSha256Prefix = $Matches['prefix']
     $baseUrl = "https://github.com/$script:RatScannerDataRepository/releases/download/$script:RatScannerDataReleaseTag"
     return [pscustomobject]@{
-        Repository       = $script:RatScannerDataRepository
-        ReleaseTag       = $script:RatScannerDataReleaseTag
-        ArchiveSha256    = $script:RatScannerDataArchiveSha256
-        ManifestSchema   = $script:RatScannerDataManifestSchema
-        MinimumIconCount = $script:RatScannerDataMinimumIconCount
-        ArchiveUrl       = "$baseUrl/Data.zip"
-        ChecksumUrl      = "$baseUrl/Data.zip.sha256"
-        ManifestUrl      = "$baseUrl/manifest.json"
+        Repository          = $script:RatScannerDataRepository
+        ReleaseTag          = $script:RatScannerDataReleaseTag
+        ArchiveSha256       = $script:RatScannerDataArchiveSha256
+        ContentSha256Prefix = $contentSha256Prefix
+        ManifestSchema      = $script:RatScannerDataManifestSchema
+        MinimumIconCount    = $script:RatScannerDataMinimumIconCount
+        ArchiveUrl          = "$baseUrl/Data.zip"
+        ChecksumUrl         = "$baseUrl/Data.zip.sha256"
+        ManifestUrl         = "$baseUrl/manifest.json"
     }
 }
 
@@ -119,6 +126,52 @@ function Resolve-RatScannerDataRoot {
     throw 'Data archive is missing manifest.json at its root or under Data/.'
 }
 
+function Assert-RatScannerDataManifestObject {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][int]$ExpectedSchema,
+        [Parameter(Mandatory = $true)][int]$MinimumIconCount
+    )
+
+    if ($null -eq $Manifest.schemaVersion -or [int]$Manifest.schemaVersion -ne $ExpectedSchema) {
+        throw "Unsupported RatScanner data manifest schema. Found: $($Manifest.schemaVersion); expected: $ExpectedSchema"
+    }
+    if ($null -eq $Manifest.iconCount -or [int]$Manifest.iconCount -lt $MinimumIconCount) {
+        throw "RatScanner data manifest iconCount is missing or below $MinimumIconCount. Found: $($Manifest.iconCount)"
+    }
+    if ($null -eq $Manifest.catalogItemCount -or [int]$Manifest.catalogItemCount -lt [int]$Manifest.iconCount) {
+        throw 'RatScanner data manifest catalogItemCount is missing or smaller than iconCount.'
+    }
+    if ($null -eq $Manifest.skippedItemCount -or [int]$Manifest.skippedItemCount -lt 0) {
+        throw 'RatScanner data manifest skippedItemCount is missing or negative.'
+    }
+    if ([int]$Manifest.catalogItemCount -ne ([int]$Manifest.iconCount + [int]$Manifest.skippedItemCount)) {
+        throw 'RatScanner data manifest catalogItemCount must equal iconCount plus skippedItemCount.'
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$Manifest.contentSha256) -or [string]$Manifest.contentSha256 -notmatch '^[0-9A-Fa-f]{64}$') {
+        throw 'RatScanner data manifest contentSha256 is missing or invalid.'
+    }
+    if ($null -eq $Manifest.fileCount -or [int]$Manifest.fileCount -le 0) {
+        throw 'RatScanner data manifest fileCount is missing or invalid.'
+    }
+    if ($null -eq $Manifest.files -or @($Manifest.files).Count -ne [int]$Manifest.fileCount) {
+        throw 'RatScanner data manifest files do not match fileCount.'
+    }
+    return $Manifest
+}
+
+function Assert-RatScannerDataContentPin {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$ContentSha256Prefix
+    )
+
+    $contentSha256 = ([string]$Manifest.contentSha256).ToLowerInvariant()
+    if (-not $contentSha256.StartsWith($ContentSha256Prefix.ToLowerInvariant(), [System.StringComparison]::Ordinal)) {
+        throw "RatScanner data contentSha256 does not match the pinned release. Found: $contentSha256; expected prefix: $ContentSha256Prefix"
+    }
+}
+
 function Read-RatScannerDataManifest {
     param(
         [Parameter(Mandatory = $true)][string]$ManifestPath,
@@ -137,31 +190,10 @@ function Read-RatScannerDataManifest {
         throw "RatScanner data manifest is not valid JSON: $($_.Exception.Message)"
     }
 
-    if ($null -eq $manifest.schemaVersion -or [int]$manifest.schemaVersion -ne $ExpectedSchema) {
-        throw "Unsupported RatScanner data manifest schema. Found: $($manifest.schemaVersion); expected: $ExpectedSchema"
-    }
-    if ($null -eq $manifest.iconCount -or [int]$manifest.iconCount -lt $MinimumIconCount) {
-        throw "RatScanner data manifest iconCount is missing or below $MinimumIconCount. Found: $($manifest.iconCount)"
-    }
-    if ($null -eq $manifest.catalogItemCount -or [int]$manifest.catalogItemCount -lt [int]$manifest.iconCount) {
-        throw 'RatScanner data manifest catalogItemCount is missing or smaller than iconCount.'
-    }
-    if ($null -eq $manifest.skippedItemCount -or [int]$manifest.skippedItemCount -lt 0) {
-        throw 'RatScanner data manifest skippedItemCount is missing or negative.'
-    }
-    if ([int]$manifest.catalogItemCount -ne ([int]$manifest.iconCount + [int]$manifest.skippedItemCount)) {
-        throw 'RatScanner data manifest catalogItemCount must equal iconCount plus skippedItemCount.'
-    }
-    if ([string]::IsNullOrWhiteSpace([string]$manifest.contentSha256) -or [string]$manifest.contentSha256 -notmatch '^[0-9A-Fa-f]{64}$') {
-        throw 'RatScanner data manifest contentSha256 is missing or invalid.'
-    }
-    if ($null -eq $manifest.fileCount -or [int]$manifest.fileCount -le 0) {
-        throw 'RatScanner data manifest fileCount is missing or invalid.'
-    }
-    if ($null -eq $manifest.files -or @($manifest.files).Count -ne [int]$manifest.fileCount) {
-        throw 'RatScanner data manifest files do not match fileCount.'
-    }
-    return $manifest
+    return Assert-RatScannerDataManifestObject `
+        -Manifest $manifest `
+        -ExpectedSchema $ExpectedSchema `
+        -MinimumIconCount $MinimumIconCount
 }
 
 function Assert-RatScannerDataFiles {
@@ -211,7 +243,8 @@ function Assert-RatScannerDataPayload {
         [Parameter(Mandatory = $true)][string]$DataRoot,
         [Parameter(Mandatory = $true)][string]$PublishedManifestPath,
         [Parameter(Mandatory = $true)][int]$ExpectedSchema,
-        [Parameter(Mandatory = $true)][int]$MinimumIconCount
+        [Parameter(Mandatory = $true)][int]$MinimumIconCount,
+        [string]$ContentSha256Prefix = ''
     )
 
     $embeddedManifestPath = Join-Path $DataRoot 'manifest.json'
@@ -225,6 +258,9 @@ function Assert-RatScannerDataPayload {
         -ManifestPath $embeddedManifestPath `
         -ExpectedSchema $ExpectedSchema `
         -MinimumIconCount $MinimumIconCount
+    if (-not [string]::IsNullOrWhiteSpace($ContentSha256Prefix)) {
+        Assert-RatScannerDataContentPin -Manifest $manifest -ContentSha256Prefix $ContentSha256Prefix
+    }
     Assert-RatScannerDataFiles -DataRoot $DataRoot -Manifest $manifest
 
     foreach ($relativePath in @('maps.json', 'unknown.png', 'traineddata\eng.traineddata')) {
@@ -272,5 +308,161 @@ function Test-RatScannerDataInstallation {
     }
     catch {
         return $false
+    }
+}
+
+function Get-RatScannerDataEntrySha256 {
+    param([Parameter(Mandatory = $true)]$Entry)
+
+    $stream = $Entry.Open()
+    try {
+        $sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            return ([System.BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+<#
+.SYNOPSIS
+  Verifies the packaged release archive that is actually promoted.
+
+.DESCRIPTION
+  Installation validation only proves the staged publish tree was correct. Packaging happens
+  afterwards, so the promoted artifact is verified here directly from the zip: the manifest it
+  carries, every manifest-listed payload byte, the pinned content hash, the icon count, the
+  required application entries, and the absence of packaging leftovers.
+#>
+function Assert-RatScannerDataPackage {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][int]$ExpectedSchema,
+        [Parameter(Mandatory = $true)][int]$MinimumIconCount,
+        [string]$ContentSha256Prefix = '',
+        [string]$DataPrefix = 'Data/',
+        [string[]]$RequiredEntries = @('RatScanner.exe', 'LICENSE')
+    )
+
+    if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) {
+        throw "Release package does not exist: $PackagePath"
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $archive = [System.IO.Compression.ZipFile]::OpenRead([System.IO.Path]::GetFullPath($PackagePath))
+    try {
+        $files = @{}
+        foreach ($entry in $archive.Entries) {
+            # Directory entries carry an empty Name; only real files are verifiable.
+            if ([string]::IsNullOrEmpty($entry.Name)) {
+                continue
+            }
+            # 7-Zip writes spec-compliant forward slashes; Compress-Archive on Windows PowerShell
+            # writes backslashes. Normalize so either packer produces the same lookup keys.
+            $files[$entry.FullName.Replace('\', '/')] = $entry
+        }
+
+        foreach ($required in $RequiredEntries) {
+            if (-not $files.ContainsKey($required)) {
+                throw "Release package is missing required entry: $required"
+            }
+        }
+
+        foreach ($entryName in $files.Keys) {
+            if ($entryName -eq 'Data.zip' -or $entryName -eq ($DataPrefix + 'Data.zip')) {
+                throw "Release package contains a temporary data archive: $entryName"
+            }
+            if ($entryName -like ($DataPrefix + 'Data/*')) {
+                throw "Release package contains an unflattened nested data directory: $entryName"
+            }
+            if ($entryName -like '*/.Data.install-*' -or $entryName -like '*/.Data.backup-*' -or
+                $entryName -like '.Data.install-*' -or $entryName -like '.Data.backup-*') {
+                throw "Release package contains a data installation leftover: $entryName"
+            }
+        }
+
+        $manifestEntryName = $DataPrefix + 'manifest.json'
+        if (-not $files.ContainsKey($manifestEntryName)) {
+            throw "Release package is missing required entry: $manifestEntryName"
+        }
+        $manifestStream = $files[$manifestEntryName].Open()
+        try {
+            $reader = New-Object System.IO.StreamReader($manifestStream)
+            try {
+                $manifestText = $reader.ReadToEnd()
+            }
+            finally {
+                $reader.Dispose()
+            }
+        }
+        finally {
+            $manifestStream.Dispose()
+        }
+
+        try {
+            $manifest = $manifestText | ConvertFrom-Json
+        }
+        catch {
+            throw "Release package manifest is not valid JSON: $($_.Exception.Message)"
+        }
+
+        [void](Assert-RatScannerDataManifestObject `
+            -Manifest $manifest `
+            -ExpectedSchema $ExpectedSchema `
+            -MinimumIconCount $MinimumIconCount)
+        if (-not [string]::IsNullOrWhiteSpace($ContentSha256Prefix)) {
+            Assert-RatScannerDataContentPin -Manifest $manifest -ContentSha256Prefix $ContentSha256Prefix
+        }
+
+        foreach ($manifestEntry in @($manifest.files)) {
+            $relativePath = ([string]$manifestEntry.path).Replace('\', '/')
+            $entryName = $DataPrefix + $relativePath
+            if (-not $files.ContainsKey($entryName)) {
+                throw "Release package is missing manifest file: $relativePath"
+            }
+            $packagedEntry = $files[$entryName]
+            $expectedSize = [long]$manifestEntry.size
+            if ($packagedEntry.Length -ne $expectedSize) {
+                throw "Release package file size mismatch for $relativePath. Actual: $($packagedEntry.Length); manifest: $expectedSize"
+            }
+            $expectedHash = ([string]$manifestEntry.sha256).ToLowerInvariant()
+            $actualHash = Get-RatScannerDataEntrySha256 -Entry $packagedEntry
+            if ($actualHash -ne $expectedHash) {
+                throw "Release package file checksum mismatch for $relativePath. Actual: $actualHash; manifest: $expectedHash"
+            }
+        }
+
+        $actualContentHash = Get-RatScannerDataContentSha256 -Entries $manifest.files
+        if ($actualContentHash -ne ([string]$manifest.contentSha256).ToLowerInvariant()) {
+            throw "Release package contentSha256 mismatch. Actual: $actualContentHash; manifest: $($manifest.contentSha256)"
+        }
+
+        foreach ($relativePath in @('maps.json', 'unknown.png', 'traineddata/eng.traineddata')) {
+            if (-not $files.ContainsKey($DataPrefix + $relativePath)) {
+                throw "Release package is missing required data file: $relativePath"
+            }
+        }
+
+        $iconPrefix = $DataPrefix + 'icons/'
+        $packagedIconCount = @($files.Keys | Where-Object { $_ -like ($iconPrefix + '*.png') }).Count
+        if ($packagedIconCount -ne [int]$manifest.iconCount) {
+            throw "Release package icon count does not match manifest.json. Actual: $packagedIconCount; manifest: $($manifest.iconCount)"
+        }
+
+        return [pscustomobject]@{
+            PackagePath   = [System.IO.Path]::GetFullPath($PackagePath)
+            EntryCount    = $files.Count
+            IconCount     = $packagedIconCount
+            FileCount     = @($manifest.files).Count
+            ContentSha256 = [string]$manifest.contentSha256
+        }
+    }
+    finally {
+        $archive.Dispose()
     }
 }

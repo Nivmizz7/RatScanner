@@ -439,6 +439,43 @@ try {
         Restore-FixtureFile -RelativePath 'publish.bat'
     }
 
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        $workflow.Replace('scripts/verify-package.ps1', 'scripts/Expand-Zip.ps1')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI must verify the packaged artifact' -Scenario 'CI drops post-zip package verification'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $publish = Get-Content -LiteralPath $publishPath -Raw
+    [System.IO.File]::WriteAllText(
+        $publishPath,
+        $publish.Replace('scripts\verify-package.ps1', 'scripts\Expand-Zip.ps1')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'publish.bat must verify the packaged archive' -Scenario 'local publish drops post-zip package verification'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'publish.bat'
+    }
+
+    $verifyPackageFixture = Join-Path $fixtureRoot 'scripts\verify-package.ps1'
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Write-Output')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'package verifier stops using the shared data contract'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     [System.IO.File]::WriteAllText(

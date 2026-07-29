@@ -58,7 +58,7 @@ Resolved: the product version is now `4.0.1-beta.1`, and the release workflow re
 ### Pin and verify the maintained RatScannerData release
 
 **Status:** Done
-**Files:** `scripts/RatScannerData.ps1`, `scripts/setup-data.ps1`, `publish.bat`, `.github/workflows/build.yml`
+**Files:** `scripts/RatScannerData.ps1`, `scripts/setup-data.ps1`, `scripts/verify-package.ps1`, `publish.bat`, `.github/workflows/build.yml`
 
 RatScanner's setup and packaging paths downloaded `RatScanner/RatScannerData/releases/latest`, so builds ignored the maintained `tarkovtracker-org/RatScannerData` bundle and could change when an unrelated upstream `latest` release moved. The current known-good input is `data-f1f047dc5d38ee43` with archive SHA-256 `bce49e8bc7dde57ad46fb95010627831d4483db2273d554e3add6c49388a3b38`.
 
@@ -67,7 +67,8 @@ The fix must keep one pinned release contract and make setup, local publish, and
 - `Data.zip.sha256` matches both the downloaded archive and the repository pin;
 - the published and embedded `manifest.json` files are identical and use schema version 1;
 - required map, fallback image, and English OCR files exist;
-- the extracted icon count matches the manifest and remains above a conservative sanity floor.
+- the extracted icon count matches the manifest and remains above a conservative sanity floor;
+- the packaged `RatScanner.zip` itself carries the pinned payload, byte for byte, with no packaging leftovers.
 
 The existing build artifact must be rebuilt after this change; an artifact produced through the old URL must not be promoted as `4.0.1-beta.1`.
 

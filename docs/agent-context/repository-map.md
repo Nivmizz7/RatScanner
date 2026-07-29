@@ -116,6 +116,7 @@ examples/                # Sample resolution screenshots
 | `scripts/setup-data.ps1` | Install the pinned, checksum/manifest-verified Data release into the app or a caller-provided destination |
 | `scripts/RatScannerData.ps1` | RatScannerData release pin and reusable checksum/manifest/payload validators |
 | `scripts/test-data-validation.ps1` | Hermetic regression tests for the RatScannerData validators (also CI) |
+| `scripts/verify-package.ps1` | Verify a packaged `RatScanner.zip` against the pinned data contract (also CI, after zipping) |
 | `scripts/Expand-Zip.ps1` | Robust zip extract fallbacks |
 | `scripts/check-agent-docs.ps1` | Structural documentation integrity (also CI) |
 | `scripts/test-agent-docs.ps1` | Disposable adversarial regression fixture for the integrity check (also CI) |

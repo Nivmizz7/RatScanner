@@ -54,6 +54,14 @@ if not exist "RatScanner.zip" (
 	exit /b 1
 )
 
+:: Verify the packaged archive itself, not just the staged publish tree
+echo Verifying release package...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\verify-package.ps1" -PackagePath "%~dp0RatScanner.zip"
+if errorlevel 1 (
+	echo ERROR: RatScanner.zip failed release package verification.
+	exit /b 1
+)
+
 :: Finalize publish
 echo Done
 echo Output folder: publish\

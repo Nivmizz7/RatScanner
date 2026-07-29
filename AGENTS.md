@@ -37,6 +37,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
 publish.bat                      :: release package only (not day-to-day)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
 Initialize source dependencies after cloning:

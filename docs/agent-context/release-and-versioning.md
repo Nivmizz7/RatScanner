@@ -64,6 +64,7 @@ Matches the CI packaging intent:
 - Install the pinned `tarkovtracker-org/RatScannerData` release into `publish\Data` through `scripts\setup-data.ps1`
 - Verify `Data.zip` against the published and repository-pinned SHA-256, then verify the standalone/embedded manifest and extracted icon count
 - Zip to `RatScanner.zip`
+- Verify the resulting zip against the pinned contract through `scripts\verify-package.ps1`
 
 Day-to-day coding should use `dev.bat`, not publish.
 
@@ -74,7 +75,7 @@ Workflows:
 - `.github/workflows/build.yml` — PRs to `master` and pushes to `master`.
 - `.github/workflows/release.yml` — manual artifact promotion from `master` only.
 
-The build job (Windows, .NET 10.x, `contents: read`) runs agent-doc and RatScannerData validator tests → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + the pinned Data release → upload `RatScanner.zip` as an immutable workflow artifact.
+The build job (Windows, .NET 10.x, `contents: read`) runs agent-doc and RatScannerData validator tests → Markdown and C# formatting → restore/build/test Release → .NET/npm vulnerability audits → publish single-file → validate LICENSE + the pinned Data release → zip → verify the packaged zip against the pinned contract → upload `RatScanner.zip` as an immutable workflow artifact.
 
 The release workflow does **not** rebuild. It resolves `<Version>` from the selected `master` commit, requires a successful push-triggered Build run for that exact commit, and downloads that run's `RatScanner.zip` with GitHub's artifact digest verification enabled. It then validates the zip, refuses to overwrite an existing tag or draft/published release, and auto-creates the tag. Only the Release workflow receives `actions: read` and `contents: write`; PR and branch-push builds remain read-only.
 
@@ -115,7 +116,7 @@ Safe bridge rollout for the updater change:
 
 1. Version bumped in App csproj; the release tag must match it exactly with a leading `v`. Reuse the same numeric target while iterating pre-releases (`4.0.1-beta.1` → `4.0.1-beta.2` → `4.0.1-rc.1` → `4.0.1`).
 2. `dotnet test` / build green, including `scripts\test-data-validation.ps1`.
-3. The RatScannerData tag and archive SHA-256 in `scripts\RatScannerData.ps1` identify the intended validated bundle; inspect the packaged manifest/icon count when the pin changes.
+3. The RatScannerData tag and archive SHA-256 in `scripts\RatScannerData.ps1` identify the intended validated bundle; `scripts\verify-package.ps1` proves the packaged zip carries that pinned payload.
 4. `scripts\check-agent-docs.ps1` green if docs/packaging references changed.
 5. Publish smoke or trust CI for package construction; accuracy-sensitive releases still require fixture replay/manual scan validation.
 6. Changelog/notes ready for draft release body if needed.

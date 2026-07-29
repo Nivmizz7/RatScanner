@@ -6,6 +6,7 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 . (Join-Path $PSScriptRoot 'RatScannerData.ps1')
 
 $fixtureRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('RatScanner data tests ' + [Guid]::NewGuid().ToString('N'))
@@ -93,6 +94,31 @@ function New-DataFixture {
     $json = $manifest | ConvertTo-Json
     [System.IO.File]::WriteAllText((Join-Path $root 'manifest.json'), $json)
     return $root
+}
+
+function New-PackageFixture {
+    param(
+        [Parameter(Mandatory = $true)][string]$StagingPath,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [scriptblock]$Mutate
+    )
+
+    $workPath = Join-Path (Split-Path -Parent $StagingPath) ('package-' + $Name)
+    if (Test-Path -LiteralPath $workPath) {
+        Remove-Item -LiteralPath $workPath -Recurse -Force
+    }
+    # Copy the staging directory itself so the Data/ subtree is preserved.
+    Copy-Item -LiteralPath $StagingPath -Destination $workPath -Recurse -Force
+    if ($Mutate) {
+        & $Mutate $workPath
+    }
+
+    $packagePath = Join-Path (Split-Path -Parent $StagingPath) ($Name + '.zip')
+    if (Test-Path -LiteralPath $packagePath) {
+        Remove-Item -LiteralPath $packagePath -Force
+    }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($workPath, $packagePath)
+    return $packagePath
 }
 
 try {
@@ -199,6 +225,106 @@ try {
         Assert-RatScannerDataPayload `
             -DataRoot $missingRoot `
             -PublishedManifestPath $publishedManifest `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    $packageStaging = Join-Path $fixtureRoot 'package-stage'
+    $packageDataRoot = New-DataFixture -Path (Join-Path $packageStaging 'Data')
+    [System.IO.File]::WriteAllBytes((Join-Path $packageStaging 'RatScanner.exe'), [byte[]](77, 90))
+    [System.IO.File]::WriteAllText((Join-Path $packageStaging 'LICENSE'), 'fixture license')
+    $packageManifest = Get-Content -LiteralPath (Join-Path $packageDataRoot 'manifest.json') -Raw | ConvertFrom-Json
+    $packagePrefix = ([string]$packageManifest.contentSha256).Substring(0, 16)
+
+    Assert-Passes -Scenario 'valid release package' -Action {
+        $result = Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'valid') `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1 `
+            -ContentSha256Prefix $packagePrefix
+        if ($result.IconCount -ne 2) { throw "Unexpected packaged icon count: $($result.IconCount)" }
+        if ($result.FileCount -ne 5) { throw "Unexpected verified file count: $($result.FileCount)" }
+    }
+
+    Assert-Throws -Scenario 'packaged payload does not match the pinned release' -ExpectedText 'does not match the pinned release' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'wrong-pin') `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1 `
+            -ContentSha256Prefix ('a' * 16)
+    }
+
+    Assert-Throws -Scenario 'package is missing the application executable' -ExpectedText 'missing required entry: RatScanner.exe' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'no-exe' -Mutate {
+                param($Path)
+                Remove-Item -LiteralPath (Join-Path $Path 'RatScanner.exe') -Force
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'packaged payload file was corrupted after validation' -ExpectedText 'checksum mismatch for maps.json' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'corrupt' -Mutate {
+                param($Path)
+                # Same length, different bytes: only a content hash can catch this.
+                [System.IO.File]::WriteAllText((Join-Path $Path 'Data\maps.json'), '{}')
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package is missing a manifest-listed payload file' -ExpectedText 'missing manifest file: icons/item-1.png' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'missing-icon' -Mutate {
+                param($Path)
+                Remove-Item -LiteralPath (Join-Path $Path 'Data\icons\item-1.png') -Force
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package carries an unlisted extra icon' -ExpectedText 'icon count does not match manifest.json' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'extra-icon' -Mutate {
+                param($Path)
+                [System.IO.File]::WriteAllBytes((Join-Path $Path 'Data\icons\stray.png'), [byte[]](137, 80, 78, 71))
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package retains the temporary data archive' -ExpectedText 'temporary data archive' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'temp-archive' -Mutate {
+                param($Path)
+                [System.IO.File]::WriteAllText((Join-Path $Path 'Data\Data.zip'), 'leftover')
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package keeps an unflattened nested Data directory' -ExpectedText 'unflattened nested data directory' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'nested' -Mutate {
+                param($Path)
+                $nested = Join-Path $Path 'Data\Data'
+                New-Item -ItemType Directory -Force -Path $nested | Out-Null
+                [System.IO.File]::WriteAllText((Join-Path $nested 'manifest.json'), '{}')
+            }) `
+            -ExpectedSchema 1 `
+            -MinimumIconCount 1
+    }
+
+    Assert-Throws -Scenario 'package keeps a rollback staging leftover' -ExpectedText 'data installation leftover' -Action {
+        Assert-RatScannerDataPackage `
+            -PackagePath (New-PackageFixture -StagingPath $packageStaging -Name 'leftover' -Mutate {
+                param($Path)
+                $leftover = Join-Path $Path '.Data.backup-abc123'
+                New-Item -ItemType Directory -Force -Path $leftover | Out-Null
+                [System.IO.File]::WriteAllText((Join-Path $leftover 'manifest.json'), '{}')
+            }) `
             -ExpectedSchema 1 `
             -MinimumIconCount 1
     }

@@ -76,7 +76,8 @@ try {
         -DataRoot $sourceRoot `
         -PublishedManifestPath $publishedManifestPath `
         -ExpectedSchema $contract.ManifestSchema `
-        -MinimumIconCount $contract.MinimumIconCount
+        -MinimumIconCount $contract.MinimumIconCount `
+        -ContentSha256Prefix $contract.ContentSha256Prefix
 
     New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
     New-Item -ItemType Directory -Force -Path $stagingPath | Out-Null
