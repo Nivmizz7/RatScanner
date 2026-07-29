@@ -55,32 +55,12 @@ $configuration = if ($Release) { 'Release' } else { 'Debug' }
 $project = Join-Path $repositoryRoot 'src\App\RatScanner.csproj'
 $solution = Join-Path $repositoryRoot 'RatScanner.sln'
 $setupScript = Join-Path $PSScriptRoot 'setup-data.ps1'
-$dataDir = Join-Path $repositoryRoot 'src\App\Data'
 
 function Assert-Command {
     param([string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "'$Name' is not on PATH. Install the .NET SDK: https://dotnet.microsoft.com/download"
     }
-}
-
-function Test-DataReady {
-    param([string]$DataDir)
-    $required = @(
-        'maps.json',
-        'unknown.png',
-        'traineddata\eng.traineddata'
-    )
-    foreach ($relativePath in $required) {
-        if (-not (Test-Path -LiteralPath (Join-Path $DataDir $relativePath))) {
-            return $false
-        }
-    }
-    $iconsDir = Join-Path $DataDir 'icons'
-    if (-not (Test-Path -LiteralPath $iconsDir)) {
-        return $false
-    }
-    return (@(Get-ChildItem -LiteralPath $iconsDir -Filter '*.png' -File -ErrorAction SilentlyContinue).Count -gt 0)
 }
 
 Write-Host ""
@@ -99,17 +79,14 @@ Write-Host ""
 Assert-Command -Name 'dotnet'
 
 # 1) Runtime data (icons + OCR) — copied into bin output by the csproj
-if ($ForceSetup -or -not (Test-DataReady -DataDir $dataDir)) {
-    Write-Host "Ensuring item icons and OCR data are installed..."
-    $setupArgs = @()
-    if ($ForceSetup) { $setupArgs += '-Force' }
-    & $setupScript @setupArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "setup-data.ps1 failed."
-    }
-}
-else {
-    Write-Host "Data OK: $dataDir"
+# setup-data.ps1 owns the readiness decision: it validates the installed payload against the pinned
+# contract and exits early when nothing needs to change. A second predicate here would drift.
+Write-Host "Ensuring item icons and OCR data are installed..."
+$setupArgs = @()
+if ($ForceSetup) { $setupArgs += '-Force' }
+& $setupScript @setupArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "setup-data.ps1 failed."
 }
 
 # 2) Restore packages once unless skipped
@@ -198,7 +175,7 @@ function Stop-AppProcess {
 
 function Start-App {
     param([string]$ProjectPath, [string]$Config)
-    $runArgs = "run --project `"$ProjectPath`" -c $Config --no-build --no-restore"
+    $runArgs = @('run', '--project', $ProjectPath, '-c', $Config, '--no-build', '--no-restore')
     $proc = Start-Process -FilePath 'dotnet' -ArgumentList $runArgs -PassThru -NoNewWindow
     Write-Host "  App launched (PID $($proc.Id))." -ForegroundColor Green
     return $proc

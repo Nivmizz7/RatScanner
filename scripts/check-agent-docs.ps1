@@ -185,35 +185,299 @@ function Get-GitSubmoduleSections {
     return $sections
 }
 
-function Test-CheckoutUsesRecursiveSubmodules {
-    param([string]$WorkflowText)
+<#
+.SYNOPSIS
+  True when a command AST sits in a statically unreachable branch.
 
-    $lines = [regex]::Split($WorkflowText, '\r?\n')
-    $blockScalarLines = [bool[]]::new($lines.Count)
-    for ($header = 0; $header -lt $lines.Count; $header++) {
+.DESCRIPTION
+  FindAll walks unreachable code too, so an assertion parked in `if ($false) { ... }` or in the
+  `else` of `if ($true) { ... }` would otherwise satisfy a presence guard while never running.
+#>
+function Test-AstIsTopLevelStatement {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Node)
+
+    for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
+        if ($parent -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
+            $parent -is [System.Management.Automation.Language.ScriptBlockExpressionAst] -or
+            $parent -is [System.Management.Automation.Language.IfStatementAst] -or
+            $parent -is [System.Management.Automation.Language.LoopStatementAst] -or
+            $parent -is [System.Management.Automation.Language.SwitchStatementAst] -or
+            $parent -is [System.Management.Automation.Language.TryStatementAst] -or
+            $parent -is [System.Management.Automation.Language.TrapStatementAst]) {
+            return $false
+        }
+    }
+    return $true
+}
+
+function Test-AstIsUnreachable {
+    param([Parameter(Mandatory = $true)][System.Management.Automation.Language.Ast]$Node)
+
+    for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
+        if ($parent -is [System.Management.Automation.Language.WhileStatementAst] -or
+            $parent -is [System.Management.Automation.Language.ForStatementAst]) {
+            $condition = $parent.Condition
+            if ($null -ne $condition -and
+                $condition.Extent.Text.Trim() -match '(?i)^\(*\s*\$false\s*\)*$') {
+                return $true
+            }
+            continue
+        }
+        if ($parent -isnot [System.Management.Automation.Language.IfStatementAst]) {
+            continue
+        }
+        $precedingClauseIsStaticallyTrue = $false
+        foreach ($clause in $parent.Clauses) {
+            $conditionText = $clause.Item1.Extent.Text.Trim()
+            $nodeIsInClause =
+                $clause.Item2.Extent.StartOffset -le $Node.Extent.StartOffset -and
+                $clause.Item2.Extent.EndOffset -ge $Node.Extent.EndOffset
+            if ($nodeIsInClause -and
+                ($precedingClauseIsStaticallyTrue -or
+                    $conditionText -match '(?i)^\(*\s*\$false\s*\)*$')) {
+                return $true
+            }
+            if ($conditionText -match '(?i)^\(*\s*\$true\s*\)*$') {
+                $precedingClauseIsStaticallyTrue = $true
+            }
+        }
+        # An else body is dead when any preceding clause is statically true.
+        if ($null -ne $parent.ElseClause -and
+            $precedingClauseIsStaticallyTrue -and
+            $parent.ElseClause.Extent.StartOffset -le $Node.Extent.StartOffset -and
+            $parent.ElseClause.Extent.EndOffset -ge $Node.Extent.EndOffset) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Test-ScriptDotSourcesFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+
+    $parseErrors = $null
+    $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $ScriptPath, [ref]$null, [ref]$parseErrors)
+    if (@($parseErrors).Count -gt 0) {
+        return [pscustomobject]@{ Parsed = $false; Matches = $false; Ast = $null }
+    }
+
+    $contractVariables = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($assignment in @($scriptAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+    }, $true))) {
+        if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst] -or
+            -not (Test-AstIsTopLevelStatement -Node $assignment)) {
+            continue
+        }
+        $referencesFile = @($assignment.Right.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            [System.IO.Path]::GetFileName($node.Value) -eq $FileName
+        }, $true)).Count -gt 0
+        if ($referencesFile) {
+            [void]$contractVariables.Add($assignment.Left.VariablePath.UserPath)
+        }
+    }
+
+    $commands = @($scriptAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.CommandAst]
+    }, $true))
+    foreach ($command in $commands) {
+        if ($command.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -or
+            -not (Test-AstIsTopLevelStatement -Node $command)) {
+            continue
+        }
+        $sourceElement = @($command.CommandElements)[0]
+        $referencesFile = @($sourceElement.FindAll({
+            param($node)
+            ($node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                [System.IO.Path]::GetFileName($node.Value) -eq $FileName) -or
+            ($node -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $contractVariables.Contains($node.VariablePath.UserPath))
+        }, $true)).Count -gt 0
+        if ($referencesFile) {
+            return [pscustomobject]@{ Parsed = $true; Matches = $true; Ast = $scriptAst }
+        }
+    }
+
+    return [pscustomobject]@{ Parsed = $true; Matches = $false; Ast = $scriptAst }
+}
+
+function Test-DataContractStringAssignment {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContractPath,
+        [Parameter(Mandatory = $true)][string]$VariableName,
+        [Parameter(Mandatory = $true)][scriptblock]$ValuePredicate
+    )
+
+    $parseErrors = $null
+    $contractAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $ContractPath, [ref]$null, [ref]$parseErrors)
+    if (@($parseErrors).Count -gt 0) {
+        return [pscustomobject]@{ Parsed = $false; Matches = $false }
+    }
+
+    $assignments = @($contractAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+    }, $true))
+    foreach ($assignment in $assignments) {
+        if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst]) {
+            continue
+        }
+        if ($assignment.Left.VariablePath.UserPath -ne $VariableName) {
+            continue
+        }
+        if (Test-AstIsUnreachable -Node $assignment) {
+            continue
+        }
+        $right = $assignment.Right
+        if ($right -is [System.Management.Automation.Language.CommandExpressionAst]) {
+            $right = $right.Expression
+        }
+        if ($right -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            (& $ValuePredicate $right.Value)) {
+            return [pscustomobject]@{ Parsed = $true; Matches = $true }
+        }
+    }
+    return [pscustomobject]@{ Parsed = $true; Matches = $false }
+}
+
+function Test-DataContractRepositoryAssignment {
+    param(
+        [Parameter(Mandatory = $true)][string]$ContractPath,
+        [Parameter(Mandatory = $true)][string]$ExpectedRepository
+    )
+
+    return Test-DataContractStringAssignment `
+        -ContractPath $ContractPath `
+        -VariableName 'script:RatScannerDataRepository' `
+        -ValuePredicate { param($value) $value -eq $ExpectedRepository }
+}
+
+function Get-WorkflowBlockScalarMap {
+    param([AllowEmptyString()][string[]]$Lines)
+
+    $blockScalarLines = [bool[]]::new($Lines.Count)
+    for ($header = 0; $header -lt $Lines.Count; $header++) {
         if ($blockScalarLines[$header]) {
             continue
         }
         if (
-            $lines[$header] -notmatch
+            $Lines[$header] -notmatch
             '^(?<indent>[ ]*)(?:-\s+)?[^#].*:\s*[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$'
         ) {
             continue
         }
 
         $headerIndent = $Matches['indent'].Length
-        for ($content = $header + 1; $content -lt $lines.Count; $content++) {
-            if ($lines[$content] -match '^\s*$') {
+        for ($content = $header + 1; $content -lt $Lines.Count; $content++) {
+            if ($Lines[$content] -match '^\s*$') {
                 $blockScalarLines[$content] = $true
                 continue
             }
-            $contentIndent = ([regex]::Match($lines[$content], '^[ ]*')).Value.Length
+            $contentIndent = ([regex]::Match($Lines[$content], '^[ ]*')).Value.Length
             if ($contentIndent -le $headerIndent) {
                 break
             }
             $blockScalarLines[$content] = $true
         }
     }
+    return $blockScalarLines
+}
+
+<#
+.SYNOPSIS
+  Returns the ordered steps of every job in a workflow as line ranges.
+
+.DESCRIPTION
+  String offsets cannot distinguish a real step from prose in a comment or block scalar, so
+  ordering and presence checks need step boundaries. Each result carries the step's own lines with
+  comments stripped, so commented-out text cannot satisfy a guard.
+#>
+function Get-WorkflowStepRanges {
+    param([Parameter(Mandatory = $true)][string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = Get-WorkflowBlockScalarMap -Lines $lines
+    $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
+    $steps = New-Object System.Collections.Generic.List[object]
+
+    for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
+        if (
+            $blockScalarLines[$stepsIndex] -or
+            $lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$'
+        ) {
+            continue
+        }
+
+        $stepsIndent = $Matches['indent'].Length
+        $stepsEnd = $lines.Count
+        for ($candidate = $stepsIndex + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($blockScalarLines[$candidate] -or $lines[$candidate] -match '^\s*(?:#.*)?$') {
+                continue
+            }
+            if (([regex]::Match($lines[$candidate], '^[ ]*')).Value.Length -le $stepsIndent) {
+                $stepsEnd = $candidate
+                break
+            }
+        }
+
+        $stepIndent = -1
+        for ($index = $stepsIndex + 1; $index -lt $stepsEnd; $index++) {
+            if ($blockScalarLines[$index] -or $lines[$index] -notmatch $stepStarterPattern) {
+                continue
+            }
+            $candidateStepIndent = $Matches['indent'].Length
+            if ($stepIndent -lt 0) {
+                $stepIndent = $candidateStepIndent
+            }
+            if ($candidateStepIndent -ne $stepIndent) {
+                continue
+            }
+
+            $stepEnd = $stepsEnd
+            for ($candidate = $index + 1; $candidate -lt $stepsEnd; $candidate++) {
+                if (
+                    -not $blockScalarLines[$candidate] -and
+                    $lines[$candidate] -match $stepStarterPattern -and
+                    $Matches['indent'].Length -eq $stepIndent
+                ) {
+                    $stepEnd = $candidate
+                    break
+                }
+            }
+
+            $effectiveLines = New-Object System.Collections.Generic.List[string]
+            for ($line = $index; $line -lt $stepEnd; $line++) {
+                # Drop comment-only lines and trailing comments so commented text cannot satisfy a
+                # guard. Shell comments inside a run block are stripped for the same reason.
+                $text = [regex]::Replace($lines[$line], '(^|\s)#.*$', '')
+                if (-not [string]::IsNullOrWhiteSpace($text)) {
+                    $effectiveLines.Add($text)
+                }
+            }
+
+            $steps.Add([pscustomobject]@{
+                StartIndex     = $index
+                EndIndex       = $stepEnd
+                EffectiveText  = ($effectiveLines -join "`n")
+            })
+            $index = $stepEnd - 1
+        }
+        $stepsIndex = $stepsEnd - 1
+    }
+    return $steps.ToArray()
+}
+
+function Test-CheckoutUsesRecursiveSubmodules {
+    param([string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = Get-WorkflowBlockScalarMap -Lines $lines
 
     $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
     for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
@@ -530,6 +794,9 @@ $requiredFiles = @(
     '.csharpierrc.json',
     'scripts\dev.ps1',
     'scripts\setup-data.ps1',
+    'scripts\RatScannerData.ps1',
+    'scripts\test-data-validation.ps1',
+    'scripts\verify-package.ps1',
     'scripts\Expand-Zip.ps1',
     'scripts\check-agent-docs.ps1',
     'scripts\test-agent-docs.ps1',
@@ -577,6 +844,88 @@ if (Test-Path -LiteralPath $gitmodulesPath) {
     }
     elseif ($ratEyeSubmodules[0].Url -ne 'https://github.com/tarkovtracker-org/RatEye.git') {
         Add-Failure '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git'
+    }
+}
+
+$dataContractPath = Join-Path $RepoRoot 'scripts\RatScannerData.ps1'
+$setupDataPath = Join-Path $RepoRoot 'scripts\setup-data.ps1'
+$publishPath = Join-Path $RepoRoot 'publish.bat'
+$ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
+if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $setupDataPath)) {
+    $dataContractText = Get-Content -LiteralPath $dataContractPath -Raw
+    $setupDataText = Get-Content -LiteralPath $setupDataPath -Raw
+    # Validate the assignment through the AST: neither a comment nor a string literal elsewhere in
+    # the file may authorize a different data source.
+    $repositoryAssignment = Test-DataContractRepositoryAssignment `
+        -ContractPath $dataContractPath `
+        -ExpectedRepository 'tarkovtracker-org/RatScannerData'
+    if (-not $repositoryAssignment.Parsed) {
+        Add-Failure 'scripts\RatScannerData.ps1 must parse without errors'
+    }
+    elseif (-not $repositoryAssignment.Matches) {
+        Add-Failure 'RatScannerData contract must use tarkovtracker-org/RatScannerData'
+    }
+    $releaseTagAssignment = Test-DataContractStringAssignment `
+        -ContractPath $dataContractPath `
+        -VariableName 'script:RatScannerDataReleaseTag' `
+        -ValuePredicate { param($value) $value -match '^data-[0-9a-f]{16}$' }
+    if ($releaseTagAssignment.Parsed -and -not $releaseTagAssignment.Matches) {
+        Add-Failure 'RatScannerData contract must pin a content-addressed data release tag'
+    }
+    $setupContractSource = Test-ScriptDotSourcesFile `
+        -ScriptPath $setupDataPath `
+        -FileName 'RatScannerData.ps1'
+    if (-not $setupContractSource.Parsed) {
+        Add-Failure 'scripts\setup-data.ps1 must parse without errors'
+    }
+    elseif (-not $setupContractSource.Matches) {
+        Add-Failure 'scripts\setup-data.ps1 must use scripts\RatScannerData.ps1'
+    }
+}
+
+foreach ($activePath in @($setupDataPath, $publishPath, $ciPath)) {
+    if (-not (Test-Path -LiteralPath $activePath)) {
+        continue
+    }
+    $activeText = Get-Content -LiteralPath $activePath -Raw
+    # Match the path segment, not an owner-qualified URL: reintroducing the unpinned latest release
+    # is a regression regardless of which org it points at.
+    if ($activeText -like '*RatScannerData/releases/latest*') {
+        Add-Failure ((Get-RepoRelativePath -FullName $activePath) + ' must not download the old unpinned RatScannerData latest release')
+    }
+}
+if (Test-Path -LiteralPath $publishPath) {
+    $publishText = Get-Content -LiteralPath $publishPath -Raw
+    if ($publishText -notlike '*scripts\setup-data.ps1*') {
+        Add-Failure 'publish.bat must delegate RatScannerData installation to scripts\setup-data.ps1'
+    }
+    if ($publishText -notlike '*scripts\verify-package.ps1*') {
+        Add-Failure 'publish.bat must verify the packaged archive with scripts\verify-package.ps1'
+    }
+}
+
+$verifyPackagePath = Join-Path $RepoRoot 'scripts\verify-package.ps1'
+if (Test-Path -LiteralPath $verifyPackagePath) {
+    $verifyContractSource = Test-ScriptDotSourcesFile `
+        -ScriptPath $verifyPackagePath `
+        -FileName 'RatScannerData.ps1'
+    if (-not $verifyContractSource.Parsed) {
+        Add-Failure 'scripts\verify-package.ps1 must parse without errors'
+    }
+    else {
+        $verifyAst = $verifyContractSource.Ast
+        $commandAsts = @($verifyAst.FindAll(
+            { param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
+        $invokesAssertion = @($commandAsts | Where-Object {
+            $_.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -and
+            $_.GetCommandName() -eq 'Assert-RatScannerDataPackage' -and
+            (Test-AstIsTopLevelStatement -Node $_) -and
+            -not (Test-AstIsUnreachable -Node $_)
+        }).Count -gt 0
+        $dotSourcesContract = $verifyContractSource.Matches
+        if (-not $invokesAssertion -or -not $dotSourcesContract) {
+            Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
+        }
     }
 }
 
@@ -701,6 +1050,29 @@ if (Test-Path -LiteralPath $ciPath) {
     $ciText = Get-Content -LiteralPath $ciPath -Raw
     if (-not (Test-CheckoutUsesRecursiveSubmodules -WorkflowText $ciText)) {
         Add-Failure 'CI checkout must initialize RatEye with submodules: recursive'
+    }
+
+    if ($ciText -notlike '*scripts/setup-data.ps1*') {
+        Add-Failure 'CI Include Data must delegate to scripts/setup-data.ps1'
+    }
+
+    # Compare real steps, not raw offsets: a mention in a comment or block scalar must not let a
+    # future workflow upload an unverified zip.
+    $ciSteps = @(Get-WorkflowStepRanges -WorkflowText $ciText)
+    $verifyStepIndex = -1
+    $uploadStepIndex = -1
+    for ($stepIndex = 0; $stepIndex -lt $ciSteps.Count; $stepIndex++) {
+        $stepText = $ciSteps[$stepIndex].EffectiveText
+        if ($verifyStepIndex -lt 0 -and
+            $stepText -match '(?im)^\s*(?:&\s*)?(?:powershell(?:\.exe)?\s+.*?-File\s+)?scripts[\\/]verify-package\.ps1(?:\s|$)') {
+            $verifyStepIndex = $stepIndex
+        }
+        if ($uploadStepIndex -lt 0 -and $stepText -match 'uses\s*:\s*\S*upload-artifact') {
+            $uploadStepIndex = $stepIndex
+        }
+    }
+    if ($verifyStepIndex -lt 0 -or ($uploadStepIndex -ge 0 -and $verifyStepIndex -gt $uploadStepIndex)) {
+        Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
     }
 
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')

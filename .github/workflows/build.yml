@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-docs.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: RatScannerData validation tests
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-data-validation.ps1
       - name: Setup Node
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
@@ -100,28 +102,16 @@ jobs:
           if (-not (Test-Path publish/LICENSE)) { throw 'LICENSE is missing from publish output.' }
       - name: Include Data
         run: |
-          $archive = Join-Path $PWD 'publish/Data.zip'
-          $destination = Join-Path $PWD 'publish/Data'
-          & curl.exe -fL --retry 3 --retry-all-errors "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output $archive
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to download RatScanner Data.zip.' }
-          & 7z x $archive "-o$destination" -y
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to extract RatScanner Data.zip.' }
-          Remove-Item -LiteralPath $archive -Force
-          $nestedData = Join-Path $destination 'Data'
-          if (-not (Test-Path (Join-Path $destination 'maps.json')) -and (Test-Path (Join-Path $nestedData 'maps.json'))) {
-            Get-ChildItem -LiteralPath $nestedData -Force | Move-Item -Destination $destination -Force
-            Remove-Item -LiteralPath $nestedData -Recurse -Force
-          }
-          foreach ($required in @('maps.json', 'unknown.png', 'traineddata/eng.traineddata')) {
-            if (-not (Test-Path (Join-Path $destination $required))) { throw "Published Data is missing $required." }
-          }
-          if (@(Get-ChildItem -LiteralPath (Join-Path $destination 'icons') -Filter '*.png' -File).Count -eq 0) {
-            throw 'Published Data contains no item icons.'
-          }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-data.ps1 -DestinationPath (Join-Path $PWD 'publish/Data') -Force
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to download or validate RatScanner data.' }
       - name: Zip Content
         run: |
           & 7z a -r RatScanner.zip ./publish/*
           if ($LASTEXITCODE -ne 0 -or -not (Test-Path RatScanner.zip)) { throw 'Failed to create RatScanner.zip.' }
+      - name: Verify release package
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-package.ps1 -PackagePath (Join-Path $PWD 'RatScanner.zip')
+          if ($LASTEXITCODE -ne 0) { throw 'RatScanner.zip failed release package verification.' }
       - name: Upload validated release package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

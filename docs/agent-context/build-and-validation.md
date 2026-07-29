@@ -77,6 +77,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-agent-docs.ps1
 
 The integrity check validates required paths, context routing, local Markdown links, structurally parsed MSBuild references/package versions, RatEye submodule wiring, and primary-branch consistency while excluding generated output. The adversarial test builds a disposable path-with-spaces fixture and proves representative failures are non-zero and actionable. Both run in CI.
 
+### RatScannerData validator tests
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-data-validation.ps1
+```
+
+These hermetic fixtures cover checksum parsing/mismatch handling, manifest schema and count validation, required files, root/nested archive layouts, and packaged-archive verification. They do not download live data. The later packaging step downloads the pinned release and validates the real published assets.
+
+### Release package verification
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
+```
+
+Installation validation only proves the staged `publish\Data` tree was correct; packaging happens afterward. This runs against the archive that actually ships — reading the manifest and every manifest-listed payload byte out of the zip — so a packaging step cannot silently drop, truncate, or duplicate payload files. It also rejects duplicate entry names and entries that differ only by case, which collide on extraction on the Windows x64 target. `publish.bat` and CI both run it on the zip they just produced, before that artifact can be uploaded or promoted. Entry separators are normalized because 7-Zip writes forward slashes and `Compress-Archive` writes backslashes.
+
 ### Analyzers / warnings
 
 - Nullable enabled on App; treat nullability seriously.
@@ -136,8 +152,10 @@ Confirm:
 
 - `publish\RatScanner.exe` starts.
 - `publish\LICENSE` present.
+- `publish\Data\manifest.json` is schema 1 and declares the extracted icon count.
 - `publish\Data\` contains maps.json / icons / traineddata.
-- `RatScanner.zip` created.
+- The setup log confirms the pinned archive checksum and published/embedded manifest validation.
+- `RatScanner.zip` created, verified by `scripts\verify-package.ps1`, and containing no temporary `Data.zip` or checksum download files.
 - Single-file self-contained win-x64 matches CI intent.
 
 CI uploads the validated `RatScanner.zip` as an immutable build artifact. The separate least-privilege Release workflow promotes that exact artifact only after verifying a successful push-triggered Build for the selected `master` commit; it does not rebuild (see `release-and-versioning.md`).
@@ -152,7 +170,8 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | RatEye processing | standalone RatEye build/tests + integrated App build | fixture replay + scan smoke if accuracy-sensitive |
 | Config paths / display | build + tests | manual multi-monitor if possible |
 | i18n | build | all locale files updated; UI language switch |
-| CI / scripts | build (or script dry-run) | publish path once if packaging changed |
+| CI / scripts | relevant hermetic script test + build (or script dry-run) | publish path once if packaging changed |
+| RatScannerData pin / packaging | `test-data-validation.ps1` + setup against the pinned release + `verify-package.ps1` on the built zip + Release build/test | current-EFT fixture replay and clean-machine smoke |
 | Agent docs / layout | `check-agent-docs.ps1` + markdown lint | `test-agent-docs.ps1` when changing the checker |
 | Version / release notes | csproj version + docs | tag workflow locally understood |
 | Docs only / any `*.md` | `lint-markdown.ps1 -Fix` then check; `check-agent-docs.ps1` when structure/links change | |

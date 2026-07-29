@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+:: Resolve every path below against the repository root, not the caller's working directory
+pushd "%~dp0"
+
 :: Always replace the same local outputs so repeated builds do not accumulate folders/zips
 echo Removing old publish folder and zip...
 if exist publish rmdir /s /q publish
@@ -11,7 +14,7 @@ echo Publishing RatScanner project...
 dotnet publish src/App/RatScanner.csproj -c Release -o publish --runtime win-x64 -p:PublishSingleFile=true --self-contained true
 if errorlevel 1 (
 	echo Publish failed.
-	exit /b 1
+	goto :fail
 )
 
 :: Ensure LICENSE is always present for redistributed packages (license notice requirement)
@@ -20,53 +23,15 @@ if not exist "publish\LICENSE" (
 )
 if not exist "publish\LICENSE" (
 	echo ERROR: LICENSE file missing from publish output.
-	exit /b 1
+	goto :fail
 )
 
-:: Include runtime data (use shared extractor that falls back if Expand-Archive is broken)
-echo Adding latest RatScanner data...
-curl -fL --retry 3 --retry-all-errors "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
+:: Include the pinned runtime data release through the shared verified installer
+echo Adding pinned RatScanner data...
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\setup-data.ps1" -DestinationPath "%CD%\publish\Data" -Force
 if errorlevel 1 (
-	echo Failed to download RatScanner data.
-	exit /b 1
-)
-if exist publish\Data rmdir /s /q publish\Data
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Expand-Zip.ps1" -ArchivePath "%~dp0publish\Data.zip" -DestinationPath "%~dp0publish\Data"
-if errorlevel 1 (
-	echo Failed to extract RatScanner data.
-	exit /b 1
-)
-del /f /q "publish\Data.zip"
-
-:: If archive nested under Data/, flatten then validate the same package contract as CI.
-if not exist "publish\Data\maps.json" (
-	if exist "publish\Data\Data\maps.json" (
-		echo Flattening nested Data\Data layout...
-		robocopy "publish\Data\Data" "publish\Data" /E /MOVE >nul
-		rem robocopy: 0-7 = success/partial; 8+ = failure. Use errorlevel form so block parse-time expansion is safe.
-		if errorlevel 8 (
-			echo Failed to flatten nested Data layout.
-			exit /b 1
-		)
-		if exist "publish\Data\Data" rmdir /s /q "publish\Data\Data"
-	)
-)
-if not exist "publish\Data\maps.json" (
-	echo publish\Data looks incomplete after extract: missing maps.json.
-	exit /b 1
-)
-if not exist "publish\Data\unknown.png" (
-	echo publish\Data looks incomplete after extract: missing unknown.png.
-	exit /b 1
-)
-if not exist "publish\Data\traineddata\eng.traineddata" (
-	echo publish\Data looks incomplete after extract: missing traineddata\eng.traineddata.
-	exit /b 1
-)
-dir /b "publish\Data\icons\*.png" >nul 2>&1
-if errorlevel 1 (
-	echo publish\Data looks incomplete after extract: no item icons found.
-	exit /b 1
+	echo Failed to download or validate RatScanner data.
+	goto :fail
 )
 
 :: Zip into a single overwriteable artifact
@@ -76,19 +41,27 @@ if errorlevel 1 (
 	powershell -NoProfile -Command "Compress-Archive -Path '.\publish\*' -DestinationPath 'RatScanner.zip' -Force"
 	if errorlevel 1 (
 		echo Failed to create RatScanner.zip.
-		exit /b 1
+		goto :fail
 	)
 ) else (
 	echo Packing publish folder into RatScanner.zip...
 	7z a -r RatScanner.zip ./publish/*
 	if errorlevel 1 (
 		echo Failed to create RatScanner.zip.
-		exit /b 1
+		goto :fail
 	)
 )
 if not exist "RatScanner.zip" (
 	echo Failed to create RatScanner.zip.
-	exit /b 1
+	goto :fail
+)
+
+:: Verify the packaged archive itself, not just the staged publish tree
+echo Verifying release package...
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\verify-package.ps1" -PackagePath "%CD%\RatScanner.zip"
+if errorlevel 1 (
+	echo ERROR: RatScanner.zip failed release package verification.
+	goto :fail
 )
 
 :: Finalize publish
@@ -98,4 +71,11 @@ echo Artifact zip:  RatScanner.zip
 echo Run publish\RatScanner.exe to test locally.
 echo.
 echo Tip: for day-to-day coding use dev.bat (watch mode), not publish.bat.
+popd
 endlocal
+exit /b 0
+
+:fail
+popd
+endlocal
+exit /b 1
