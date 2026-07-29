@@ -91,7 +91,7 @@ These hermetic fixtures cover checksum parsing/mismatch handling, manifest schem
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
 ```
 
-Installation validation only proves the staged `publish\Data` tree was correct; packaging happens afterwards. This runs against the archive that actually ships — reading the manifest and every manifest-listed payload byte out of the zip — so a packaging step cannot silently drop, truncate, or duplicate payload files. It also rejects duplicate entry names and entries that differ only by case, which collide on extraction on the Windows x64 target. `publish.bat` and CI both run it on the zip they just produced, before that artifact can be uploaded or promoted. Entry separators are normalized because 7-Zip writes forward slashes and `Compress-Archive` writes backslashes.
+Installation validation only proves the staged `publish\Data` tree was correct; packaging happens afterward. This runs against the archive that actually ships — reading the manifest and every manifest-listed payload byte out of the zip — so a packaging step cannot silently drop, truncate, or duplicate payload files. It also rejects duplicate entry names and entries that differ only by case, which collide on extraction on the Windows x64 target. `publish.bat` and CI both run it on the zip they just produced, before that artifact can be uploaded or promoted. Entry separators are normalized because 7-Zip writes forward slashes and `Compress-Archive` writes backslashes.
 
 ### Analyzers / warnings
 

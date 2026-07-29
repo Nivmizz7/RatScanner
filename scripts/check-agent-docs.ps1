@@ -717,30 +717,26 @@ if (Test-Path -LiteralPath $publishPath) {
 
 $verifyPackagePath = Join-Path $RepoRoot 'scripts\verify-package.ps1'
 if (Test-Path -LiteralPath $verifyPackagePath) {
-    # Tokenize so a comment or an unreachable string literal cannot satisfy this guard: the
-    # verifier must actually load the shared contract and invoke the package assertion.
-    $verifyTokens = $null
+    # Inspect command AST nodes, not token presence: a comment, a string literal, or a dead
+    # fragment must not satisfy this guard while the verifier no longer verifies packages.
     $verifyErrors = $null
-    [void][System.Management.Automation.Language.Parser]::ParseFile(
-        $verifyPackagePath, [ref]$verifyTokens, [ref]$verifyErrors)
+    $verifyAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $verifyPackagePath, [ref]$null, [ref]$verifyErrors)
     if (@($verifyErrors).Count -gt 0) {
         Add-Failure 'scripts\verify-package.ps1 must parse without errors'
     }
     else {
-        $commandNames = @(
-            $verifyTokens |
-            Where-Object { $_.Kind -eq 'Generic' -or $_.Kind -eq 'Identifier' } |
-            ForEach-Object { $_.Text }
-        )
-        $stringValues = @(
-            $verifyTokens |
-            Where-Object { $null -ne ($_.PSObject.Properties['Value']) } |
-            ForEach-Object { [string]$_.Value }
-        )
-        if ($commandNames -notcontains 'Assert-RatScannerDataPackage') {
-            Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
-        }
-        elseif (-not ($stringValues | Where-Object { $_ -like '*RatScannerData.ps1' })) {
+        $commandAsts = @($verifyAst.FindAll(
+            { param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
+        $invokesAssertion = @($commandAsts | Where-Object {
+            $_.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -and
+            $_.GetCommandName() -eq 'Assert-RatScannerDataPackage'
+        }).Count -gt 0
+        $dotSourcesContract = @($commandAsts | Where-Object {
+            $_.InvocationOperator -eq [System.Management.Automation.Language.TokenKind]::Dot -and
+            $_.Extent.Text -like '*RatScannerData.ps1*'
+        }).Count -gt 0
+        if (-not $invokesAssertion -or -not $dotSourcesContract) {
             Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
         }
     }

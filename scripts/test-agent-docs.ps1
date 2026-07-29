@@ -542,6 +542,34 @@ try {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
     }
 
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload') +
+        "`n`$unused = 'Assert-RatScannerDataPackage'`n"
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'a string literal does not satisfy the package assertion guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    $withoutDotSource = $verifyPackage.Replace(
+        '. (Join-Path $PSScriptRoot ''RatScannerData.ps1'')',
+        '$null = Join-Path $PSScriptRoot ''RatScannerData.ps1''')
+    if ($withoutDotSource -eq $verifyPackage) {
+        throw 'Fixture mutation did not apply: the contract dot-source was not found in verify-package.ps1.'
+    }
+    [System.IO.File]::WriteAllText($verifyPackageFixture, $withoutDotSource)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'package verifier stops dot-sourcing the shared contract'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     [System.IO.File]::WriteAllText(
