@@ -414,6 +414,44 @@ try {
         Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
     }
 
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        $workflow.Replace('scripts/setup-data.ps1', 'scripts/Expand-Zip.ps1')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI Include Data must delegate to scripts/setup-data.ps1' -Scenario 'CI bypasses the shared RatScannerData installer'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $publishPath = Join-Path $fixtureRoot 'publish.bat'
+    $publish = Get-Content -LiteralPath $publishPath -Raw
+    [System.IO.File]::WriteAllText(
+        $publishPath,
+        $publish.Replace('scripts\setup-data.ps1', 'scripts\Expand-Zip.ps1')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'publish.bat must delegate RatScannerData installation' -Scenario 'local publish bypasses the shared RatScannerData installer'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'publish.bat'
+    }
+
+    $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
+    $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
+    [System.IO.File]::WriteAllText(
+        $dataContractPath,
+        $dataContract.Replace('tarkovtracker-org/RatScannerData', 'RatScanner/RatScannerData')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'RatScannerData contract must use tarkovtracker-org/RatScannerData' -Scenario 'data contract points back to the old upstream repository'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\RatScannerData.ps1'
+    }
+
     $contributingPath = Join-Path $fixtureRoot 'CONTRIBUTING.md'
     $contributing = Get-Content -LiteralPath $contributingPath -Raw
     [System.IO.File]::WriteAllText(
@@ -435,3 +473,5 @@ finally {
         Remove-Item -LiteralPath $fixtureRoot -Recurse -Force
     }
 }
+
+exit 0

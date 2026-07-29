@@ -77,6 +77,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-agent-docs.ps1
 
 The integrity check validates required paths, context routing, local Markdown links, structurally parsed MSBuild references/package versions, RatEye submodule wiring, and primary-branch consistency while excluding generated output. The adversarial test builds a disposable path-with-spaces fixture and proves representative failures are non-zero and actionable. Both run in CI.
 
+### RatScannerData validator tests
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-data-validation.ps1
+```
+
+These hermetic fixtures cover checksum parsing/mismatch handling, manifest schema and count validation, required files, and root/nested archive layouts. They do not download live data. The later packaging step downloads the pinned release and validates the real published assets.
+
 ### Analyzers / warnings
 
 - Nullable enabled on App; treat nullability seriously.
@@ -136,8 +144,10 @@ Confirm:
 
 - `publish\RatScanner.exe` starts.
 - `publish\LICENSE` present.
+- `publish\Data\manifest.json` is schema 1 and declares the extracted icon count.
 - `publish\Data\` contains maps.json / icons / traineddata.
-- `RatScanner.zip` created.
+- The setup log confirms the pinned archive checksum and published/embedded manifest validation.
+- `RatScanner.zip` created and contains no temporary `Data.zip` or checksum download files.
 - Single-file self-contained win-x64 matches CI intent.
 
 CI uploads the validated `RatScanner.zip` as an immutable build artifact. The separate least-privilege Release workflow promotes that exact artifact only after verifying a successful push-triggered Build for the selected `master` commit; it does not rebuild (see `release-and-versioning.md`).
@@ -152,7 +162,8 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | RatEye processing | standalone RatEye build/tests + integrated App build | fixture replay + scan smoke if accuracy-sensitive |
 | Config paths / display | build + tests | manual multi-monitor if possible |
 | i18n | build | all locale files updated; UI language switch |
-| CI / scripts | build (or script dry-run) | publish path once if packaging changed |
+| CI / scripts | relevant hermetic script test + build (or script dry-run) | publish path once if packaging changed |
+| RatScannerData pin / packaging | `test-data-validation.ps1` + setup against the pinned release + Release build/test | inspect packaged manifest/icon count; current-EFT fixture replay and clean-machine smoke |
 | Agent docs / layout | `check-agent-docs.ps1` + markdown lint | `test-agent-docs.ps1` when changing the checker |
 | Version / release notes | csproj version + docs | tag workflow locally understood |
 | Docs only / any `*.md` | `lint-markdown.ps1 -Fix` then check; `check-agent-docs.ps1` when structure/links change | |

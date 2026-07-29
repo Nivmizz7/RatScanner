@@ -23,49 +23,12 @@ if not exist "publish\LICENSE" (
 	exit /b 1
 )
 
-:: Include runtime data (use shared extractor that falls back if Expand-Archive is broken)
-echo Adding latest RatScanner data...
-curl -fL --retry 3 --retry-all-errors "https://github.com/RatScanner/RatScannerData/releases/latest/download/Data.zip" --output "publish/Data.zip"
+:: Include the pinned runtime data release through the shared verified installer
+set "DATA_DESTINATION=%~dp0publish\Data"
+echo Adding pinned RatScanner data...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup-data.ps1" -DestinationPath "%DATA_DESTINATION%" -Force
 if errorlevel 1 (
-	echo Failed to download RatScanner data.
-	exit /b 1
-)
-if exist publish\Data rmdir /s /q publish\Data
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\Expand-Zip.ps1" -ArchivePath "%~dp0publish\Data.zip" -DestinationPath "%~dp0publish\Data"
-if errorlevel 1 (
-	echo Failed to extract RatScanner data.
-	exit /b 1
-)
-del /f /q "publish\Data.zip"
-
-:: If archive nested under Data/, flatten then validate the same package contract as CI.
-if not exist "publish\Data\maps.json" (
-	if exist "publish\Data\Data\maps.json" (
-		echo Flattening nested Data\Data layout...
-		robocopy "publish\Data\Data" "publish\Data" /E /MOVE >nul
-		rem robocopy: 0-7 = success/partial; 8+ = failure. Use errorlevel form so block parse-time expansion is safe.
-		if errorlevel 8 (
-			echo Failed to flatten nested Data layout.
-			exit /b 1
-		)
-		if exist "publish\Data\Data" rmdir /s /q "publish\Data\Data"
-	)
-)
-if not exist "publish\Data\maps.json" (
-	echo publish\Data looks incomplete after extract: missing maps.json.
-	exit /b 1
-)
-if not exist "publish\Data\unknown.png" (
-	echo publish\Data looks incomplete after extract: missing unknown.png.
-	exit /b 1
-)
-if not exist "publish\Data\traineddata\eng.traineddata" (
-	echo publish\Data looks incomplete after extract: missing traineddata\eng.traineddata.
-	exit /b 1
-)
-dir /b "publish\Data\icons\*.png" >nul 2>&1
-if errorlevel 1 (
-	echo publish\Data looks incomplete after extract: no item icons found.
+	echo Failed to download or validate RatScanner data.
 	exit /b 1
 )
 

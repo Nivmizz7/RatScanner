@@ -96,7 +96,7 @@ examples/                # Sample resolution screenshots
 
 | Concern | Where |
 | --- | --- |
-| Icons / OCR / maps payload | `src/App/Data/**` (gitignored; from RatScannerData releases) |
+| Icons / OCR / maps payload | `src/App/Data/**` (gitignored; from a pinned `tarkovtracker-org/RatScannerData` release with checksum + manifest validation) |
 | App resources | `src/App/Resources/*` |
 | Web static | `wwwroot/**` |
 
@@ -113,7 +113,9 @@ examples/                # Sample resolution screenshots
 | Script | Role |
 | --- | --- |
 | `dev.bat` / `scripts/dev.ps1` | Local watch or one-shot run |
-| `scripts/setup-data.ps1` | Download/extract Data.zip into `src/App/Data` |
+| `scripts/setup-data.ps1` | Install the pinned, checksum/manifest-verified Data release into the app or a caller-provided destination |
+| `scripts/RatScannerData.ps1` | RatScannerData release pin and reusable checksum/manifest/payload validators |
+| `scripts/test-data-validation.ps1` | Hermetic regression tests for the RatScannerData validators (also CI) |
 | `scripts/Expand-Zip.ps1` | Robust zip extract fallbacks |
 | `scripts/check-agent-docs.ps1` | Structural documentation integrity (also CI) |
 | `scripts/test-agent-docs.ps1` | Disposable adversarial regression fixture for the integrity check (also CI) |

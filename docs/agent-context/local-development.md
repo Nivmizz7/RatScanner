@@ -39,16 +39,19 @@ powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1
 powershell -ExecutionPolicy Bypass -File scripts\setup-data.ps1 -Force
 ```
 
-Data source: GitHub release `RatScanner/RatScannerData` → `Data.zip` into **`src\App\Data\`**.
+Data source: pinned GitHub release `tarkovtracker-org/RatScannerData@data-f1f047dc5d38ee43` into **`src\App\Data\`**. `setup-data.ps1` downloads `Data.zip`, `Data.zip.sha256`, and `manifest.json`, verifies the archive against both the published checksum and the repository pin, and validates the embedded manifest before replacing an existing installation.
+
+Use `-DestinationPath <path>` when the verified payload belongs somewhere other than `src\App\Data`, such as `publish\Data`. Advancing the data release requires updating the tag and archive SHA-256 together in `scripts\RatScannerData.ps1` after validating the new release.
 
 ### Data readiness checks
 
-Scripts treat Data as ready when all exist:
+Scripts treat Data as ready only when the embedded schema-1 `manifest.json` is valid, its icon count matches the extracted files and exceeds the sanity floor, and all of these exist:
 
+- `manifest.json`
 - `maps.json`
 - `unknown.png`
 - `traineddata\eng.traineddata`
-- `icons\` with at least one `.png`
+- the exact number of `icons\*.png` declared by the manifest
 
 `RatScanner.csproj` copies `Data\**` to output with `Watch=false` so icon dumps do not flood `dotnet watch`.
 

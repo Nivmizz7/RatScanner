@@ -530,6 +530,8 @@ $requiredFiles = @(
     '.csharpierrc.json',
     'scripts\dev.ps1',
     'scripts\setup-data.ps1',
+    'scripts\RatScannerData.ps1',
+    'scripts\test-data-validation.ps1',
     'scripts\Expand-Zip.ps1',
     'scripts\check-agent-docs.ps1',
     'scripts\test-agent-docs.ps1',
@@ -577,6 +579,40 @@ if (Test-Path -LiteralPath $gitmodulesPath) {
     }
     elseif ($ratEyeSubmodules[0].Url -ne 'https://github.com/tarkovtracker-org/RatEye.git') {
         Add-Failure '.gitmodules must use https://github.com/tarkovtracker-org/RatEye.git'
+    }
+}
+
+$dataContractPath = Join-Path $RepoRoot 'scripts\RatScannerData.ps1'
+$setupDataPath = Join-Path $RepoRoot 'scripts\setup-data.ps1'
+$publishPath = Join-Path $RepoRoot 'publish.bat'
+$ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
+if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $setupDataPath)) {
+    $dataContractText = Get-Content -LiteralPath $dataContractPath -Raw
+    $setupDataText = Get-Content -LiteralPath $setupDataPath -Raw
+    if ($dataContractText -notlike '*tarkovtracker-org/RatScannerData*') {
+        Add-Failure 'RatScannerData contract must use tarkovtracker-org/RatScannerData'
+    }
+    if ($dataContractText -notmatch "RatScannerDataReleaseTag\s*=\s*'data-[0-9a-f]{16}'") {
+        Add-Failure 'RatScannerData contract must pin a content-addressed data release tag'
+    }
+    if ($setupDataText -notlike '*RatScannerData.ps1*') {
+        Add-Failure 'scripts\setup-data.ps1 must use scripts\RatScannerData.ps1'
+    }
+}
+
+foreach ($activePath in @($setupDataPath, $publishPath, $ciPath)) {
+    if (-not (Test-Path -LiteralPath $activePath)) {
+        continue
+    }
+    $activeText = Get-Content -LiteralPath $activePath -Raw
+    if ($activeText -like '*github.com/RatScanner/RatScannerData/releases/latest*') {
+        Add-Failure ((Get-RepoRelativePath -FullName $activePath) + ' must not download the old unpinned RatScannerData latest release')
+    }
+}
+if (Test-Path -LiteralPath $publishPath) {
+    $publishText = Get-Content -LiteralPath $publishPath -Raw
+    if ($publishText -notlike '*scripts\setup-data.ps1*') {
+        Add-Failure 'publish.bat must delegate RatScannerData installation to scripts\setup-data.ps1'
     }
 }
 
@@ -701,6 +737,10 @@ if (Test-Path -LiteralPath $ciPath) {
     $ciText = Get-Content -LiteralPath $ciPath -Raw
     if (-not (Test-CheckoutUsesRecursiveSubmodules -WorkflowText $ciText)) {
         Add-Failure 'CI checkout must initialize RatEye with submodules: recursive'
+    }
+
+    if ($ciText -notlike '*scripts/setup-data.ps1*') {
+        Add-Failure 'CI Include Data must delegate to scripts/setup-data.ps1'
     }
 
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')

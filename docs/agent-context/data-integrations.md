@@ -7,6 +7,7 @@
 | Catalog bulk (items, tasks, hideout, crafts, barters) | `TarkovDevAPI` → **json.tarkov.dev** | Primary market/quest/hideout data |
 | Maps (id/name/normalizedName) | `TarkovDevAPI` slim **GraphQL** on api.tarkov.dev | Avoid multi-MB maps JSON on critical path |
 | Maps fallback | json.tarkov.dev maps stream extract | When GraphQL fails/empty |
+| RatScannerData runtime bundle | `scripts/setup-data.ps1` + `scripts/RatScannerData.ps1` | Pinned icon templates, OCR models, maps, fallback image, and provenance manifest |
 | Interactive map tiles/meta | local `Data/maps.json` via `MapDataLoader` | Overlay map viewer |
 | Progress tracking | `TarkovTrackerDB` + `APIClient` | Quests/hideout/team |
 | App updates | `GitHubUpdateService` | Fork releases only |
@@ -41,6 +42,18 @@ Items cache update raises `ItemsCacheUpdated` → App rebuilds RatEye item datab
 - Offline projected cache allows startup without network for previously warmed documents.
 - Failed live fetches leave last-good memory/disk data when present.
 - Maps may be empty/not-ready without blocking items/tasks/hideout cold start.
+
+## RatScannerData runtime bundle
+
+RatScanner does not fetch recognition templates at runtime. Development setup and release packaging install the content-addressed release pinned in `scripts/RatScannerData.ps1` from `tarkovtracker-org/RatScannerData`.
+
+The installer verifies three assets from the same release:
+
+1. `Data.zip` hashes to both the release's `Data.zip.sha256` value and the repository-pinned digest.
+2. The standalone `manifest.json` is byte-identical to the manifest embedded in the archive.
+3. The schema, catalog/skipped/icon counts, required files, and actual extracted icon count are consistent before the destination is replaced.
+
+The bundle's icons are named by tarkov.dev item ID and use RatEye's 63-pixel slot geometry. The manifest records source URLs and skipped generic-placeholder items. When advancing the pin, validate the new RatScannerData release first, update its tag and archive hash together, rebuild the RatScanner artifact, and perform current-EFT fixture/manual scan checks. Package integrity does not by itself prove recognition accuracy.
 
 ## Maps: slim GraphQL + fallback
 
