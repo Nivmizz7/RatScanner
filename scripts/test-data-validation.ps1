@@ -387,7 +387,7 @@ try {
         if ($result.IconCount -ne 2) { throw "Nested icons changed the count: $($result.IconCount)" }
     }
 
-    Assert-Passes -Scenario 'case-colliding icon entries are not silently collapsed' -Action {
+    Assert-Passes -Scenario 'case-colliding icon entries are rejected' -Action {
         # NTFS cannot hold both cases, so the colliding entry is injected into the archive directly.
         $collidePackage = Join-Path $fixtureRoot 'case-collide.zip'
         Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-source') -Destination $collidePackage -Force
@@ -396,12 +396,29 @@ try {
             Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
         }
         catch {
-            if ($_.Exception.Message -notlike '*icon count does not match manifest.json*') {
+            if ($_.Exception.Message -notlike '*differ only by case*') {
                 throw "Unexpected case-collision error: $($_.Exception.Message)"
             }
             return
         }
         throw 'A case-colliding icon entry should have been rejected.'
+    }
+
+    Assert-Passes -Scenario 'case-colliding non-icon entries are rejected' -Action {
+        # A collision outside icons/ changes no count, so only explicit detection catches it.
+        $collidePackage = Join-Path $fixtureRoot 'case-collide-maps.zip'
+        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-maps-source') -Destination $collidePackage -Force
+        Add-ZipEntry -PackagePath $collidePackage -EntryName 'Data/MAPS.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[{"spoofed":true}]'))
+        try {
+            Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
+        }
+        catch {
+            if ($_.Exception.Message -notlike '*differ only by case*') {
+                throw "Unexpected case-collision error: $($_.Exception.Message)"
+            }
+            return
+        }
+        throw 'A case-colliding non-icon entry should have been rejected.'
     }
 
     Assert-Passes -Scenario 'duplicate archive entries are rejected' -Action {

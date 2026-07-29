@@ -376,6 +376,9 @@ function Assert-RatScannerDataPackage {
         # manifest paths are compared ordinally elsewhere. A case-insensitive map would silently
         # collapse Data/icons/AbC.png and Data/icons/abc.png, leaving one payload file unhashed.
         $files = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+        # Tracked separately: this target is Windows x64 only, where two entries differing only by
+        # case overwrite each other on extraction, so the shipped file may not be the verified one.
+        $caseFoldedNames = [System.Collections.Generic.Dictionary[string, string]]::new([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($entry in $archive.Entries) {
             # Directory entries carry an empty Name; only real files are verifiable.
             if ([string]::IsNullOrEmpty($entry.Name)) {
@@ -387,6 +390,11 @@ function Assert-RatScannerDataPackage {
             if ($files.ContainsKey($normalizedName)) {
                 throw "Release package contains a duplicate entry: $normalizedName"
             }
+            if ($caseFoldedNames.ContainsKey($normalizedName)) {
+                throw ("Release package contains entries that differ only by case and collide when " +
+                    "extracted on Windows: $($caseFoldedNames[$normalizedName]) and $normalizedName")
+            }
+            $caseFoldedNames[$normalizedName] = $normalizedName
             $files[$normalizedName] = $entry
         }
 
