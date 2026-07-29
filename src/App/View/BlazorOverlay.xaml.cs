@@ -174,7 +174,10 @@ public partial class BlazorOverlay : Window
             // Only enter the topmost band while the overlay has content. A permanently
             // topmost virtual-screen window suppresses the taskbar and interferes with
             // fullscreen-aware features such as variable refresh rate.
-            if (!IsVisible)
+            // The 100x100 bootstrap window is already visible during WebView startup,
+            // so Topmost — not Visibility — identifies an overlay that has entered
+            // tooltip mode and already received virtual-screen bounds.
+            if (!Topmost)
                 SetSize();
             Topmost = true;
             if (!IsVisible)
