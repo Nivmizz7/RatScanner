@@ -615,6 +615,18 @@ try {
     }
 
     $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    $contractOnlyInArgument = $verifyPackage.Replace(
+        '. (Join-Path $PSScriptRoot ''RatScannerData.ps1'')',
+        '. (Join-Path $PSScriptRoot ''Expand-Zip.ps1'') (Join-Path $PSScriptRoot ''RatScannerData.ps1'')')
+    [System.IO.File]::WriteAllText($verifyPackageFixture, $contractOnlyInArgument)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'a contract reference in a non-source dot-command argument does not satisfy the guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
     $scriptBlockOnly = $verifyPackage.Replace(
         '. (Join-Path $PSScriptRoot ''RatScannerData.ps1'')',
         '$unused = { . (Join-Path $PSScriptRoot ''RatScannerData.ps1'') }').Replace(

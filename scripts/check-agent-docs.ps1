@@ -291,7 +291,8 @@ function Test-ScriptDotSourcesFile {
             -not (Test-AstIsTopLevelStatement -Node $command)) {
             continue
         }
-        $referencesFile = @($command.FindAll({
+        $sourceElement = @($command.CommandElements)[0]
+        $referencesFile = @($sourceElement.FindAll({
             param($node)
             ($node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
                 [System.IO.Path]::GetFileName($node.Value) -eq $FileName) -or

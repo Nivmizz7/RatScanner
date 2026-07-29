@@ -49,10 +49,14 @@ function Get-RatScannerDataContentSha256 {
     param([Parameter(Mandatory = $true)]$Entries)
 
     $entriesByPath = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
+    $caseFoldedPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     [string[]]$paths = @($Entries | ForEach-Object {
         $path = [string]$_.path
         if ($entriesByPath.ContainsKey($path)) {
             throw "RatScanner data manifest contains a duplicate file path: $path"
+        }
+        if (-not $caseFoldedPaths.Add($path)) {
+            throw "RatScanner data manifest contains file paths that differ only by case: $path"
         }
         $entriesByPath[$path] = $_
         $path

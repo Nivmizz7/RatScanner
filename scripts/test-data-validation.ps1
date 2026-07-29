@@ -146,13 +146,11 @@ function Add-ZipEntry {
 try {
     New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
 
-    Assert-Passes -Scenario 'content hash preserves case-distinct manifest paths' -Action {
-        $caseEntries = @(
+    Assert-Throws -Scenario 'content hash rejects case-colliding manifest paths' -ExpectedText 'differ only by case' -Action {
+        Get-RatScannerDataContentSha256 -Entries @(
             [pscustomobject]@{ path = 'icons/A.png'; sha256 = ('a' * 64) },
             [pscustomobject]@{ path = 'icons/a.png'; sha256 = ('b' * 64) }
         )
-        $hash = Get-RatScannerDataContentSha256 -Entries $caseEntries
-        if ($hash -notmatch '^[0-9a-f]{64}$') { throw 'Content hash was not produced.' }
     }
 
     $archive = Join-Path $fixtureRoot 'Data.zip'
