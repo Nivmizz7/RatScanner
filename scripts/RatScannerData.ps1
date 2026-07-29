@@ -48,7 +48,7 @@ function Get-RatScannerDataFileSha256 {
 function Get-RatScannerDataContentSha256 {
     param([Parameter(Mandatory = $true)]$Entries)
 
-    $entriesByPath = @{}
+    $entriesByPath = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
     [string[]]$paths = @($Entries | ForEach-Object {
         $path = [string]$_.path
         if ($entriesByPath.ContainsKey($path)) {
@@ -243,7 +243,7 @@ function Assert-RatScannerDataFiles {
     }
 
     $rootPrefix = [System.IO.Path]::GetFullPath($DataRoot).TrimEnd('\') + '\'
-    foreach ($item in Get-ChildItem -LiteralPath $DataRoot -File -Recurse) {
+    foreach ($item in Get-ChildItem -LiteralPath $DataRoot -File -Recurse -Force) {
         $relativePath = $item.FullName.Substring($rootPrefix.Length).Replace('\', '/')
         if (-not $expectedFiles.Contains($relativePath)) {
             throw "Data archive contains a file not listed in manifest.json: $relativePath"

@@ -463,6 +463,20 @@ try {
         Restore-FixtureFile -RelativePath 'publish.bat'
     }
 
+    $setupDataFixture = Join-Path $fixtureRoot 'scripts\setup-data.ps1'
+    $setupData = Get-Content -LiteralPath $setupDataFixture -Raw
+    $setupWithoutContract = $setupData.Replace('. $dataScript', '. $expandScript') + "`n# RatScannerData.ps1`n"
+    if ($setupWithoutContract -eq $setupData) {
+        throw 'Fixture mutation did not apply: setup-data.ps1 contract dot-source was not found.'
+    }
+    [System.IO.File]::WriteAllText($setupDataFixture, $setupWithoutContract)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'scripts\setup-data.ps1 must use scripts\RatScannerData.ps1' -Scenario 'a comment cannot replace the setup script contract dot-source'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\setup-data.ps1'
+    }
+
     $verifyPackageFixture = Join-Path $fixtureRoot 'scripts\verify-package.ps1'
     $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
     [System.IO.File]::WriteAllText(
@@ -583,6 +597,35 @@ try {
     [System.IO.File]::WriteAllText($verifyPackageFixture, $withoutDotSource)
     try {
         Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'package verifier stops dot-sourcing the shared contract'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    $wrongDotSource = $verifyPackage.Replace(
+        '. (Join-Path $PSScriptRoot ''RatScannerData.ps1'')',
+        '. (Join-Path $PSScriptRoot ''Expand-Zip.ps1'')') + "`n`$unused = 'RatScannerData.ps1'`n"
+    [System.IO.File]::WriteAllText($verifyPackageFixture, $wrongDotSource)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'an unrelated dot-source and contract filename string do not satisfy the package guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    $scriptBlockOnly = $verifyPackage.Replace(
+        '. (Join-Path $PSScriptRoot ''RatScannerData.ps1'')',
+        '$unused = { . (Join-Path $PSScriptRoot ''RatScannerData.ps1'') }').Replace(
+        '$result = Assert-RatScannerDataPackage `',
+        '$unusedAssertion = { $result = Assert-RatScannerDataPackage `')
+    $scriptBlockOnly = $scriptBlockOnly.Replace(
+        '    -ContentSha256Prefix $contract.ContentSha256Prefix',
+        '    -ContentSha256Prefix $contract.ContentSha256Prefix }')
+    [System.IO.File]::WriteAllText($verifyPackageFixture, $scriptBlockOnly)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'uninvoked script blocks do not satisfy package verifier guards'
     }
     finally {
         Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'

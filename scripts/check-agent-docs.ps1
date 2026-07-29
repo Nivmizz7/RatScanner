@@ -198,6 +198,7 @@ function Test-AstIsTopLevelStatement {
 
     for ($parent = $Node.Parent; $null -ne $parent; $parent = $parent.Parent) {
         if ($parent -is [System.Management.Automation.Language.FunctionDefinitionAst] -or
+            $parent -is [System.Management.Automation.Language.ScriptBlockExpressionAst] -or
             $parent -is [System.Management.Automation.Language.IfStatementAst] -or
             $parent -is [System.Management.Automation.Language.LoopStatementAst] -or
             $parent -is [System.Management.Automation.Language.SwitchStatementAst] -or
@@ -249,6 +250,60 @@ function Test-AstIsUnreachable {
         }
     }
     return $false
+}
+
+function Test-ScriptDotSourcesFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [Parameter(Mandatory = $true)][string]$FileName
+    )
+
+    $parseErrors = $null
+    $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
+        $ScriptPath, [ref]$null, [ref]$parseErrors)
+    if (@($parseErrors).Count -gt 0) {
+        return [pscustomobject]@{ Parsed = $false; Matches = $false; Ast = $null }
+    }
+
+    $contractVariables = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($assignment in @($scriptAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst]
+    }, $true))) {
+        if ($assignment.Left -isnot [System.Management.Automation.Language.VariableExpressionAst] -or
+            -not (Test-AstIsTopLevelStatement -Node $assignment)) {
+            continue
+        }
+        $referencesFile = @($assignment.Right.FindAll({
+            param($node)
+            $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+            [System.IO.Path]::GetFileName($node.Value) -eq $FileName
+        }, $true)).Count -gt 0
+        if ($referencesFile) {
+            [void]$contractVariables.Add($assignment.Left.VariablePath.UserPath)
+        }
+    }
+
+    $commands = @($scriptAst.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.CommandAst]
+    }, $true))
+    foreach ($command in $commands) {
+        if ($command.InvocationOperator -ne [System.Management.Automation.Language.TokenKind]::Dot -or
+            -not (Test-AstIsTopLevelStatement -Node $command)) {
+            continue
+        }
+        $referencesFile = @($command.FindAll({
+            param($node)
+            ($node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
+                [System.IO.Path]::GetFileName($node.Value) -eq $FileName) -or
+            ($node -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                $contractVariables.Contains($node.VariablePath.UserPath))
+        }, $true)).Count -gt 0
+        if ($referencesFile) {
+            return [pscustomobject]@{ Parsed = $true; Matches = $true; Ast = $scriptAst }
+        }
+    }
+
+    return [pscustomobject]@{ Parsed = $true; Matches = $false; Ast = $scriptAst }
 }
 
 function Test-DataContractStringAssignment {
@@ -816,7 +871,13 @@ if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $set
     if ($releaseTagAssignment.Parsed -and -not $releaseTagAssignment.Matches) {
         Add-Failure 'RatScannerData contract must pin a content-addressed data release tag'
     }
-    if ($setupDataText -notlike '*RatScannerData.ps1*') {
+    $setupContractSource = Test-ScriptDotSourcesFile `
+        -ScriptPath $setupDataPath `
+        -FileName 'RatScannerData.ps1'
+    if (-not $setupContractSource.Parsed) {
+        Add-Failure 'scripts\setup-data.ps1 must parse without errors'
+    }
+    elseif (-not $setupContractSource.Matches) {
         Add-Failure 'scripts\setup-data.ps1 must use scripts\RatScannerData.ps1'
     }
 }
@@ -844,15 +905,14 @@ if (Test-Path -LiteralPath $publishPath) {
 
 $verifyPackagePath = Join-Path $RepoRoot 'scripts\verify-package.ps1'
 if (Test-Path -LiteralPath $verifyPackagePath) {
-    # Inspect command AST nodes, not token presence: a comment, a string literal, or a dead
-    # fragment must not satisfy this guard while the verifier no longer verifies packages.
-    $verifyErrors = $null
-    $verifyAst = [System.Management.Automation.Language.Parser]::ParseFile(
-        $verifyPackagePath, [ref]$null, [ref]$verifyErrors)
-    if (@($verifyErrors).Count -gt 0) {
+    $verifyContractSource = Test-ScriptDotSourcesFile `
+        -ScriptPath $verifyPackagePath `
+        -FileName 'RatScannerData.ps1'
+    if (-not $verifyContractSource.Parsed) {
         Add-Failure 'scripts\verify-package.ps1 must parse without errors'
     }
     else {
+        $verifyAst = $verifyContractSource.Ast
         $commandAsts = @($verifyAst.FindAll(
             { param($node) $node -is [System.Management.Automation.Language.CommandAst] }, $true))
         $invokesAssertion = @($commandAsts | Where-Object {
@@ -861,18 +921,7 @@ if (Test-Path -LiteralPath $verifyPackagePath) {
             (Test-AstIsTopLevelStatement -Node $_) -and
             -not (Test-AstIsUnreachable -Node $_)
         }).Count -gt 0
-        # Accept both idioms in use here: a literal dot-source, and setup-data.ps1's
-        # `$dataScript = Join-Path ...` followed by `. $dataScript`.
-        $referencesContractFile = @($verifyAst.FindAll({
-            param($node)
-            $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and
-            $node.Value -like '*RatScannerData.ps1'
-        }, $true)).Count -gt 0
-        $dotSourcesContract = $referencesContractFile -and @($commandAsts | Where-Object {
-            $_.InvocationOperator -eq [System.Management.Automation.Language.TokenKind]::Dot -and
-            (Test-AstIsTopLevelStatement -Node $_) -and
-            -not (Test-AstIsUnreachable -Node $_)
-        }).Count -gt 0
+        $dotSourcesContract = $verifyContractSource.Matches
         if (-not $invokesAssertion -or -not $dotSourcesContract) {
             Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
         }
