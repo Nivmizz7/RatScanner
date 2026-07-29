@@ -180,6 +180,34 @@ public class ItemQueueTests
         Assert.Contains(second, received);
     }
 
+    [Fact]
+    public void Enqueue_callbacks_can_wait_for_another_enqueue_without_blocking()
+    {
+        ItemQueue queue = new();
+        TestItemScan first = new(long.MaxValue);
+        TestItemScan second = new(long.MaxValue);
+        List<ItemScan> received = [];
+        queue.ItemsEnqueued += scans =>
+        {
+            received.AddRange(scans);
+            if (!ReferenceEquals(scans[0], first))
+                return;
+
+            System.Threading.Tasks.Task enqueue = System.Threading.Tasks.Task.Run(
+                () => queue.Enqueue(second),
+                TestContext.Current.CancellationToken
+            );
+            Assert.True(
+                enqueue.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken),
+                "A callback waiting for another producer must not hold the enqueue lock."
+            );
+        };
+
+        queue.Enqueue(first);
+
+        Assert.Equal([first, second], received);
+    }
+
     private sealed class TestItemScan : ItemScan
     {
         public TestItemScan(long expiresAt)
