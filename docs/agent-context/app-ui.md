@@ -5,7 +5,7 @@ Scoped mandatory rules also live in `src/App/AGENTS.md`.
 ## WPF / Blazor hybrid relationship
 
 - **WPF** owns OS windows, chrome, tray, jump list, single-instance activation, and hosts `BlazorWebView` controls.
-- **Blazor** owns almost all product UI (scan page, history, settings, credits, overlays).
+- **Blazor** owns almost all product UI (scan page, recent scans, settings, about, overlays).
 - Host pages:
   - Main: `wwwroot/index.html` → `RazorApp` → routes under `/app`
   - Overlay tooltip: `wwwroot/overlay.html` → `/overlay`
