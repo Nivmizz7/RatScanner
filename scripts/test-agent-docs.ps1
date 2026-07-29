@@ -491,6 +491,73 @@ try {
         Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
     }
 
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    [System.IO.File]::WriteAllText(
+        $workflowPath,
+        $workflow.Replace(
+            '-File scripts/verify-package.ps1',
+            '-File scripts/Expand-Zip.ps1 # scripts/verify-package.ps1'
+        )
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'CI must verify the packaged artifact' -Scenario 'commented-out CI verification does not satisfy the guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw
+    $zipStepLine = '      - name: Zip Content'
+    $prematureUpload = @(
+        '      - name: Premature upload',
+        '        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1',
+        '        with:',
+        '          name: RatScanner.zip',
+        '          path: ./RatScanner.zip',
+        $zipStepLine
+    ) -join "`r`n"
+    $mutatedWorkflow = $workflow.Replace($zipStepLine, $prematureUpload)
+    if ($mutatedWorkflow -eq $workflow) {
+        throw "Fixture mutation did not apply: '$zipStepLine' was not found in build.yml."
+    }
+    [System.IO.File]::WriteAllText($workflowPath, $mutatedWorkflow)
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'before upload' -Scenario 'an upload step before verification is rejected'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath '.github\workflows\build.yml'
+    }
+
+    $verifyPackageFixture = Join-Path $fixtureRoot 'scripts\verify-package.ps1'
+    $verifyPackage = Get-Content -LiteralPath $verifyPackageFixture -Raw
+    [System.IO.File]::WriteAllText(
+        $verifyPackageFixture,
+        "# Assert-RatScannerDataPackage appears only in this comment.`n" +
+        $verifyPackage.Replace('Assert-RatScannerDataPackage', 'Assert-RatScannerDataPayload')
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'must verify packages through the shared RatScannerData contract' -Scenario 'commented package assertion does not satisfy the guard'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\verify-package.ps1'
+    }
+
+    $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
+    $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
+    [System.IO.File]::WriteAllText(
+        $dataContractPath,
+        $dataContract.Replace(
+            '$script:RatScannerDataRepository = ''tarkovtracker-org/RatScannerData''',
+            '$script:RatScannerDataRepository = ''RatScanner/RatScannerData'' # tarkovtracker-org/RatScannerData'
+        )
+    )
+    try {
+        Invoke-IntegrityCheck -ShouldPass $false -ExpectedText 'RatScannerData contract must use tarkovtracker-org/RatScannerData' -Scenario 'a comment cannot authorize a changed contract repository'
+    }
+    finally {
+        Restore-FixtureFile -RelativePath 'scripts\RatScannerData.ps1'
+    }
+
     $dataContractPath = Join-Path $fixtureRoot 'scripts\RatScannerData.ps1'
     $dataContract = Get-Content -LiteralPath $dataContractPath -Raw
     [System.IO.File]::WriteAllText(

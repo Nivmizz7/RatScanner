@@ -121,6 +121,28 @@ function New-PackageFixture {
     return $packagePath
 }
 
+function Add-ZipEntry {
+    param(
+        [Parameter(Mandatory = $true)][string]$PackagePath,
+        [Parameter(Mandatory = $true)][string]$EntryName,
+        [Parameter(Mandatory = $true)][byte[]]$Bytes
+    )
+
+    $archive = [System.IO.Compression.ZipFile]::Open($PackagePath, [System.IO.Compression.ZipArchiveMode]::Update)
+    try {
+        $stream = $archive.CreateEntry($EntryName).Open()
+        try {
+            $stream.Write($Bytes, 0, $Bytes.Length)
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
 try {
     New-Item -ItemType Directory -Force -Path $fixtureRoot | Out-Null
 
@@ -363,6 +385,40 @@ try {
             -ExpectedSchema 1 `
             -MinimumIconCount 1
         if ($result.IconCount -ne 2) { throw "Nested icons changed the count: $($result.IconCount)" }
+    }
+
+    Assert-Passes -Scenario 'case-colliding icon entries are not silently collapsed' -Action {
+        # NTFS cannot hold both cases, so the colliding entry is injected into the archive directly.
+        $collidePackage = Join-Path $fixtureRoot 'case-collide.zip'
+        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'collide-source') -Destination $collidePackage -Force
+        Add-ZipEntry -PackagePath $collidePackage -EntryName 'Data/icons/ITEM-0.png' -Bytes ([byte[]](137, 80, 78, 71))
+        try {
+            Assert-RatScannerDataPackage -PackagePath $collidePackage -ExpectedSchema 1 -MinimumIconCount 1
+        }
+        catch {
+            if ($_.Exception.Message -notlike '*icon count does not match manifest.json*') {
+                throw "Unexpected case-collision error: $($_.Exception.Message)"
+            }
+            return
+        }
+        throw 'A case-colliding icon entry should have been rejected.'
+    }
+
+    Assert-Passes -Scenario 'duplicate archive entries are rejected' -Action {
+        $duplicatePackage = Join-Path $fixtureRoot 'duplicate.zip'
+        Copy-Item -LiteralPath (New-PackageFixture -StagingPath $packageStaging -Name 'dupe-source') -Destination $duplicatePackage -Force
+        # The zip format permits repeated names; the verifier must not pick one and move on.
+        Add-ZipEntry -PackagePath $duplicatePackage -EntryName 'Data/maps.json' -Bytes ([System.Text.Encoding]::UTF8.GetBytes('[]'))
+        try {
+            Assert-RatScannerDataPackage -PackagePath $duplicatePackage -ExpectedSchema 1 -MinimumIconCount 1
+        }
+        catch {
+            if ($_.Exception.Message -notlike '*duplicate entry: Data/maps.json*') {
+                throw "Unexpected duplicate-entry error: $($_.Exception.Message)"
+            }
+            return
+        }
+        throw 'A duplicated archive entry should have been rejected.'
     }
 
     Write-Host "`nAll $testCount RatScannerData validation scenarios passed." -ForegroundColor Green

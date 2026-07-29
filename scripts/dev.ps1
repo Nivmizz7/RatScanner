@@ -55,27 +55,12 @@ $configuration = if ($Release) { 'Release' } else { 'Debug' }
 $project = Join-Path $repositoryRoot 'src\App\RatScanner.csproj'
 $solution = Join-Path $repositoryRoot 'RatScanner.sln'
 $setupScript = Join-Path $PSScriptRoot 'setup-data.ps1'
-$dataDir = Join-Path $repositoryRoot 'src\App\Data'
-
-. (Join-Path $PSScriptRoot 'RatScannerData.ps1')
 
 function Assert-Command {
     param([string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         throw "'$Name' is not on PATH. Install the .NET SDK: https://dotnet.microsoft.com/download"
     }
-}
-
-function Test-DataReady {
-    param([string]$DataDir)
-    # Use the shared contract so the watch loop cannot keep running against a payload from a
-    # previously pinned release, which a loose file-presence check would happily accept.
-    $contract = Get-RatScannerDataReleaseContract
-    return Test-RatScannerDataInstallation `
-        -DataRoot $DataDir `
-        -ExpectedSchema $contract.ManifestSchema `
-        -MinimumIconCount $contract.MinimumIconCount `
-        -ContentSha256Prefix $contract.ContentSha256Prefix
 }
 
 Write-Host ""
@@ -94,17 +79,14 @@ Write-Host ""
 Assert-Command -Name 'dotnet'
 
 # 1) Runtime data (icons + OCR) — copied into bin output by the csproj
-if ($ForceSetup -or -not (Test-DataReady -DataDir $dataDir)) {
-    Write-Host "Ensuring item icons and OCR data are installed..."
-    $setupArgs = @()
-    if ($ForceSetup) { $setupArgs += '-Force' }
-    & $setupScript @setupArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "setup-data.ps1 failed."
-    }
-}
-else {
-    Write-Host "Data OK: $dataDir"
+# setup-data.ps1 owns the readiness decision: it validates the installed payload against the pinned
+# contract and exits early when nothing needs to change. A second predicate here would drift.
+Write-Host "Ensuring item icons and OCR data are installed..."
+$setupArgs = @()
+if ($ForceSetup) { $setupArgs += '-Force' }
+& $setupScript @setupArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "setup-data.ps1 failed."
 }
 
 # 2) Restore packages once unless skipped

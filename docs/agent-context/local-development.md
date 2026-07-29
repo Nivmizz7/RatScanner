@@ -30,7 +30,7 @@ From repo root:
 dev.bat
 ```
 
-First run (or incomplete Data) executes `scripts\setup-data.ps1`, restores the solution, then starts the watch loop.
+Every run delegates the Data decision to `scripts\setup-data.ps1`, which validates the existing installation against the pinned contract and exits early when nothing needs to change. It then restores the solution and starts the watch loop. `dev.ps1` deliberately keeps no readiness predicate of its own, because a second predicate drifts from the contract.
 
 Manual data only:
 
@@ -52,6 +52,8 @@ Scripts treat Data as ready only when the embedded schema-1 `manifest.json` is v
 - `unknown.png`
 - `traineddata\eng.traineddata`
 - the exact number of `icons\*.png` declared by the manifest
+
+Readiness additionally requires the installed `contentSha256` to match the pinned release tag, and `setup-data.ps1` re-hashes every manifest-listed file before skipping a reinstall. Without those two checks a payload from a previously pinned release, or one with a corrupted file, would satisfy the skip path.
 
 `RatScanner.csproj` copies `Data\**` to output with `Watch=false` so icon dumps do not flood `dotnet watch`.
 

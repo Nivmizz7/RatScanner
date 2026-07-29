@@ -293,7 +293,8 @@ function Test-RatScannerDataInstallation {
         [Parameter(Mandatory = $true)][string]$DataRoot,
         [Parameter(Mandatory = $true)][int]$ExpectedSchema,
         [Parameter(Mandatory = $true)][int]$MinimumIconCount,
-        [string]$ContentSha256Prefix = ''
+        [string]$ContentSha256Prefix = '',
+        [switch]$Deep
     )
 
     try {
@@ -312,7 +313,14 @@ function Test-RatScannerDataInstallation {
             }
         }
         $actualIconCount = @(Get-ChildItem -LiteralPath (Join-Path $DataRoot 'icons') -Filter '*.png' -File -ErrorAction Stop).Count
-        return $actualIconCount -eq [int]$manifest.iconCount
+        if ($actualIconCount -ne [int]$manifest.iconCount) {
+            return $false
+        }
+        if ($Deep) {
+            # A matching manifest still does not prove the files on disk are intact.
+            Assert-RatScannerDataFiles -DataRoot $DataRoot -Manifest $manifest
+        }
+        return $true
     }
     catch {
         return $false
@@ -364,7 +372,10 @@ function Assert-RatScannerDataPackage {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::OpenRead([System.IO.Path]::GetFullPath($PackagePath))
     try {
-        $files = @{}
+        # PowerShell hashtables are case-insensitive, but zip entry names are case-sensitive and
+        # manifest paths are compared ordinally elsewhere. A case-insensitive map would silently
+        # collapse Data/icons/AbC.png and Data/icons/abc.png, leaving one payload file unhashed.
+        $files = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::Ordinal)
         foreach ($entry in $archive.Entries) {
             # Directory entries carry an empty Name; only real files are verifiable.
             if ([string]::IsNullOrEmpty($entry.Name)) {
@@ -372,7 +383,11 @@ function Assert-RatScannerDataPackage {
             }
             # 7-Zip writes spec-compliant forward slashes; Compress-Archive on Windows PowerShell
             # writes backslashes. Normalize so either packer produces the same lookup keys.
-            $files[$entry.FullName.Replace('\', '/')] = $entry
+            $normalizedName = $entry.FullName.Replace('\', '/')
+            if ($files.ContainsKey($normalizedName)) {
+                throw "Release package contains a duplicate entry: $normalizedName"
+            }
+            $files[$normalizedName] = $entry
         }
 
         foreach ($required in $RequiredEntries) {

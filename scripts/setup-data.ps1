@@ -35,7 +35,17 @@ function Invoke-DataDownload {
     )
 
     try {
-        Invoke-WebRequest -Uri $Uri -OutFile $OutFile
+        # Without a timeout a hung connection blocks the installer (and CI) indefinitely instead of
+        # falling through to curl. Windows PowerShell's progress rendering also makes large binary
+        # downloads dramatically slower.
+        $previousProgressPreference = $ProgressPreference
+        $ProgressPreference = 'SilentlyContinue'
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -TimeoutSec 120
+        }
+        finally {
+            $ProgressPreference = $previousProgressPreference
+        }
     }
     catch {
         Write-Host "Invoke-WebRequest failed for $Uri; trying curl..."
@@ -50,7 +60,8 @@ if (-not $Force -and (Test-RatScannerDataInstallation `
     -DataRoot $destination `
     -ExpectedSchema $contract.ManifestSchema `
     -MinimumIconCount $contract.MinimumIconCount `
-    -ContentSha256Prefix $contract.ContentSha256Prefix)) {
+    -ContentSha256Prefix $contract.ContentSha256Prefix `
+    -Deep)) {
     $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
     Write-Host "Data already installed ($($manifest.iconCount) icons, content $($manifest.contentSha256)) at $destination"
     Write-Host 'Pass -Force to re-download.'

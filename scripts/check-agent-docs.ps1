@@ -185,35 +185,126 @@ function Get-GitSubmoduleSections {
     return $sections
 }
 
-function Test-CheckoutUsesRecursiveSubmodules {
-    param([string]$WorkflowText)
+function Get-WorkflowBlockScalarMap {
+    param([AllowEmptyString()][string[]]$Lines)
 
-    $lines = [regex]::Split($WorkflowText, '\r?\n')
-    $blockScalarLines = [bool[]]::new($lines.Count)
-    for ($header = 0; $header -lt $lines.Count; $header++) {
+    $blockScalarLines = [bool[]]::new($Lines.Count)
+    for ($header = 0; $header -lt $Lines.Count; $header++) {
         if ($blockScalarLines[$header]) {
             continue
         }
         if (
-            $lines[$header] -notmatch
+            $Lines[$header] -notmatch
             '^(?<indent>[ ]*)(?:-\s+)?[^#].*:\s*[|>](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?$'
         ) {
             continue
         }
 
         $headerIndent = $Matches['indent'].Length
-        for ($content = $header + 1; $content -lt $lines.Count; $content++) {
-            if ($lines[$content] -match '^\s*$') {
+        for ($content = $header + 1; $content -lt $Lines.Count; $content++) {
+            if ($Lines[$content] -match '^\s*$') {
                 $blockScalarLines[$content] = $true
                 continue
             }
-            $contentIndent = ([regex]::Match($lines[$content], '^[ ]*')).Value.Length
+            $contentIndent = ([regex]::Match($Lines[$content], '^[ ]*')).Value.Length
             if ($contentIndent -le $headerIndent) {
                 break
             }
             $blockScalarLines[$content] = $true
         }
     }
+    return $blockScalarLines
+}
+
+<#
+.SYNOPSIS
+  Returns the ordered steps of every job in a workflow as line ranges.
+
+.DESCRIPTION
+  String offsets cannot distinguish a real step from prose in a comment or block scalar, so
+  ordering and presence checks need step boundaries. Each result carries the step's own lines with
+  comments stripped, so commented-out text cannot satisfy a guard.
+#>
+function Get-WorkflowStepRanges {
+    param([Parameter(Mandatory = $true)][string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = Get-WorkflowBlockScalarMap -Lines $lines
+    $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
+    $steps = New-Object System.Collections.Generic.List[object]
+
+    for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
+        if (
+            $blockScalarLines[$stepsIndex] -or
+            $lines[$stepsIndex] -notmatch '^(?<indent>[ ]*)steps\s*:\s*(?:#.*)?$'
+        ) {
+            continue
+        }
+
+        $stepsIndent = $Matches['indent'].Length
+        $stepsEnd = $lines.Count
+        for ($candidate = $stepsIndex + 1; $candidate -lt $lines.Count; $candidate++) {
+            if ($blockScalarLines[$candidate] -or $lines[$candidate] -match '^\s*(?:#.*)?$') {
+                continue
+            }
+            if (([regex]::Match($lines[$candidate], '^[ ]*')).Value.Length -le $stepsIndent) {
+                $stepsEnd = $candidate
+                break
+            }
+        }
+
+        $stepIndent = -1
+        for ($index = $stepsIndex + 1; $index -lt $stepsEnd; $index++) {
+            if ($blockScalarLines[$index] -or $lines[$index] -notmatch $stepStarterPattern) {
+                continue
+            }
+            $candidateStepIndent = $Matches['indent'].Length
+            if ($stepIndent -lt 0) {
+                $stepIndent = $candidateStepIndent
+            }
+            if ($candidateStepIndent -ne $stepIndent) {
+                continue
+            }
+
+            $stepEnd = $stepsEnd
+            for ($candidate = $index + 1; $candidate -lt $stepsEnd; $candidate++) {
+                if (
+                    -not $blockScalarLines[$candidate] -and
+                    $lines[$candidate] -match $stepStarterPattern -and
+                    $Matches['indent'].Length -eq $stepIndent
+                ) {
+                    $stepEnd = $candidate
+                    break
+                }
+            }
+
+            $effectiveLines = New-Object System.Collections.Generic.List[string]
+            for ($line = $index; $line -lt $stepEnd; $line++) {
+                # Drop comment-only lines and trailing comments so commented text cannot satisfy a
+                # guard. Shell comments inside a run block are stripped for the same reason.
+                $text = [regex]::Replace($lines[$line], '(^|\s)#.*$', '')
+                if (-not [string]::IsNullOrWhiteSpace($text)) {
+                    $effectiveLines.Add($text)
+                }
+            }
+
+            $steps.Add([pscustomobject]@{
+                StartIndex     = $index
+                EndIndex       = $stepEnd
+                EffectiveText  = ($effectiveLines -join "`n")
+            })
+            $index = $stepEnd - 1
+        }
+        $stepsIndex = $stepsEnd - 1
+    }
+    return $steps.ToArray()
+}
+
+function Test-CheckoutUsesRecursiveSubmodules {
+    param([string]$WorkflowText)
+
+    $lines = [regex]::Split($WorkflowText, '\r?\n')
+    $blockScalarLines = Get-WorkflowBlockScalarMap -Lines $lines
 
     $stepStarterPattern = '^(?<indent>\s*)-\s+[^#\s][^:]*\s*:'
     for ($stepsIndex = 0; $stepsIndex -lt $lines.Count; $stepsIndex++) {
@@ -590,7 +681,9 @@ $ciPath = Join-Path $RepoRoot '.github\workflows\build.yml'
 if ((Test-Path -LiteralPath $dataContractPath) -and (Test-Path -LiteralPath $setupDataPath)) {
     $dataContractText = Get-Content -LiteralPath $dataContractPath -Raw
     $setupDataText = Get-Content -LiteralPath $setupDataPath -Raw
-    if ($dataContractText -notlike '*tarkovtracker-org/RatScannerData*') {
+    # Match the assignment, not arbitrary text: a comment or doc line must not be able to
+    # authorize an unpinned or incorrect data source after the real value changes.
+    if ($dataContractText -notmatch "RatScannerDataRepository\s*=\s*'tarkovtracker-org/RatScannerData'") {
         Add-Failure 'RatScannerData contract must use tarkovtracker-org/RatScannerData'
     }
     if ($dataContractText -notmatch "RatScannerDataReleaseTag\s*=\s*'data-[0-9a-f]{16}'") {
@@ -624,9 +717,32 @@ if (Test-Path -LiteralPath $publishPath) {
 
 $verifyPackagePath = Join-Path $RepoRoot 'scripts\verify-package.ps1'
 if (Test-Path -LiteralPath $verifyPackagePath) {
-    $verifyPackageText = Get-Content -LiteralPath $verifyPackagePath -Raw
-    if ($verifyPackageText -notlike '*RatScannerData.ps1*' -or $verifyPackageText -notlike '*Assert-RatScannerDataPackage*') {
-        Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
+    # Tokenize so a comment or an unreachable string literal cannot satisfy this guard: the
+    # verifier must actually load the shared contract and invoke the package assertion.
+    $verifyTokens = $null
+    $verifyErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile(
+        $verifyPackagePath, [ref]$verifyTokens, [ref]$verifyErrors)
+    if (@($verifyErrors).Count -gt 0) {
+        Add-Failure 'scripts\verify-package.ps1 must parse without errors'
+    }
+    else {
+        $commandNames = @(
+            $verifyTokens |
+            Where-Object { $_.Kind -eq 'Generic' -or $_.Kind -eq 'Identifier' } |
+            ForEach-Object { $_.Text }
+        )
+        $stringValues = @(
+            $verifyTokens |
+            Where-Object { $null -ne ($_.PSObject.Properties['Value']) } |
+            ForEach-Object { [string]$_.Value }
+        )
+        if ($commandNames -notcontains 'Assert-RatScannerDataPackage') {
+            Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
+        }
+        elseif (-not ($stringValues | Where-Object { $_ -like '*RatScannerData.ps1' })) {
+            Add-Failure 'scripts\verify-package.ps1 must verify packages through the shared RatScannerData contract'
+        }
     }
 }
 
@@ -757,15 +873,22 @@ if (Test-Path -LiteralPath $ciPath) {
         Add-Failure 'CI Include Data must delegate to scripts/setup-data.ps1'
     }
 
-    if ($ciText -notlike '*scripts/verify-package.ps1*') {
-        Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
-    }
-    else {
-        $verifyIndex = $ciText.IndexOf('scripts/verify-package.ps1', [System.StringComparison]::Ordinal)
-        $uploadIndex = $ciText.IndexOf('upload-artifact', [System.StringComparison]::Ordinal)
-        if ($uploadIndex -ge 0 -and $verifyIndex -gt $uploadIndex) {
-            Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
+    # Compare real steps, not raw offsets: a mention in a comment or block scalar must not let a
+    # future workflow upload an unverified zip.
+    $ciSteps = @(Get-WorkflowStepRanges -WorkflowText $ciText)
+    $verifyStepIndex = -1
+    $uploadStepIndex = -1
+    for ($stepIndex = 0; $stepIndex -lt $ciSteps.Count; $stepIndex++) {
+        $stepText = $ciSteps[$stepIndex].EffectiveText
+        if ($verifyStepIndex -lt 0 -and $stepText -like '*scripts/verify-package.ps1*') {
+            $verifyStepIndex = $stepIndex
         }
+        if ($uploadStepIndex -lt 0 -and $stepText -match 'uses\s*:\s*\S*upload-artifact') {
+            $uploadStepIndex = $stepIndex
+        }
+    }
+    if ($verifyStepIndex -lt 0 -or ($uploadStepIndex -ge 0 -and $verifyStepIndex -gt $uploadStepIndex)) {
+        Add-Failure 'CI must verify the packaged artifact with scripts/verify-package.ps1 before upload'
     }
 
     $pullRequestBranches = @(Get-WorkflowEventBranches -WorkflowPath $ciPath -EventName 'pull_request')
