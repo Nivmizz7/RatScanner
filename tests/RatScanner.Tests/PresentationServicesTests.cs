@@ -131,6 +131,17 @@ public class ItemQueueTests
         Assert.Null(queue.GetNextExpiration(now));
     }
 
+    [Fact]
+    public void GetNextExpiration_returns_the_earliest_live_scan()
+    {
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        ItemQueue queue = new();
+        queue.Enqueue(new TestItemScan(now + 2_000));
+        queue.Enqueue(new TestItemScan(now + 1_000));
+
+        Assert.Equal(now + 1_000, queue.GetNextExpiration(now));
+    }
+
     private sealed class TestItemScan : ItemScan
     {
         public TestItemScan(long expiresAt)
