@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using RatScanner.FetchModels.TarkovTracker;
 using RatScanner.Presentation;
@@ -142,6 +143,71 @@ public class ItemQueueTests
         Assert.Equal(now + 1_000, queue.GetNextExpiration(now));
     }
 
+    [Fact]
+    public void EnqueueRange_notifies_subscribers_with_the_exact_batch()
+    {
+        ItemQueue queue = new();
+        IReadOnlyList<ItemScan> received = [];
+        queue.ItemsEnqueued += scans => received = scans;
+        List<TestItemScan> expected = [new TestItemScan(long.MaxValue), new TestItemScan(long.MaxValue)];
+
+        queue.EnqueueRange(expected);
+
+        Assert.NotNull(received);
+        Assert.Equal(expected, received);
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task Concurrent_enqueues_notify_each_exact_item_once()
+    {
+        ItemQueue queue = new();
+        ConcurrentBag<ItemScan> received = [];
+        queue.ItemsEnqueued += scans =>
+        {
+            foreach (ItemScan scan in scans)
+                received.Add(scan);
+        };
+        TestItemScan first = new(long.MaxValue);
+        TestItemScan second = new(long.MaxValue);
+
+        await System.Threading.Tasks.Task.WhenAll(
+            System.Threading.Tasks.Task.Run(() => queue.Enqueue(first), TestContext.Current.CancellationToken),
+            System.Threading.Tasks.Task.Run(() => queue.Enqueue(second), TestContext.Current.CancellationToken)
+        );
+
+        Assert.Equal(2, received.Count);
+        Assert.Contains(first, received);
+        Assert.Contains(second, received);
+    }
+
+    [Fact]
+    public void Enqueue_callbacks_can_wait_for_another_enqueue_without_blocking()
+    {
+        ItemQueue queue = new();
+        TestItemScan first = new(long.MaxValue);
+        TestItemScan second = new(long.MaxValue);
+        List<ItemScan> received = [];
+        queue.ItemsEnqueued += scans =>
+        {
+            received.AddRange(scans);
+            if (!ReferenceEquals(scans[0], first))
+                return;
+
+            System.Threading.Tasks.Task enqueue = System.Threading.Tasks.Task.Run(
+                () => queue.Enqueue(second),
+                TestContext.Current.CancellationToken
+            );
+            Assert.True(
+                enqueue.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken),
+                "A callback waiting for another producer must not hold the enqueue lock."
+            );
+        };
+
+        queue.Enqueue(first);
+
+        Assert.Equal([first, second], received);
+    }
+
     private sealed class TestItemScan : ItemScan
     {
         public TestItemScan(long expiresAt)
@@ -153,23 +219,23 @@ public class ItemQueueTests
     }
 }
 
-public class SessionHistoryServiceTests
+public class RecentScansServiceTests
 {
     [Fact]
     public void Queue_changes_are_recorded_without_a_page_component()
     {
         ItemQueue queue = new();
-        using SessionHistoryService history = new(
+        using RecentScansService recentScans = new(
             queue,
             scan => ScanResultAdapter.Map(scan, questRemaining: 0, hideoutRemaining: 0, false)
         );
         int changed = 0;
-        history.Changed += (_, _) => changed++;
+        recentScans.Changed += (_, _) => changed++;
 
         queue.Enqueue(new DefaultItemScan(CreateItem("seed"), isSeed: true));
         queue.Enqueue(new DefaultItemScan(CreateItem("scanned")));
 
-        ScanResultViewModel result = Assert.Single(history.Items);
+        ScanResultViewModel result = Assert.Single(recentScans.Items);
         Assert.Equal("scanned", result.Item.Id);
         Assert.True(result.IsHistoricalResult);
         Assert.NotNull(result.ScannedAt);
@@ -177,26 +243,26 @@ public class SessionHistoryServiceTests
     }
 
     [Fact]
-    public void History_is_bounded_and_duplicate_items_move_to_the_front()
+    public void Recent_scans_are_capped_at_five_and_duplicates_move_to_the_front()
     {
         ItemQueue queue = new();
-        using SessionHistoryService history = new(
+        using RecentScansService recentScans = new(
             queue,
             scan => ScanResultAdapter.Map(scan, questRemaining: 0, hideoutRemaining: 0, false)
         );
 
-        for (int index = 0; index < 55; index++)
+        for (int index = 0; index < 7; index++)
             queue.Enqueue(new DefaultItemScan(CreateItem($"item-{index}")));
 
-        Assert.Equal(50, history.Items.Count);
-        Assert.Equal("item-54", history.Items[0].Item.Id);
-        Assert.Equal("item-5", history.Items[^1].Item.Id);
+        Assert.Equal(5, recentScans.Items.Count);
+        Assert.Equal("item-6", recentScans.Items[0].Item.Id);
+        Assert.Equal("item-2", recentScans.Items[^1].Item.Id);
 
-        queue.Enqueue(new DefaultItemScan(CreateItem("item-10")));
+        queue.Enqueue(new DefaultItemScan(CreateItem("item-3")));
 
-        Assert.Equal(50, history.Items.Count);
-        Assert.Equal("item-10", history.Items[0].Item.Id);
-        Assert.Single(history.Items, result => result.Item.Id == "item-10");
+        Assert.Equal(5, recentScans.Items.Count);
+        Assert.Equal("item-3", recentScans.Items[0].Item.Id);
+        Assert.Single(recentScans.Items, result => result.Item.Id == "item-3");
     }
 
     private static Item CreateItem(string id) =>

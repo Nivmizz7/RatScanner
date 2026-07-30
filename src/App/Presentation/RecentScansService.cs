@@ -5,8 +5,10 @@ using RatScanner.Scan;
 
 namespace RatScanner.Presentation;
 
-internal sealed class SessionHistoryService : IDisposable
+internal sealed class RecentScansService : IDisposable
 {
+    private const int Capacity = 5;
+
     private readonly object _sync = new();
     private readonly List<ScanResultViewModel> _items = new();
     private readonly ItemQueue _itemScans;
@@ -21,37 +23,36 @@ internal sealed class SessionHistoryService : IDisposable
         }
     }
 
-    internal ScanResultViewModel? Selected { get; set; }
     internal event EventHandler? Changed;
 
-    internal SessionHistoryService(ItemQueue itemScans, Func<ItemScan, ScanResultViewModel> mapResult)
+    internal RecentScansService(ItemQueue itemScans, Func<ItemScan, ScanResultViewModel> mapResult)
     {
         _itemScans = itemScans;
         _mapResult = mapResult;
-        _itemScans.Changed += OnItemScansChanged;
+        _itemScans.ItemsEnqueued += OnItemsEnqueued;
     }
 
-    private void OnItemScansChanged(object? sender, EventArgs e)
+    private void OnItemsEnqueued(IReadOnlyList<ItemScan> scans)
     {
-        ItemScan? scan = _itemScans.LastOrDefault();
-        if (scan is null || scan.IsSeed)
-            return;
-
-        Record(_mapResult(scan));
+        foreach (ItemScan scan in scans)
+        {
+            if (!scan.IsSeed)
+                Record(_mapResult(scan));
+        }
     }
 
-    internal void Record(ScanResultViewModel result)
+    private void Record(ScanResultViewModel result)
     {
         lock (_sync)
         {
             _items.RemoveAll(existing => existing.Item.Id == result.Item.Id);
             _items.Insert(0, result with { ScannedAt = DateTimeOffset.Now, IsHistoricalResult = true });
-            if (_items.Count > 50)
-                _items.RemoveRange(50, _items.Count - 50);
+            if (_items.Count > Capacity)
+                _items.RemoveRange(Capacity, _items.Count - Capacity);
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Dispose() => _itemScans.Changed -= OnItemScansChanged;
+    public void Dispose() => _itemScans.ItemsEnqueued -= OnItemsEnqueued;
 }

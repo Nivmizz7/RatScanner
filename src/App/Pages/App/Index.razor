@@ -7,7 +7,7 @@
 @using System.Threading
 @using System.Globalization
 @inject MenuVM MenuVM
-@inject SessionHistoryService History
+@inject RecentScansService RecentScansStore
 @inject LocalizationService Localizer
 @implements IDisposable
 
@@ -333,7 +333,6 @@
     private bool _detailsOpen;
     private bool _copiedId;
 
-    private const int RecentLimit = 5;
     private const float HighConfidence = 0.9f;
     private const float MediumConfidence = 0.7f;
 
@@ -433,29 +432,15 @@
         }
     }
 
-    // The recent-scans strip derives from the DI-singleton SessionHistoryService
-    // instead of component-local state, so navigating away from the Scan page
-    // and back no longer wipes it (issue #12).
-    private IReadOnlyList<ScanResultViewModel> RecentScans
-    {
-        get
-        {
-            IReadOnlyList<ScanResultViewModel> items = History.Items;
-            return items.Count <= RecentLimit ? items : items.Take(RecentLimit).ToArray();
-        }
-    }
+    // Recent scans are scan-time snapshots kept in a DI singleton, so they
+    // survive navigation without retaining screenshots or decoded images.
+    private IReadOnlyList<ScanResultViewModel> RecentScans => RecentScansStore.Items;
 
     protected override void OnInitialized()
     {
         RefreshResult();
-        if (History.Selected is not null)
-        {
-            _result = History.Selected;
-            History.Selected = null;
-        }
-
         MenuVM.PropertyChanged += OnResultChanged;
-        History.Changed += OnHistoryChanged;
+        RecentScansStore.Changed += OnRecentScansChanged;
     }
 
     private void RefreshResult()
@@ -472,7 +457,7 @@
             StateHasChanged();
         });
 
-    private async void OnHistoryChanged(object? sender, EventArgs e) =>
+    private async void OnRecentScansChanged(object? sender, EventArgs e) =>
         await InvokeAsync(StateHasChanged);
 
     private void SelectRecent(ScanResultViewModel scan)
@@ -587,6 +572,6 @@
     public void Dispose()
     {
         MenuVM.PropertyChanged -= OnResultChanged;
-        History.Changed -= OnHistoryChanged;
+        RecentScansStore.Changed -= OnRecentScansChanged;
     }
 }

@@ -11,7 +11,7 @@ It does **not** read game memory or inject into the client.
 1. **Name scan** — capture inspection UI (marker + name text), OCR, map to catalog item.
 2. **Icon scan** — capture stash/inventory icon region (modifier + click), template match icons.
 3. **Manual search** — MudAutocomplete item search in the main Blazor UI.
-4. **Session history** — recent scans retained for the session.
+4. **Recent scans** — five deduplicated scan-time snapshots retained for the session and shown on the Scan page.
 5. **Overlays** — non-interactive tooltip overlay; interactive search/map overlay via hotkey.
 6. **Minimal UI** — compact always-on-top window with configurable fields.
 7. **Tracking (optional)** — mode-specific TarkovTracker.org PvP/PvE keys (or the legacy PvP-only TarkovTracker.io key) enable quest/hideout need hints and optional team progress.

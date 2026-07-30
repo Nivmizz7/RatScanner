@@ -59,7 +59,7 @@ DI is **not** the full app composition root for domain services. Critical domain
 `BlazorUI` builds a `ServiceProvider` with:
 
 - `AddWpfBlazorWebView()`, `AddMudServices()`
-- Singletons: `MenuVM`, `SessionHistoryService`, `LocalizationService`, `SettingsVM`, `VirtualScreenOffset`, `TarkovTrackerDB` (from `RatScannerMain`)
+- Singletons: `MenuVM`, `RecentScansService`, `LocalizationService`, `SettingsVM`, `VirtualScreenOffset`, `TarkovTrackerDB` (from `RatScannerMain`)
 
 The passive overlay receives the **same** `ServiceProvider` instance.
 
@@ -113,7 +113,7 @@ flowchart TD
 | `TarkovTrackerDB` + `APIClient` | Tracker progress, team, token validation |
 | `RatConfig` | Persisted settings, path constants, cache file helpers, game display config |
 | `LocalizationService` | UI string tables |
-| `Presentation/*` | Scan result view models, session history, result hints (craft/barter/FIR) |
+| `Presentation/*` | Scan result view models, bounded recent scans, result hints (craft/barter/FIR) |
 | `Display/*` | Detect monitors / game viewport / DPI |
 | ScanEngine (`RatEye`) | Image processing only — no network, no WPF |
 

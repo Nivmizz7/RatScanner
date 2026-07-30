@@ -121,7 +121,7 @@ Fast, headless. Prefer expanding these for pure logic (parsers, projections, pur
 With `dev.bat` or `-Once`:
 
 - Main window loads Blazor shell (not stuck on “Loading…”).
-- Navigation: Scan, History, Settings, Credits.
+- Navigation: Scan, Settings, About.
 - Item search autocomplete returns results when catalog cache is warm.
 - Scanner status chip shows ready/degraded appropriately.
 - Theme/CSS changes: visual check for layout regressions (search bar, sidebar).

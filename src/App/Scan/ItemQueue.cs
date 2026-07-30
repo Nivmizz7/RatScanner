@@ -8,8 +8,12 @@ namespace RatScanner.Scan;
 
 public class ItemQueue : IEnumerable<ItemScan>
 {
+    private readonly object enqueueSync = new();
     private readonly ConcurrentQueue<ItemScan> queue = new();
+    private readonly Queue<IReadOnlyList<ItemScan>> pendingNotifications = new();
+    private bool isDrainingNotifications;
     public event EventHandler? Changed;
+    internal event Action<IReadOnlyList<ItemScan>>? ItemsEnqueued;
 
     protected virtual void OnChanged()
     {
@@ -34,15 +38,64 @@ public class ItemQueue : IEnumerable<ItemScan>
 
     public virtual void Enqueue(ItemScan item)
     {
-        queue.Enqueue(item);
-        OnChanged();
+        bool shouldDrain;
+        lock (enqueueSync)
+        {
+            queue.Enqueue(item);
+            pendingNotifications.Enqueue([item]);
+            shouldDrain = !isDrainingNotifications;
+            isDrainingNotifications = true;
+        }
+
+        if (shouldDrain)
+            DrainNotifications();
     }
 
     public void EnqueueRange<T>(List<T> items)
         where T : ItemScan
     {
-        items.ForEach(queue.Enqueue);
-        OnChanged();
+        bool shouldDrain;
+        lock (enqueueSync)
+        {
+            items.ForEach(queue.Enqueue);
+            pendingNotifications.Enqueue(items);
+            shouldDrain = !isDrainingNotifications;
+            isDrainingNotifications = true;
+        }
+
+        if (shouldDrain)
+            DrainNotifications();
+    }
+
+    private void DrainNotifications()
+    {
+        Exception? firstError = null;
+        while (true)
+        {
+            IReadOnlyList<ItemScan> scans;
+            lock (enqueueSync)
+            {
+                if (pendingNotifications.Count == 0)
+                {
+                    isDrainingNotifications = false;
+                    if (firstError is not null)
+                        throw firstError;
+                    return;
+                }
+
+                scans = pendingNotifications.Dequeue();
+            }
+
+            try
+            {
+                ItemsEnqueued?.Invoke(scans);
+                OnChanged();
+            }
+            catch (Exception exception)
+            {
+                firstError ??= exception;
+            }
+        }
     }
 
     public int Count => queue.Count;
