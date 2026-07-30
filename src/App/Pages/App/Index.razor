@@ -496,7 +496,7 @@
         _result?.Recommendation.Type switch
         {
             RecommendationType.KeepForQuest or RecommendationType.KeepForHideout => "tone-keep",
-            RecommendationType.QuestAvailableSoon => "tone-accent",
+            RecommendationType.QuestAvailableSoon or RecommendationType.NeededLater => "tone-accent",
             RecommendationType.MaybeNeeded or RecommendationType.PriceUnavailable => "tone-warning",
             _ => "tone-sell",
         };
