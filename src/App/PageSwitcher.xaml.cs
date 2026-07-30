@@ -645,14 +645,14 @@ public partial class PageSwitcher : Window
         }
 
         // Capture the top-right corner of the title bar (where the minimal-UI
-        // button sits). The main window has a 1px visual chrome margin
-        // (WindowRoot.Margin = VisibleChromeMargin), so the title bar's actual
-        // top-right is inset from the outer window bounds. Anchoring at the title
-        // bar corner instead of the outer window corner makes the minimal UI
-        // appear exactly where the button is, not offset up and to the right.
-        const double chromeMargin = VisibleChromeMargin;
-        double rightEdge = Left + Width - chromeMargin;
-        double topEdge = Top + chromeMargin;
+        // button sits). Maximized WPF windows use the resize-border margin while
+        // normal windows use the visible hairline, so derive the live inset.
+        Thickness chromeMargin =
+            WindowState == WindowState.Maximized
+                ? _normalChrome.ResizeBorderThickness
+                : new Thickness(VisibleChromeMargin);
+        double rightEdge = Left + Width - chromeMargin.Right;
+        double topEdge = Top + chromeMargin.Top;
 
         _restoreBounds = RestoreBounds;
         _restoreWindowState = WindowState == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
@@ -664,6 +664,14 @@ public partial class PageSwitcher : Window
         Opacity = 0;
 
         RatConfig.LastWindowMode = RatConfig.WindowMode.Minimal;
+
+        // Remove the WebView composition control before changing the maximized
+        // window to content-sized minimal bounds. WebView2's capture frame pool
+        // rejects the transient zero-sized layout WPF can produce during that
+        // transition.
+        Navigate(MinimalMenu.Instance);
+        _isMinimalUi = true;
+
         WindowChrome.SetWindowChrome(this, _minimalChrome);
         WindowRoot.Margin = new Thickness(0);
         CollapseTitleBar();
@@ -675,7 +683,6 @@ public partial class PageSwitcher : Window
         WindowState = WindowState.Normal;
         SizeToContent = SizeToContent.WidthAndHeight;
         SetBackgroundOpacity(RatConfig.MinimalUi.Opacity / 100f);
-        Navigate(MinimalMenu.Instance);
 
         // Force a layout pass so the content-derived size from SizeToContent is
         // available, then anchor the minimal window's top-right corner near the
@@ -693,7 +700,6 @@ public partial class PageSwitcher : Window
         Opacity = savedOpacity;
         Activate();
 
-        _isMinimalUi = true;
         UpdateMinimalUIButton();
     }
 
@@ -805,6 +811,7 @@ public partial class PageSwitcher : Window
     private readonly DispatcherTimer _fitAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private bool _fitAnimationRunning;
     private bool _fitApplying;
+    private double? _fitWrittenHeight;
     private double? _fitAnchor;
     private DateTime _fitAnimationStart;
     private double _fitAnimationFrom;
@@ -848,6 +855,11 @@ public partial class PageSwitcher : Window
         }
 
         MinHeight = target;
+        if (_fitAnimationRunning)
+        {
+            StartFitAnimation(target);
+            return;
+        }
         bool anchored = _fitAnchor is double a && Math.Abs(Height - a) <= 1.0;
         if (!anchored)
             return; // content shrank, but the user owns the current height
@@ -872,8 +884,15 @@ public partial class PageSwitcher : Window
     {
         // Programmatic fit writes are flagged; anything else is a user resize
         // (or maximize/restore) which stops the animator and ends fit ownership.
-        if (_fitApplying)
+        if (
+            _fitApplying
+            || _fitWrittenHeight is double writtenHeight && Math.Abs(e.NewSize.Height - writtenHeight) <= 1.0
+        )
+        {
+            _fitWrittenHeight = null;
             return;
+        }
+        _fitWrittenHeight = null;
         if (_fitAnimationRunning)
         {
             _fitAnimationTimer.Stop();
@@ -885,6 +904,7 @@ public partial class PageSwitcher : Window
 
     private void SetFitHeight(double height)
     {
+        _fitWrittenHeight = height;
         _fitApplying = true;
         try
         {
@@ -939,9 +959,8 @@ public partial class PageSwitcher : Window
     {
         if (GetWorkingAreaOfWindowCenter() is not Rect area)
             return;
-        double maxTop = area.Bottom - Height;
-        if (Top > maxTop)
-            Top = Math.Max(area.Top, maxTop);
+        double maxTop = Math.Max(area.Top, area.Bottom - Height);
+        Top = Math.Clamp(Top, area.Top, maxTop);
     }
 
     private Rect? GetWorkingAreaOfWindowCenter()

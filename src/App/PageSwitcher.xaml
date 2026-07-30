@@ -193,7 +193,7 @@
 			        Grid.ColumnSpan="4"
 			        VerticalAlignment="Bottom"
 			        Height="1"
-			        Background="#2B3334" />
+			        Background="{DynamicResource NativeTitleBarControlBorderBrush}" />
 		</Grid>
 
 		<ContentControl x:Name="ContentControl"

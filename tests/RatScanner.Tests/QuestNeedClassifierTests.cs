@@ -289,6 +289,19 @@ public class QuestNeedClassifierTests
     }
 
     [Fact]
+    public void Objective_progress_does_not_override_known_faction_mismatch()
+    {
+        Task task = MakeTask("bear-only", faction: "BEAR");
+        UserProgress progress = ProgressAtLevel(42); // USEC player
+        progress.TaskObjectives.Add(new Progress { Id = "bear-only-find", Count = 0 });
+
+        QuestNeedReport report = ClassifySingle(task, progress);
+
+        Assert.Equal(0, report.GrandTotal);
+        Assert.Equal(0, report.ActiveNow);
+    }
+
+    [Fact]
     public void Faction_match_is_known_true_and_stays_applicable()
     {
         Task task = MakeTask("bear-only", faction: "BEAR");
@@ -433,6 +446,29 @@ public class QuestNeedClassifierTests
     }
 
     [Fact]
+    public void Non_weapon_give_item_does_not_trigger_weapon_usability_advisory()
+    {
+        Task task = MakeTask(
+            "documents",
+            objectives:
+            [
+                new TaskObjective
+                {
+                    Id = "documents-give",
+                    Type = "giveItem",
+                    Count = 1,
+                    ItemIds = [ItemId],
+                },
+            ]
+        );
+
+        QuestNeedReport report = QuestNeedClassifier.Classify(TestItem("barter"), [task], ProgressAtLevel(42), true);
+
+        Assert.Equal(1, report.GrandTotal);
+        Assert.Equal(0, report.WeaponHandInTotal);
+    }
+
+    [Fact]
     public void Optional_objectives_are_not_required()
     {
         Task task = new()
@@ -455,6 +491,72 @@ public class QuestNeedClassifierTests
         QuestNeedReport report = ClassifySingle(task, ProgressAtLevel(42));
 
         Assert.Equal(0, report.GrandTotal);
+    }
+
+    [Fact]
+    public void Optional_find_objective_does_not_suppress_required_give_objective()
+    {
+        Task task = MakeTask(
+            "mixed-pair",
+            objectives:
+            [
+                new TaskObjective
+                {
+                    Id = "mixed-pair-find",
+                    Type = "findItem",
+                    Count = 2,
+                    FoundInRaid = true,
+                    Optional = true,
+                    ItemIds = [ItemId],
+                },
+                new TaskObjective
+                {
+                    Id = "mixed-pair-give",
+                    Type = "giveItem",
+                    Count = 2,
+                    FoundInRaid = true,
+                    ItemIds = [ItemId],
+                },
+            ]
+        );
+
+        QuestNeedReport report = ClassifySingle(task, ProgressAtLevel(42));
+
+        Assert.Equal(2, report.GrandTotal);
+        Assert.Equal(2, report.AvailableNowFir);
+    }
+
+    [Fact]
+    public void Optional_give_objective_does_not_suppress_required_find_objective()
+    {
+        Task task = MakeTask(
+            "reverse-mixed-pair",
+            objectives:
+            [
+                new TaskObjective
+                {
+                    Id = "reverse-mixed-pair-find",
+                    Type = "findItem",
+                    Count = 2,
+                    FoundInRaid = true,
+                    ItemIds = [ItemId],
+                },
+                new TaskObjective
+                {
+                    Id = "reverse-mixed-pair-give",
+                    Type = "giveItem",
+                    Count = 2,
+                    FoundInRaid = true,
+                    Optional = true,
+                    ItemIds = [ItemId],
+                },
+            ]
+        );
+
+        QuestNeedReport report = ClassifySingle(task, ProgressAtLevel(42));
+
+        Assert.Equal(2, report.GrandTotal);
+        Assert.Equal(2, report.AvailableNowFir);
     }
 
     [Fact]

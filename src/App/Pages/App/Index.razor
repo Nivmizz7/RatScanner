@@ -11,7 +11,7 @@
 @inject LocalizationService Localizer
 @inject AppStateService AppState
 @inject IJSRuntime JSRuntime
-@implements IDisposable
+@implements IAsyncDisposable
 
 <div class="scan-page">
     <div class="utility-bar">
@@ -389,7 +389,10 @@
     private bool HasStatusChips =>
         HasFirNeedAnywhere
         || _result?.Quests.WeaponUsableAdvisory == true
-        || _result?.Quests.Report.FutureKnown > 0
+        || (
+            _result?.Quests.Report.FutureKnown > 0
+            && (!QuestBucketsCoveredByVerdict || _result.Quests.Report.UnlockLevel is not null)
+        )
         || (!QuestBucketsCoveredByVerdict && _result?.Quests.Report.GrandTotal > 0)
         || ShowHideoutChip
         || _result?.Acquisition.Any == true;
@@ -480,8 +483,10 @@
                     _result.Recommendation.Explanation,
                 RecommendationType.SellToTrader when Difference is < 0 =>
                     $"+{PriceFormatter.Format(-Difference.Value)} {Localizer.Format("VsTrader", Localizer["FleaMarket"])}",
-                RecommendationType.SellToTrader =>
+                RecommendationType.SellToTrader when Difference is 0 =>
                     Localizer["FleaAndTraderMatch"],
+                RecommendationType.SellToTrader =>
+                    _result.Recommendation.Explanation,
                 _ => _result.Recommendation.Explanation,
             };
         }
@@ -492,7 +497,7 @@
         {
             RecommendationType.KeepForQuest or RecommendationType.KeepForHideout => "tone-keep",
             RecommendationType.QuestAvailableSoon => "tone-accent",
-            RecommendationType.MaybeNeeded => "tone-warning",
+            RecommendationType.MaybeNeeded or RecommendationType.PriceUnavailable => "tone-warning",
             _ => "tone-sell",
         };
 
@@ -655,7 +660,7 @@
                 // host script is not loaded yet or interop is unavailable.
                 await JSRuntime.InvokeVoidAsync("RatScanner.fitWatch.start", _fitRef);
             }
-            catch (JSException)
+            catch (Exception exception) when (IsExpectedInteropShutdown(exception))
             {
             }
         }
@@ -672,16 +677,16 @@
             AppState.ReportContentFit(requiredCssHeight, visibleCssHeight);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         _disposed = true;
         MenuVM.PropertyChanged -= OnResultChanged;
         RecentScansStore.Changed -= OnRecentScansChanged;
         try
         {
-            _ = JSRuntime.InvokeVoidAsync("RatScanner.fitWatch.stop");
+            await JSRuntime.InvokeVoidAsync("RatScanner.fitWatch.stop");
         }
-        catch (JSException)
+        catch (Exception exception) when (IsExpectedInteropShutdown(exception))
         {
         }
 
@@ -689,4 +694,7 @@
         _fitRef?.Dispose();
         _fitRef = null;
     }
+
+    private static bool IsExpectedInteropShutdown(Exception exception) =>
+        exception is JSException or JSDisconnectedException or ObjectDisposedException or TaskCanceledException;
 }

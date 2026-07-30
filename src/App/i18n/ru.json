@@ -360,7 +360,7 @@
   "RestoreWindow": "Восстановить",
   "MaximizeWindow": "Развернуть",
   "ScannerSectionLabel": "Сканер",
-  "CurrentGameModeOpen": "Текущий режим игры: {0}. Откройте настройки сканера, чтобы изменить.",
+  "CurrentGameModeOpen": "Текущий режим игры: {0}. Откройте панель навигации, чтобы изменить.",
   "ExpandNavigation": "Развернуть навигацию",
   "CollapseNavigation": "Свернуть навигацию",
   "EnterMinimalUi": "Включить мини-интерфейс",

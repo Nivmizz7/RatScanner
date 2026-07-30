@@ -47,9 +47,7 @@ public static class ItemExtensions
         bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
 
         TarkovDev.Task[] tasks = TarkovDevAPI.GetTasks();
-        IReadOnlyDictionary<string, TarkovDev.Task> tasksById = tasks
-            .Where(t => !string.IsNullOrEmpty(t.Id))
-            .ToDictionary(t => t.Id);
+        IReadOnlyDictionary<string, TarkovDev.Task> tasksById = ToTaskMap(tasks);
 
         int fir = 0;
         int nonFir = 0;
@@ -69,7 +67,7 @@ public static class ItemExtensions
         return new RequirementBreakdown(fir + nonFir, fir, nonFir);
     }
 
-    private static IReadOnlyDictionary<string, TarkovDev.Task> ToTaskMap(IReadOnlyList<TarkovDev.Task> tasks) =>
+    internal static IReadOnlyDictionary<string, TarkovDev.Task> ToTaskMap(IReadOnlyList<TarkovDev.Task> tasks) =>
         tasks.Where(t => !string.IsNullOrEmpty(t.Id)).ToDictionary(t => t.Id);
 
     /// <summary>Objective-level remaining counts for one task.</summary>
@@ -123,19 +121,21 @@ public static class ItemExtensions
 
         int fir = 0;
         int nonFir = 0;
+        bool isWeapon = item.Types?.Contains("gun", StringComparer.OrdinalIgnoreCase) == true;
         Dictionary<TaskObjective, TaskObjective> pairedFindByGive = [];
         HashSet<TaskObjective> pairedFindObjectives = [];
 
         foreach (
             TaskObjective giveObjective in objectives.Where(objective =>
-                objective.Type == "giveItem" && objective.ItemIds?.Contains(item.Id) == true
+                !objective.Optional && objective.Type == "giveItem" && objective.ItemIds?.Contains(item.Id) == true
             )
         )
         {
             // Current tarkov.dev find/give pairs share count and FIR flags;
             // loosen this match only if the upstream data starts emitting asymmetric pairs.
             TaskObjective? pairedFind = objectives.FirstOrDefault(candidate =>
-                candidate.Type == "findItem"
+                !candidate.Optional
+                && candidate.Type == "findItem"
                 && candidate.Count == giveObjective.Count
                 && candidate.FoundInRaid == giveObjective.FoundInRaid
                 && candidate.ItemIds?.Contains(item.Id) == true
@@ -168,7 +168,7 @@ public static class ItemExtensions
             else
                 nonFir += needed;
 
-            if (objective.Type is "giveItem" or "buildWeapon")
+            if (isWeapon && objective.Type is "giveItem" or "buildWeapon")
                 weaponHandIn += needed;
         }
 

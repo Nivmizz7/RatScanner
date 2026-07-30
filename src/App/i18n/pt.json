@@ -360,7 +360,7 @@
   "RestoreWindow": "Restaurar",
   "MaximizeWindow": "Maximizar",
   "ScannerSectionLabel": "Scanner",
-  "CurrentGameModeOpen": "Modo de jogo atual: {0}. Abra as configurações do scanner para alterar.",
+  "CurrentGameModeOpen": "Modo de jogo atual: {0}. Abra a navegação para alterar.",
   "ExpandNavigation": "Expandir navegação",
   "CollapseNavigation": "Recolher navegação",
   "EnterMinimalUi": "Ativar interface mínima",

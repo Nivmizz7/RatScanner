@@ -58,6 +58,7 @@
     private ScannerState? _visibleState;
     private string _announcement = string.Empty;
     private CancellationTokenSource? _pendingShowCts;
+    private ScannerState? _pendingState;
     private ElementReference _control;
     private ElementReference _popover;
     private ElementReference _action;
@@ -157,10 +158,9 @@
 
     private void ApplyVisibility()
     {
-        CancelPendingShow();
-
         if (_state == ScannerState.Ready)
         {
+            CancelPendingShow();
             bool wasVisible = _visibleState is not null || _open;
             _visibleState = null;
             _open = false;
@@ -168,9 +168,11 @@
             return;
         }
 
-        if (_visibleState == _state)
+        if (_visibleState == _state || _pendingState == _state)
             return;
 
+        CancelPendingShow();
+        _pendingState = _state;
         _pendingShowCts = new CancellationTokenSource();
         _ = ShowAfterDebounceAsync(_state, _pendingShowCts.Token);
     }
@@ -180,6 +182,7 @@
         _pendingShowCts?.Cancel();
         _pendingShowCts?.Dispose();
         _pendingShowCts = null;
+        _pendingState = null;
     }
 
     private async Task ShowAfterDebounceAsync(ScannerState state, CancellationToken cancellationToken)
@@ -199,6 +202,9 @@
                 return Task.CompletedTask;
 
             _visibleState = state;
+            _pendingShowCts?.Dispose();
+            _pendingShowCts = null;
+            _pendingState = null;
             _announcement = $"{_title}. {_detail}".Trim();
             StateHasChanged();
             return Task.CompletedTask;

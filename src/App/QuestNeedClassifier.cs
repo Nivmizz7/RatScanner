@@ -98,7 +98,7 @@ internal static class QuestNeedClassifier
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(progress);
 
-        Dictionary<string, Task> tasksById = tasks.Where(t => !string.IsNullOrEmpty(t.Id)).ToDictionary(t => t.Id);
+        IReadOnlyDictionary<string, Task> tasksById = ItemExtensions.ToTaskMap(tasks);
 
         int active = 0,
             available = 0,
@@ -125,10 +125,9 @@ internal static class QuestNeedClassifier
             // Lightkeeper dialogue, active-only prerequisites) have therefore
             // already been crossed and must not demote a live need to uncertain.
             bool taskShowsProgress = TaskShowsProgress(task, progress);
-            int? taskUnlockLevel = null;
-            QuestGate gate = taskShowsProgress
-                ? QuestGate.ActiveNow
-                : ClassifyGate(task, tasksById, progress, out taskUnlockLevel);
+            QuestGate gate = ClassifyGate(task, tasksById, progress, out int? taskUnlockLevel);
+            if (gate != QuestGate.NotApplicable && taskShowsProgress)
+                gate = QuestGate.ActiveNow;
             if (gate == QuestGate.NotApplicable)
                 continue;
 

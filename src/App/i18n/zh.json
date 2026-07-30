@@ -360,7 +360,7 @@
   "RestoreWindow": "还原",
   "MaximizeWindow": "最大化",
   "ScannerSectionLabel": "扫描器",
-  "CurrentGameModeOpen": "当前游戏模式：{0}。打开扫描仪设置以更改。",
+  "CurrentGameModeOpen": "当前游戏模式：{0}。打开导航栏即可更改。",
   "ExpandNavigation": "展开导航",
   "CollapseNavigation": "折叠导航",
   "EnterMinimalUi": "进入精简界面",
