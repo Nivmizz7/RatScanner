@@ -81,6 +81,18 @@ internal static class QuestNeedClassifier
     private const string StatusComplete = "complete";
     private const string StatusFailed = "failed";
 
+    // Collector-style event tasks are intentionally excluded from item needs.
+    // Keep the single list here so current, future, conditional, and kappa totals
+    // cannot drift apart.
+    private static readonly HashSet<string> ExcludedTaskIds = new(StringComparer.Ordinal)
+    {
+        "61e6e5e0f5b9633f6719ed95",
+        "61e6e60223374d168a4576a6",
+        "61e6e621bfeab00251576265",
+        "61e6e615eea2935bc018a2c5",
+        "61e6e60c5ca3b3783662be27",
+    };
+
     public static QuestNeedReport Classify(Item item, IReadOnlyList<Task> tasks, UserProgress progress, bool showNonFir)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -105,7 +117,18 @@ internal static class QuestNeedClassifier
 
         foreach (Task task in tasks)
         {
-            QuestGate gate = ClassifyGate(task, tasksById, progress, out int? taskUnlockLevel);
+            if (ExcludedTaskIds.Contains(task.Id))
+                continue;
+
+            // Recorded, non-invalid objective progress proves the player already
+            // started this task. Unlock gates (trader standing, delays,
+            // Lightkeeper dialogue, active-only prerequisites) have therefore
+            // already been crossed and must not demote a live need to uncertain.
+            bool taskShowsProgress = TaskShowsProgress(task, progress);
+            int? taskUnlockLevel = null;
+            QuestGate gate = taskShowsProgress
+                ? QuestGate.ActiveNow
+                : ClassifyGate(task, tasksById, progress, out taskUnlockLevel);
             if (gate == QuestGate.NotApplicable)
                 continue;
 
@@ -122,7 +145,7 @@ internal static class QuestNeedClassifier
                 kappa += need.Total;
 
             if (gate == QuestGate.ApplicableNow)
-                gate = TaskShowsProgress(task, progress) ? QuestGate.ActiveNow : QuestGate.AvailableNow;
+                gate = QuestGate.AvailableNow;
 
             switch (gate)
             {
@@ -283,7 +306,14 @@ internal static class QuestNeedClassifier
         bool wantsActive = statuses.Contains(StatusActive);
 
         if (complete)
-            return statuses.Contains(StatusComplete) ? PrerequisiteGate.Satisfied : PrerequisiteGate.MismatchedEndState;
+        {
+            if (statuses.Contains(StatusComplete))
+                return PrerequisiteGate.Satisfied;
+            // An active-only prerequisite may have unlocked the dependent task
+            // before it completed. Without progress on the dependent task this is
+            // uncertain, not proof that the dependent task is permanently dead.
+            return wantsActive ? PrerequisiteGate.UnverifiableActiveState : PrerequisiteGate.MismatchedEndState;
+        }
         if (failed)
             return statuses.Contains(StatusFailed) ? PrerequisiteGate.Satisfied : PrerequisiteGate.MismatchedEndState;
         // Prereq neither complete nor failed: satisfied only when the requirement
@@ -305,7 +335,15 @@ internal static class QuestNeedClassifier
     /// The tracker only records completed/failed tasks; started-but-unfinished tasks
     /// are observable through objective progress entries.
     /// </summary>
-    private static bool TaskShowsProgress(Task task, UserProgress progress) =>
-        task.Objectives is { Count: > 0 }
-        && task.Objectives.Any(o => o.Id is not null && progress.TaskObjectives.Any(p => p.Id == o.Id));
+    private static bool TaskShowsProgress(Task task, UserProgress progress)
+    {
+        Progress? taskEntry = progress.Tasks.FirstOrDefault(p => p.Id == task.Id);
+        if (taskEntry is { Complete: true } or { Failed: true } or { Invalid: true })
+            return false;
+
+        return task.Objectives is { Count: > 0 }
+            && task.Objectives.Any(o =>
+                o.Id is not null && progress.TaskObjectives.Any(p => p.Id == o.Id && !p.Invalid)
+            );
+    }
 }

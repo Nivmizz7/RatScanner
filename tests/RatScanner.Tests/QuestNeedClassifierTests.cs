@@ -219,6 +219,67 @@ public class QuestNeedClassifierTests
     }
 
     [Fact]
+    public void Observed_progress_outranks_unverifiable_unlock_gates()
+    {
+        Task task = MakeTask(
+            "collection",
+            traderRequirements:
+            [
+                new TaskTraderRequirement
+                {
+                    RequirementType = "reputation",
+                    CompareMethod = "<=",
+                    Value = -1,
+                },
+            ],
+            unmodeled: true
+        );
+        UserProgress progress = ProgressAtLevel(42);
+        progress.TaskObjectives.Add(new Progress { Id = "collection-find", Count = 0 });
+
+        QuestNeedReport report = ClassifySingle(task, progress);
+
+        Assert.Equal(1, report.ActiveNow);
+        Assert.Equal(0, report.ConditionalUnknown);
+        Assert.Equal(1, report.CurrentTotal);
+    }
+
+    [Fact]
+    public void Completed_active_only_prerequisite_is_conditional_not_impossible()
+    {
+        Task prerequisite = MakeTask("prerequisite");
+        Task dependent = MakeTask(
+            "dependent",
+            prerequisites: [new TaskPrerequisite { TaskId = "prerequisite", Statuses = ["active"] }]
+        );
+        UserProgress progress = ProgressAtLevel(42);
+        progress.Tasks.Add(new Progress { Id = "prerequisite", Complete = true });
+
+        QuestNeedReport report = QuestNeedClassifier.Classify(TestItem(), [prerequisite, dependent], progress, true);
+
+        Assert.Equal(1, report.ConditionalUnknown);
+        Assert.Equal(0, report.FutureKnown);
+    }
+
+    [Fact]
+    public void Dependent_progress_outranks_completed_active_only_prerequisite()
+    {
+        Task prerequisite = MakeTask("prerequisite");
+        Task dependent = MakeTask(
+            "dependent",
+            prerequisites: [new TaskPrerequisite { TaskId = "prerequisite", Statuses = ["active"] }]
+        );
+        UserProgress progress = ProgressAtLevel(42);
+        progress.Tasks.Add(new Progress { Id = "prerequisite", Complete = true });
+        progress.TaskObjectives.Add(new Progress { Id = "dependent-find", Count = 0 });
+
+        QuestNeedReport report = QuestNeedClassifier.Classify(TestItem(), [prerequisite, dependent], progress, true);
+
+        Assert.Equal(1, report.ActiveNow);
+        Assert.Equal(0, report.ConditionalUnknown);
+    }
+
+    [Fact]
     public void Faction_mismatch_makes_task_inapplicable()
     {
         Task task = MakeTask("usec-only", faction: "BEAR");
@@ -451,5 +512,17 @@ public class QuestNeedClassifierTests
 
         Assert.Equal(2, report.KappaTotal);
         Assert.Equal(1, report.CurrentTotal);
+    }
+
+    [Fact]
+    public void Collector_style_tasks_are_excluded_from_all_totals()
+    {
+        Task collector = MakeTask("61e6e5e0f5b9633f6719ed95");
+        collector.KappaRequired = true;
+
+        QuestNeedReport report = ClassifySingle(collector, ProgressAtLevel(42));
+
+        Assert.Equal(0, report.GrandTotal);
+        Assert.Equal(0, report.KappaTotal);
     }
 }

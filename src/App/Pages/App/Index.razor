@@ -407,12 +407,12 @@
                 return string.Empty;
             TimeSpan age = DateTimeOffset.UtcNow - updated.ToUniversalTime();
             if (age.TotalMinutes < 1)
-                return Localizer["UpdatedJustNow"];
+                return Localizer["FreshnessNowShort"];
             if (age.TotalHours < 1)
-                return $"{(int)age.TotalMinutes}m";
+                return Localizer.Format("FreshnessMinutesShort", (int)age.TotalMinutes);
             if (age.TotalDays < 1)
-                return $"{(int)age.TotalHours}h";
-            return $"{Math.Max(1, (int)age.TotalDays)}d";
+                return Localizer.Format("FreshnessHoursShort", (int)age.TotalHours);
+            return Localizer.Format("FreshnessDaysShort", Math.Max(1, (int)age.TotalDays));
         }
     }
 
