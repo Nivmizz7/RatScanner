@@ -35,7 +35,7 @@ examples/                # Sample resolution screenshots
 | Root router | `RazorApp.razor` → `/app` |
 | App shell layout | `Shared/AppLayout`, `MainLayout`, `SettingsLayout`, `OverlayLayout` |
 | Pages | `Pages/App/*`, `Pages/Overlay/*` |
-| Shared components | `Shared/ScannerStatus`, `Components/HotkeySelector` |
+| Shared components | `Shared/ScannerStatus`, `Shared/GameModeSwitch`, `Shared/GameModeIndicator`, `Components/HotkeySelector` |
 | Host HTML | `wwwroot/index.html`, `overlay.html` |
 | Global theme CSS | `wwwroot/css/theme.css` |
 | Scoped page CSS | co-located `*.razor.css` |

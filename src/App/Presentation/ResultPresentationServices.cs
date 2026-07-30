@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using RatScanner.TarkovDev;
@@ -7,7 +8,7 @@ namespace RatScanner.Presentation;
 
 internal static class RecommendationSelector
 {
-    /// <summary>Legacy overloads used by unit tests.</summary>
+    /// <summary>Legacy overload used by unit tests.</summary>
     internal static RecommendationViewModel Select(
         int? flea,
         int? trader,
@@ -19,7 +20,7 @@ internal static class RecommendationSelector
             flea,
             trader,
             traderName,
-            new RequirementBreakdown(questRemaining, questRemaining, 0),
+            new QuestNeedReport { ActiveNow = questRemaining, ActiveNowFir = questRemaining },
             new RequirementBreakdown(hideoutRemaining, 0, hideoutRemaining),
             default
         );
@@ -28,25 +29,33 @@ internal static class RecommendationSelector
         int? flea,
         int? trader,
         string? traderName,
-        RequirementBreakdown quests,
+        QuestNeedReport quests,
         RequirementBreakdown hideout,
         AcquisitionInfo acquisition
     )
     {
-        if (quests.Any)
+        quests ??= new QuestNeedReport();
+
+        // Priority: current quest needs → current hideout need → uncertain/future quest
+        // needs. A known hideout need must outrank a merely conditional quest need;
+        // uncertainty outranks certainty among the non-current quest buckets.
+        if (quests.ActiveNow > 0)
         {
-            string firNote = FirNote(quests);
-            string craftHint = CraftHint(acquisition, quests.HasFirNeed);
             return new(
                 RecommendationType.KeepForQuest,
                 PresentationText.T("RecKeepForQuest", "Keep for quest"),
-                PresentationText.F(
-                    "RecQuestRequired",
-                    "{0} still required for active quests.{1}{2}",
-                    quests.Total,
-                    firNote,
-                    craftHint
-                ),
+                QuestExplanation(quests),
+                null,
+                null
+            );
+        }
+
+        if (quests.AvailableNow > 0)
+        {
+            return new(
+                RecommendationType.QuestAvailableSoon,
+                PresentationText.T("RecQuestAvailableSoon", "Quest can start now"),
+                QuestExplanation(quests),
                 null,
                 null
             );
@@ -66,6 +75,21 @@ internal static class RecommendationSelector
                     firNote,
                     craftHint
                 ),
+                null,
+                null
+            );
+        }
+
+        if (quests.FutureKnown > 0 || quests.ConditionalUnknown > 0)
+        {
+            RecommendationType type =
+                quests.ConditionalUnknown > 0 ? RecommendationType.MaybeNeeded : RecommendationType.NeededLater;
+            return new(
+                type,
+                type == RecommendationType.MaybeNeeded
+                    ? PresentationText.T("RecMaybeNeeded", "May be needed")
+                    : PresentationText.T("RecNeededLater", "Needed later"),
+                QuestExplanation(quests),
                 null,
                 null
             );
@@ -117,6 +141,33 @@ internal static class RecommendationSelector
             trader - flea,
             flea is > 0 ? (int)Math.Round((double)(trader!.Value - flea.Value) / flea.Value * 100) : null
         );
+    }
+
+    /// <summary>
+    /// One concise line naming every non-empty applicability bucket. Buckets are
+    /// never merged so the source of a number is always visible.
+    /// </summary>
+    private static string QuestExplanation(QuestNeedReport quests)
+    {
+        List<string> parts = new(4);
+        if (quests.ActiveNow > 0)
+            parts.Add(PresentationText.F("ReasonBucketActive", "{0} needed for an active quest", quests.ActiveNow));
+        if (quests.AvailableNow > 0)
+            parts.Add(PresentationText.F("ReasonBucketAvailable", "{0} can be started now", quests.AvailableNow));
+        if (quests.FutureKnown > 0)
+            parts.Add(PresentationText.F("ReasonBucketFuture", "{0} required later", quests.FutureKnown));
+        if (quests.ConditionalUnknown > 0)
+            parts.Add(PresentationText.F("ReasonBucketConditional", "{0} conditional", quests.ConditionalUnknown));
+        return parts.Count switch
+        {
+            0 => string.Empty,
+            1 when quests.ActiveNow > 0 => PresentationText.F(
+                "ActiveQuestRequirementSummary",
+                "{0} still required for active quests.",
+                quests.ActiveNow
+            ),
+            _ => string.Join(" · ", parts) + ".",
+        };
     }
 
     private static string FirNote(RequirementBreakdown breakdown)

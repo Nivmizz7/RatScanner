@@ -1,0 +1,33 @@
+/* Compact current-mode indicator: cheaper than a NavLink or the search
+   field, not a menu, not a primary action. Restrained outline treatment,
+   comfortable hit target, no chevron. */
+.mode-indicator {
+    flex: none;
+    min-width: 44px;
+    min-height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--rs-border-subtle);
+    border-radius: 999px;
+    background: var(--rs-surface);
+    color: var(--rs-text-2);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.mode-indicator:hover {
+    background: var(--rs-surface-2);
+    border-color: var(--rs-border-strong);
+    color: var(--rs-text);
+}
+
+.mode-indicator:active {
+    background: var(--rs-bg);
+}

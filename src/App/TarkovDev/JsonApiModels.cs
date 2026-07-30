@@ -145,6 +145,42 @@ internal static class JsonApiModels
 
         [JsonProperty("objectives")]
         public List<JObject>? Objectives { get; set; }
+
+        [JsonProperty("minPlayerLevel")]
+        public int MinPlayerLevel { get; set; }
+
+        [JsonProperty("factionName")]
+        public string? FactionName { get; set; }
+
+        [JsonProperty("taskRequirements")]
+        public List<JObject>? TaskRequirements { get; set; }
+
+        [JsonProperty("traderRequirements")]
+        public List<RawTaskTraderRequirement>? TraderRequirements { get; set; }
+
+        [JsonProperty("otherRequirements")]
+        public List<JToken>? OtherRequirements { get; set; }
+
+        [JsonProperty("availableDelaySecondsMax")]
+        public long? AvailableDelaySecondsMax { get; set; }
+
+        [JsonProperty("lightkeeperRequired")]
+        public bool? LightkeeperRequired { get; set; }
+    }
+
+    internal sealed class RawTaskTraderRequirement
+    {
+        [JsonProperty("requirementType")]
+        public string? RequirementType { get; set; }
+
+        [JsonProperty("compareMethod")]
+        public string? CompareMethod { get; set; }
+
+        [JsonProperty("value")]
+        public double Value { get; set; }
+
+        [JsonProperty("trader")]
+        public string? Trader { get; set; }
     }
 
     internal sealed class RawHideoutStation : Entity

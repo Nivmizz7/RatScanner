@@ -6,6 +6,13 @@
     align-self: stretch;
 }
 
+/* Healthy: render no box at all, so a flex/grid toolbar leaves no track,
+   gap, or reserved width. The live-region child stays accessible (it is
+   positioned, and display:contents keeps DOM semantics intact). */
+.scanner-status-root.empty {
+    display: contents;
+}
+
 .scanner-status-control {
     display: inline-flex;
     align-items: center;
@@ -22,7 +29,7 @@
     cursor: pointer;
     color: var(--rs-success);
     background: var(--rs-success-surface);
-    border-color: rgba(88, 209, 123, 0.28);
+    border-color: rgba(112, 167, 124, 0.30);
 }
 
 .scanner-status-control.expanded {
@@ -41,7 +48,7 @@
     flex: none;
     border-radius: 50%;
     background: currentcolor;
-    box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.16);
+    box-shadow: 0 0 0 3px rgba(112, 167, 124, 0.16);
 }
 
 .scanner-status-label {
@@ -55,29 +62,33 @@
 
 .scanner-status-control.state-paused {
     color: var(--rs-warning);
-    background: rgba(231, 173, 85, 0.10);
-    border-color: rgba(231, 173, 85, 0.35);
+    background: var(--rs-warning-surface);
+    border-color: rgba(197, 154, 89, 0.35);
 }
 
 .scanner-status-control.state-paused .scanner-status-dot {
-    box-shadow: 0 0 0 3px rgba(231, 173, 85, 0.16);
+    box-shadow: 0 0 0 3px rgba(197, 154, 89, 0.16);
     animation: none;
 }
 
 .scanner-status-control.state-attention {
     color: var(--rs-danger);
-    background: rgba(235, 108, 115, 0.10);
-    border-color: rgba(235, 108, 115, 0.35);
+    background: var(--rs-danger-surface);
+    border-color: rgba(201, 111, 114, 0.35);
 }
 
 .scanner-status-control.state-attention .scanner-status-dot {
-    box-shadow: 0 0 0 3px rgba(235, 108, 115, 0.16);
+    box-shadow: 0 0 0 3px rgba(201, 111, 114, 0.16);
     animation: none;
 }
 
 .scanner-status-control:hover,
 .scanner-status-control:focus-visible {
     filter: brightness(1.08);
+}
+
+.scanner-status-control:active {
+    filter: brightness(0.94);
 }
 
 .scanner-status-scrim {
@@ -142,8 +153,8 @@
 }
 
 @keyframes scanner-status-pulse {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(88, 209, 123, 0.14); opacity: 1; }
-    50% { box-shadow: 0 0 0 5px rgba(88, 209, 123, 0.08); opacity: 0.85; }
+    0%, 100% { box-shadow: 0 0 0 3px rgba(112, 167, 124, 0.14); opacity: 1; }
+    50% { box-shadow: 0 0 0 5px rgba(112, 167, 124, 0.08); opacity: 0.85; }
 }
 
 @media (prefers-reduced-motion: reduce) {

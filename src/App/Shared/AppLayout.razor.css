@@ -35,6 +35,29 @@ nav {
 	gap: 6px;
 }
 
+/* Scanner context block: mode selector under the Scan item. */
+.sidebar-mode {
+	display: grid;
+	gap: 4px;
+}
+
+.sidebar-mode-label {
+	display: block;
+	padding: 2px 12px 2px;
+	color: var(--rs-muted);
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+/* The sidebar hosts the single authoritative selector. Rail/collapsed
+   states show no mode control here; the toolbar carries a compact
+   current-mode indicator instead. */
+.sidebar.rail .sidebar-mode {
+	display: none;
+}
+
 nav ::deep a,
 nav a {
 	min-height: 44px;
@@ -72,8 +95,10 @@ nav ::deep a.active {
 .main-content {
 	margin-left: 0;
 	height: 100vh;
+	/* No scrollbar-gutter: a stable right gutter would break the symmetric
+	   page insets of non-scrolling pages. Pages that actually scroll (long
+	   settings) reveal a transient scrollbar instead. */
 	overflow-y: auto;
-	scrollbar-gutter: stable;
 	transition: margin-left .16s ease;
 }
 

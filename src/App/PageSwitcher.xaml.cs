@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using RatScanner.Display;
@@ -30,6 +31,11 @@ public partial class PageSwitcher : Window
     // scroll container to keep the full result accessible at this size.
     public const int MinimumWidth = 360;
     public const int MinimumHeight = 380;
+
+    // Visible hairline frame in normal mode. Edge/corner resize hit testing comes
+    // from the chrome ResizeBorderThickness (7px), NOT from this margin — keep them
+    // independent so the window looks sharp but stays easy to grab.
+    internal const double VisibleChromeMargin = 1;
 
     private NotifyIcon _notifyIcon = null!;
     private ContextMenuStrip _contextMenuStrip = new();
@@ -72,8 +78,8 @@ public partial class PageSwitcher : Window
             InitializeComponent();
             _normalChrome = WindowChrome.GetWindowChrome(this) ?? new WindowChrome();
             Title = Constants.Branding.Name;
-            BrandTextBlock.Text = Constants.Branding.Name;
-            VersionTextBlock.Text = GetProductVersionDisplay();
+            BrandNameRun.Text = Constants.Branding.Name;
+            BrandVersionRun.Text = "  " + GetProductVersionDisplay();
             ApplyWindowsTheme();
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ResetWindowSize();
@@ -82,6 +88,10 @@ public partial class PageSwitcher : Window
             _appStateService = BlazorUI.Instance.Services.GetRequiredService<AppStateService>();
             _appStateService.SidebarOpenChanged += OnSidebarOpenChanged;
             _appStateService.FocusNavigationToggleRequested += OnFocusNavigationToggleRequested;
+            _appStateService.ContentFitChanged += OnContentFitChanged;
+            _appStateService.ContentFitCleared += OnContentFitCleared;
+            _fitAnimationTimer.Tick += OnFitAnimationTick;
+            SizeChanged += OnWindowSizeChangedForFit;
             UpdateNavigationToggle(_appStateService.IsSidebarOpen);
             UpdateCaptionButtonAccessibility();
             UpdateMinimalUIButton();
@@ -105,7 +115,7 @@ public partial class PageSwitcher : Window
 
     internal void ResetWindowSize()
     {
-        WindowRoot.Margin = new Thickness(7);
+        WindowRoot.Margin = new Thickness(VisibleChromeMargin);
         SizeToContent = SizeToContent.Manual;
         ResizeMode = ResizeMode.CanResize;
         MinWidth = MinimumWidth;
@@ -279,6 +289,19 @@ public partial class PageSwitcher : Window
         if (RatConfig.MinimizeToTray && WindowState == WindowState.Minimized)
             Hide();
 
+        // When maximized, Windows extends the window by the resize border
+        // thickness on every side; absorb that compensation with the margin so
+        // visible content fills the work area exactly instead of bleeding off-screen.
+        if (!_isMinimalUi)
+        {
+            WindowRoot.Margin =
+                WindowState == WindowState.Maximized
+                    ? _normalChrome.ResizeBorderThickness
+                    : new Thickness(VisibleChromeMargin);
+        }
+
+        UpdateMaxRestoreButton();
+
         base.OnStateChanged(e);
     }
 
@@ -296,6 +319,10 @@ public partial class PageSwitcher : Window
         {
             _appStateService.SidebarOpenChanged -= OnSidebarOpenChanged;
             _appStateService.FocusNavigationToggleRequested -= OnFocusNavigationToggleRequested;
+            _appStateService.ContentFitChanged -= OnContentFitChanged;
+            _appStateService.ContentFitCleared -= OnContentFitCleared;
+            SizeChanged -= OnWindowSizeChangedForFit;
+            _fitAnimationTimer.Stop();
         }
         if (_notifyIcon != null)
         {
@@ -322,20 +349,75 @@ public partial class PageSwitcher : Window
         if (personalize?.GetValue("AppsUseLightTheme") is int value)
             useLightTheme = value != 0;
 
+        (
+            string background,
+            string foreground,
+            string inactive,
+            string hover,
+            string pressed,
+            string border,
+            string closeHover,
+            string closePressed,
+            string closeHoverBorder,
+            string closeForeground
+        ) = useLightTheme
+            ? (
+                "#FFFFFF",
+                "#1B1E20",
+                "#77817E",
+                "#E7EAE8",
+                "#D7DCD9",
+                "#CBD2CF",
+                "#C94F52",
+                "#A84548",
+                "#C94F52",
+                "#FFFFFF"
+            )
+            : (
+                "#15191A",
+                "#EEF1EF",
+                "#77817E",
+                "#262C2D",
+                "#1A1F20",
+                "#3A4445",
+                "#A04548",
+                "#7E3638",
+                "#C96F72",
+                "#F4EBEB"
+            );
+
         Application.Current.Resources["NativeTitleBarBackgroundBrush"] = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(useLightTheme ? "#FFFFFF" : "#101620")
+            (Color)ColorConverter.ConvertFromString(background)
         );
         Application.Current.Resources["NativeTitleBarForegroundBrush"] = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(useLightTheme ? "#111318" : "#F4F7FA")
+            (Color)ColorConverter.ConvertFromString(foreground)
         );
         Application.Current.Resources["NativeTitleBarInactiveForegroundBrush"] = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(useLightTheme ? "#777777" : "#778291")
+            (Color)ColorConverter.ConvertFromString(inactive)
         );
-        Application.Current.Resources["NativeTitleBarHoverBrush"] = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(useLightTheme ? "#E5E5E5" : "#202A36")
+        Application.Current.Resources["NativeTitleBarVersionBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(inactive)
         );
-        Application.Current.Resources["NativeTitleBarPressedBrush"] = new SolidColorBrush(
-            (Color)ColorConverter.ConvertFromString(useLightTheme ? "#CACACA" : "#293341")
+        Application.Current.Resources["NativeTitleBarControlHoverBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(hover)
+        );
+        Application.Current.Resources["NativeTitleBarControlPressedBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(pressed)
+        );
+        Application.Current.Resources["NativeTitleBarControlBorderBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(border)
+        );
+        Application.Current.Resources["NativeTitleBarCloseHoverBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(closeHover)
+        );
+        Application.Current.Resources["NativeTitleBarClosePressedBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(closePressed)
+        );
+        Application.Current.Resources["NativeTitleBarCloseHoverBorderBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(closeHoverBorder)
+        );
+        Application.Current.Resources["NativeTitleBarCloseForegroundBrush"] = new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(closeForeground)
         );
     }
 
@@ -481,7 +563,7 @@ public partial class PageSwitcher : Window
             SetBackgroundOpacity(1);
             ShowTitleBar();
 
-            const double chromeMargin = 7;
+            const double chromeMargin = VisibleChromeMargin;
 
             if (_restoreWindowState == WindowState.Maximized)
             {
@@ -563,12 +645,12 @@ public partial class PageSwitcher : Window
         }
 
         // Capture the top-right corner of the title bar (where the minimal-UI
-        // button sits). The main window has a 7px chrome margin (WindowRoot.Margin
-        // = 7, ResizeBorderThickness = 7), so the title bar's actual top-right is
-        // inset from the outer window bounds. Anchoring at the title bar corner
-        // instead of the outer window corner makes the minimal UI appear exactly
-        // where the button is, not 7px above and to the right.
-        const double chromeMargin = 7;
+        // button sits). The main window has a 1px visual chrome margin
+        // (WindowRoot.Margin = VisibleChromeMargin), so the title bar's actual
+        // top-right is inset from the outer window bounds. Anchoring at the title
+        // bar corner instead of the outer window corner makes the minimal UI
+        // appear exactly where the button is, not offset up and to the right.
+        const double chromeMargin = VisibleChromeMargin;
         double rightEdge = Left + Width - chromeMargin;
         double topEdge = Top + chromeMargin;
 
@@ -711,6 +793,169 @@ public partial class PageSwitcher : Window
             && bounds.Height >= MinimumHeight;
     }
 
+    // ---- Content-fit window height ---------------------------------------------
+    // The scan page reports the CSS height its content needs (index.html fit watch).
+    // We ratchet the resizable floor up/down to match and smoothly resize the
+    // window to follow: grow when content gets taller (result appears, Details
+    // expands), retract back when it shrinks again — but ONLY while the last
+    // resize was ours (_fitAnchor). A user drag always wins: it stops any running
+    // animation and transfers height ownership to the user until the next
+    // content-driven growth re-anchors.
+    private const int FitAnimationDurationMs = 240;
+    private readonly DispatcherTimer _fitAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private bool _fitAnimationRunning;
+    private bool _fitApplying;
+    private double? _fitAnchor;
+    private DateTime _fitAnimationStart;
+    private double _fitAnimationFrom;
+    private double _fitAnimationTo;
+
+    private void OnContentFitChanged(object? sender, AppStateService.ContentFitChangedEventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnContentFitChanged(sender, e));
+            return;
+        }
+        if (_isMinimalUi || _isExiting)
+            return;
+
+        // Chrome above/below the web content (title bar + frame) is constant; deriving
+        // it from live geometry keeps the fit exact at any DPI (CSS px == DIPs in the
+        // BlazorWebView composition control).
+        double chrome = Math.Max(0, Height - e.VisibleCssHeight);
+        double target = Math.Max(MinimumHeight, Math.Min(e.RequiredCssHeight + chrome, GetFitWorkAreaCap()));
+
+        if (WindowState != WindowState.Normal || Math.Abs(target - Height) <= 0.5)
+            return;
+
+        // Setting MinHeight ABOVE the current height forces WPF to coerce Height up
+        // instantly (no animation), so growth ratchets the floor only at the end of
+        // the animated raise. Lowering the floor is always safe and keeps the user
+        // able to resize even when retraction is skipped (unanchored).
+        bool grow = target > Height;
+        if (grow)
+        {
+            if (!IsLoaded)
+            {
+                SetFitHeight(target);
+                MinHeight = target;
+                _fitAnchor = target;
+                return;
+            }
+            StartFitAnimation(target);
+            return;
+        }
+
+        MinHeight = target;
+        bool anchored = _fitAnchor is double a && Math.Abs(Height - a) <= 1.0;
+        if (!anchored)
+            return; // content shrank, but the user owns the current height
+        StartFitAnimation(target);
+    }
+
+    private void OnContentFitCleared(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnContentFitCleared(sender, e));
+            return;
+        }
+        _fitAnimationTimer.Stop();
+        _fitAnimationRunning = false;
+        _fitAnchor = null;
+        if (!_isMinimalUi)
+            MinHeight = MinimumHeight;
+    }
+
+    private void OnWindowSizeChangedForFit(object? sender, SizeChangedEventArgs e)
+    {
+        // Programmatic fit writes are flagged; anything else is a user resize
+        // (or maximize/restore) which stops the animator and ends fit ownership.
+        if (_fitApplying)
+            return;
+        if (_fitAnimationRunning)
+        {
+            _fitAnimationTimer.Stop();
+            _fitAnimationRunning = false;
+        }
+        if (_fitAnchor is double anchor && Math.Abs(Height - anchor) > 1.0)
+            _fitAnchor = null;
+    }
+
+    private void SetFitHeight(double height)
+    {
+        _fitApplying = true;
+        try
+        {
+            Height = height;
+        }
+        finally
+        {
+            _fitApplying = false;
+        }
+    }
+
+    private void StartFitAnimation(double target)
+    {
+        _fitAnimationFrom = Height;
+        _fitAnimationTo = target;
+        _fitAnimationStart = DateTime.UtcNow;
+        if (!_fitAnimationRunning)
+        {
+            _fitAnimationRunning = true;
+            _fitAnimationTimer.Start();
+        }
+    }
+
+    private void OnFitAnimationTick(object? sender, EventArgs e)
+    {
+        double progress = (DateTime.UtcNow - _fitAnimationStart).TotalMilliseconds / FitAnimationDurationMs;
+        if (progress >= 1 || Math.Abs(Height - _fitAnimationTo) <= 0.5)
+        {
+            SetFitHeight(_fitAnimationTo);
+            if (_fitAnimationTo > _fitAnimationFrom)
+                MinHeight = Math.Max(MinHeight, _fitAnimationTo); // floor follows completed growth
+            _fitAnimationTimer.Stop();
+            _fitAnimationRunning = false;
+            _fitAnchor = _fitAnimationTo;
+            KeepInsideVerticalWorkArea();
+            return;
+        }
+
+        double eased = 1 - Math.Pow(1 - Math.Clamp(progress, 0, 1), 3); // easeOutCubic
+        SetFitHeight(_fitAnimationFrom + (_fitAnimationTo - _fitAnimationFrom) * eased);
+    }
+
+    private double GetFitWorkAreaCap()
+    {
+        Rect? area = GetWorkingAreaOfWindowCenter();
+        if (area is Rect rect && rect.Height >= MinimumHeight)
+            return rect.Height;
+        return SystemParameters.WorkArea.Height;
+    }
+
+    private void KeepInsideVerticalWorkArea()
+    {
+        if (GetWorkingAreaOfWindowCenter() is not Rect area)
+            return;
+        double maxTop = area.Bottom - Height;
+        if (Top > maxTop)
+            Top = Math.Max(area.Top, maxTop);
+    }
+
+    private Rect? GetWorkingAreaOfWindowCenter()
+    {
+        double centerX = Left + Width / 2;
+        double centerY = Top + Height / 2;
+        foreach (LogicalWorkingArea area in GetLogicalWorkingAreas())
+        {
+            if (centerX >= area.Left && centerX < area.Right && centerY >= area.Top && centerY < area.Bottom)
+                return new Rect(area.Left, area.Top, area.Right - area.Left, area.Bottom - area.Top);
+        }
+        return null;
+    }
+
     private void OnToggleSidebar(object? sender, RoutedEventArgs e)
     {
         _appStateService?.ToggleSidebar();
@@ -789,7 +1034,34 @@ public partial class PageSwitcher : Window
             CloseButton.ToolTip = text;
             AutomationProperties.SetName(CloseButton, text);
         }
+
+        UpdateMaxRestoreButton();
     }
+
+    private void UpdateMaxRestoreButton()
+    {
+        if (MaxRestoreButton == null || MaxRestoreIcon == null)
+            return;
+
+        bool maximized = WindowState == WindowState.Maximized;
+        string text = maximized
+            ? Presentation.PresentationText.T("RestoreWindow", "Restore")
+            : Presentation.PresentationText.T("MaximizeWindow", "Maximize");
+        MaxRestoreButton.ToolTip = text;
+        AutomationProperties.SetName(MaxRestoreButton, text);
+        MaxRestoreIcon.Data = maximized ? _restoreIconGeometry : _maximizeIconGeometry;
+    }
+
+    private void OnTitleBarMaxRestore(object? sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    // Glyph geometry for the 24x24 viewbox of the caption icons (rendered at 12px).
+    private static readonly Geometry _maximizeIconGeometry = Geometry.Parse("M 6,6 H 18 V 18 H 6 Z");
+    private static readonly Geometry _restoreIconGeometry = Geometry.Parse(
+        "M 8,2 H 22 V 16 H 18 M 16,8 H 2 V 22 H 16 Z"
+    );
 
     private void UpdateMinimalUIButton()
     {

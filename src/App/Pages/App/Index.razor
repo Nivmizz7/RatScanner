@@ -9,6 +9,8 @@
 @inject MenuVM MenuVM
 @inject RecentScansService RecentScansStore
 @inject LocalizationService Localizer
+@inject AppStateService AppState
+@inject IJSRuntime JSRuntime
 @implements IDisposable
 
 <div class="scan-page">
@@ -40,7 +42,7 @@
                 </NoItemsTemplate>
             </MudAutocomplete>
         </div>
-        <GameModeSwitch />
+        <GameModeIndicator />
         <ScannerStatus />
     </div>
 
@@ -98,8 +100,8 @@
         }
 
         <article class="result-card" aria-live="polite" aria-label="@Localizer["CurrentScanResult"]">
-            <header class="result-header">
-                <div class="item-art-wrap">
+            <div class="result-main">
+                <header class="identity">
                     <div class="item-art">
                         <img src="@_result.Item.ImageUrl" alt="@_result.Item.Name" />
                         @if (_result.Item.Quantity > 1)
@@ -107,131 +109,131 @@
                             <small>x@_result.Item.Quantity</small>
                         }
                     </div>
-                </div>
+                    <div class="identity-text">
+                        <h1>@DisplayName</h1>
+                        <p class="identity-meta">
+                            <span>@FriendlyItemType</span>
+                            <span class="sep" aria-hidden="true"></span>
+                            <span>@_result.Item.SlotCount @(_result.Item.SlotCount == 1 ? Localizer["Slot"] : Localizer["Slots"])</span>
+                            @if (IsManual)
+                            {
+                                <span class="sep" aria-hidden="true"></span>
+                                <span>@Localizer["ManualShort"]</span>
+                            }
+                        </p>
+                    </div>
+                </header>
 
-                <div class="identity">
-                    <h1>@DisplayName</h1>
-                    <p class="identity-meta">
-                        <span>@FriendlyItemType</span>
-                        <span class="sep" aria-hidden="true"></span>
-                        <span>@_result.Item.SlotCount @(_result.Item.SlotCount == 1 ? Localizer["Slot"] : Localizer["Slots"])</span>
-                    </p>
-                    <p class="identity-source">@SelectionMethodLabel</p>
-                </div>
+                <section class="verdict @VerdictTone" aria-label="@_result.Recommendation.Title">
+                    <div class="verdict-inner">
+                        <span class="verdict-word">@VerdictWord</span>
+                        <span class="verdict-reason">@VerdictReason</span>
+                    </div>
+                </section>
+            </div>
 
-                <div class="recommendation @RecommendationTone">
-                    <h2>@_result.Recommendation.Title</h2>
-                    <p>@RecommendationSummary</p>
-                </div>
-            </header>
-
-            <section class="market" aria-label="@Localizer["MarketComparison"]">
-                <div class="market-columns">
-                    <div class="market-column">
-                        <label>@Localizer["FleaMarket"]</label>
+            <div class="result-data">
+                <section class="market" aria-label="@Localizer["MarketComparison"]">
+                    <div class="market-cell">
+                        <div class="market-label">
+                            <span>@Localizer["FleaMarket"]</span>
+                            @if (!_result.Pricing.BannedOnFlea && !string.IsNullOrWhiteSpace(FreshnessShortText))
+                            {
+                                <span class="freshness" title="@ExactUpdatedText">@FreshnessShortText</span>
+                            }
+                        </div>
                         @if (_result.Pricing.BannedOnFlea)
                         {
-                            <strong class="price banned">@Localizer["BannedOnFlea"]</strong>
+                            <span class="price banned">@Localizer["BannedOnFlea"]</span>
                         }
                         else
                         {
-                            <strong class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</strong>
+                            <span class="price">@PriceFormatter.Format(_result.Pricing.FleaPrice)</span>
                             @if (ShowPerSlot)
                             {
                                 <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Pricing.FleaPricePerSlot))</span>
                             }
-                            <span class="supporting">
-                                @if (!string.IsNullOrWhiteSpace(FreshnessText))
-                                {
-                                    @FreshnessText
-                                }
-                                else
-                                {
-                                    <text>@Localizer["PricesMayVary"]</text>
-                                }
-                            </span>
                         }
                     </div>
 
-                    <div class="market-column">
-                        <label>@Localizer["BestTrader"]</label>
+                    <div class="market-cell">
+                        <div class="market-label">
+                            <span>@Localizer["BestTrader"]</span>
+                        </div>
                         @if (_result.Trader is null)
                         {
-                            <strong class="price">@Localizer["Unavailable"]</strong>
+                            <span class="price">@Localizer["Unavailable"]</span>
                         }
                         else
                         {
-                            <strong class="trader-name">@(_result.Trader.Name ?? Localizer["Trader"])</strong>
-                            <span class="price supporting-price">@PriceFormatter.Format(_result.Trader.TotalPrice)</span>
-                            @if (ShowPerSlot && _result.Trader.PricePerSlot is not null)
+                            <span class="trader-name">@(_result.Trader.Name ?? Localizer["Trader"])</span>
+                            <span class="price">@PriceFormatter.Format(_result.Trader.TotalPrice)</span>
+                        }
+                    </div>
+                </section>
+
+                @if (HasStatusChips)
+                {
+                    <section class="status-strip" aria-label="@Localizer["Requirements"]">
+                        @if (HasFirNeedAnywhere)
+                        {
+                            <span class="chip fir-badge" title="@FirTooltipText" role="note" aria-label="@Localizer["FirBadgeTitle"]">
+                                <svg class="fir-icon" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                                    <rect x="0.75" y="0.75" width="10.5" height="10.5" rx="2.5" />
+                                    <path d="M3.4 6.3 5.3 8.2 8.8 3.9" />
+                                </svg>
+                                <span>@Localizer["FirBadgeText"]</span>
+                            </span>
+                        }
+                        @if (_result.Quests.WeaponUsableAdvisory)
+                        {
+                            <span class="chip chip-advisory" title="@Localizer["UsableWeaponTooltip"]">
+                                @Localizer["UsableWeaponShort"]
+                            </span>
+                        }
+                        @if (_result.Quests.Report.FutureKnown > 0 && _result.Quests.Report.UnlockLevel is int unlockLevel)
+                        {
+                            <span class="chip chip-later" title="@Localizer.Format("LaterLevelTooltip", unlockLevel)">
+                                @Localizer.Format("LaterLevelChip", unlockLevel)
+                            </span>
+                        }
+                        @if (!QuestBucketsCoveredByVerdict)
+                        {
+                            @if (_result.Quests.Report.AvailableNow > 0)
                             {
-                                <span class="supporting">@Localizer.Format("PricePerSlotLabel", PriceFormatter.Format(_result.Trader.PricePerSlot))</span>
+                                <span class="chip chip-later">@Localizer.Format("QuestChipAvailable", _result.Quests.Report.AvailableNow)</span>
+                            }
+                            @if (_result.Quests.Report.FutureKnown > 0)
+                            {
+                                <span class="chip chip-later">@Localizer.Format("QuestChipLater", _result.Quests.Report.FutureKnown)</span>
+                            }
+                            @if (_result.Quests.Report.ConditionalUnknown > 0)
+                            {
+                                <span class="chip chip-later">@Localizer.Format("QuestChipConditional", _result.Quests.Report.ConditionalUnknown)</span>
                             }
                         }
-                    </div>
-                </div>
-                @if (!string.IsNullOrWhiteSpace(MarketDifferenceText))
-                {
-                    <p class="market-difference @DifferenceClass">@MarketDifferenceText</p>
-                }
-            </section>
-
-            <section class="requirements @(HasAnyRequirement ? "has-required" : "all-clear")" aria-label="@Localizer["Requirements"]">
-                @if (HasAnyRequirement)
-                {
-                    <div class="requirement-chip @(IsRequired(_result.Quests) ? "required" : "muted") @(_result.Quests.HasFirNeed ? "fir" : null)">
-                        <label>@Localizer["QuestRequirements"]</label>
-                        <strong>@RequirementSummary(_result.Quests)</strong>
-                        @if (IsRequired(_result.Quests))
+                        @if (ShowHideoutChip)
                         {
-                            <span class="req-meta">@FirLabel(_result.Quests)</span>
+                            <span class="chip chip-required" title="@HideoutChipTooltip">
+                                @Localizer["HideoutLabel"]
+                                <strong>@Localizer.Format("QuestChipNeeded", _result.Hideout.RemainingRequired ?? 0)</strong>
+                            </span>
                         }
-                    </div>
-                    <div class="requirement-chip @(IsRequired(_result.Hideout) ? "required" : "muted") @(_result.Hideout.HasFirNeed ? "fir" : null)">
-                        <label>@Localizer["HideoutRequirements"]</label>
-                        <strong>@RequirementSummary(_result.Hideout)</strong>
-                        @if (IsRequired(_result.Hideout))
+                        @if (_result.Acquisition.CanCraft)
                         {
-                            <span class="req-meta">@FirLabel(_result.Hideout)</span>
+                            <span class="chip" title="@Localizer["CraftableTooltip"]">
+                                @Localizer["Craftable"]
+                            </span>
                         }
-                    </div>
+                        @if (_result.Acquisition.CanBarter)
+                        {
+                            <span class="chip" title="@Localizer["BarterableTooltip"]">
+                                @Localizer["Barterable"]
+                            </span>
+                        }
+                    </section>
                 }
-                else
-                {
-                    <p class="requirements-inline">
-                        <span>@Localizer.Format("RequirementNotRequired", Localizer["QuestLabel"])</span>
-                        <span class="sep" aria-hidden="true"></span>
-                        <span>@Localizer.Format("RequirementNotRequired", Localizer["HideoutLabel"])</span>
-                    </p>
-                }
-            </section>
-
-            @if (_result.Acquisition.Any || HasFirNeedAnywhere)
-            {
-                <section class="acquisition" aria-label="@Localizer["AcquisitionAndFir"]">
-                    @if (HasFirNeedAnywhere)
-                    {
-                        <div class="acq-chip fir" title="@Localizer["FirRequiredTooltip"]">
-                            <strong>@Localizer["FirRequired"]</strong>
-                            <span>@Localizer["ConfirmFir"]</span>
-                        </div>
-                    }
-                    @if (_result.Acquisition.CanCraft)
-                    {
-                        <div class="acq-chip craft" title="@Localizer["CraftableTooltip"]">
-                            <strong>@Localizer["Craftable"]</strong>
-                            <span>@Localizer.Format("CraftableDescription", _result.Acquisition.CraftRecipeCount)</span>
-                        </div>
-                    }
-                    @if (_result.Acquisition.CanBarter)
-                    {
-                        <div class="acq-chip barter" title="@Localizer["BarterableTooltip"]">
-                            <strong>@Localizer["Barterable"]</strong>
-                            <span>@Localizer.Format("BarterableDescription", _result.Acquisition.BarterOfferCount)</span>
-                        </div>
-                    }
-                </section>
-            }
+            </div>
 
             <div class="actions">
                 <div class="action-links">
@@ -249,6 +251,28 @@
                         @Localizer["OpenWiki"]
                         <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" />
                     </button>
+                </div>
+                <div class="links-menu">
+                    <MudMenu AriaLabel="@Localizer["LinksMenuLabel"]"
+                             Label="@Localizer["LinksMenuLabel"]"
+                             Variant="Variant.Text"
+                             Color="Color.Default"
+                             Size="Size.Small"
+                             Dense="true"
+                             AnchorOrigin="Origin.BottomRight"
+                             TransformOrigin="Origin.TopRight"
+                             EndIcon="@Icons.Material.Filled.ExpandMore">
+                        <MudMenuItem OnClick="OpenMarket"
+                                     Disabled="@string.IsNullOrWhiteSpace(_result.Item.MarketUrl)"
+                                     Icon="@Icons.Material.Filled.OpenInNew">
+                            @Localizer["ViewOnTarkovDev"]
+                        </MudMenuItem>
+                        <MudMenuItem OnClick="OpenWiki"
+                                     Disabled="@string.IsNullOrWhiteSpace(_result.Item.WikiUrl)"
+                                     Icon="@Icons.Material.Filled.OpenInNew">
+                            @Localizer["OpenWiki"]
+                        </MudMenuItem>
+                    </MudMenu>
                 </div>
                 <button type="button"
                         class="details-toggle"
@@ -326,6 +350,8 @@
 
 @code {
     private ScanResultViewModel? _result;
+    private DotNetObjectReference<Index>? _fitRef;
+    private bool _disposed;
     private List<Item>? _items;
     private string? _itemsLocale;
     private TarkovDev.GameMode? _itemsGameMode;
@@ -341,21 +367,54 @@
     private bool IsManual => _result?.Recognition.IsManualSelection == true;
     private bool IsLowConfidence =>
         !IsManual && _result?.Recognition.Confidence is float confidence && confidence < MediumConfidence;
-    private bool HasAnyRequirement =>
-        IsRequired(_result?.Quests) || IsRequired(_result?.Hideout);
-
     private bool HasFirNeedAnywhere =>
         (_result?.Quests.HasFirNeed == true) || (_result?.Hideout.HasFirNeed == true);
+
+    /// <summary>
+    /// Quest bucket counts are stated in the verdict reason only when the verdict is
+    /// quest-driven; hideout/sell verdicts surface remaining quest buckets as chips.
+    /// </summary>
+    private bool QuestBucketsCoveredByVerdict =>
+        _result?.Recommendation.Type
+            is RecommendationType.KeepForQuest
+                or RecommendationType.QuestAvailableSoon
+                or RecommendationType.NeededLater
+                or RecommendationType.MaybeNeeded;
+
+    /// <summary>Hideout chip only when the verdict doesn't already state the hideout need (dedupe).</summary>
+    private bool ShowHideoutChip =>
+        IsRequired(_result?.Hideout)
+        && _result?.Recommendation.Type != RecommendationType.KeepForHideout;
+
+    private bool HasStatusChips =>
+        HasFirNeedAnywhere
+        || _result?.Quests.WeaponUsableAdvisory == true
+        || _result?.Quests.Report.FutureKnown > 0
+        || (!QuestBucketsCoveredByVerdict && _result?.Quests.Report.GrandTotal > 0)
+        || ShowHideoutChip
+        || _result?.Acquisition.Any == true;
 
     private int? Difference =>
         _result?.Pricing.FleaPrice is int flea && _result.Trader?.TotalPrice is int trader
             ? flea - trader
             : null;
 
-    private string DifferenceClass =>
-        Difference is > 0 ? "positive" : Difference is < 0 ? "negative" : string.Empty;
-
-    private string FreshnessText => FreshnessFormatter.Format(_result?.Pricing.UpdatedAt);
+    private string FreshnessShortText
+    {
+        get
+        {
+            if (_result?.Pricing.UpdatedAt is not DateTimeOffset updated)
+                return string.Empty;
+            TimeSpan age = DateTimeOffset.UtcNow - updated.ToUniversalTime();
+            if (age.TotalMinutes < 1)
+                return Localizer["UpdatedJustNow"];
+            if (age.TotalHours < 1)
+                return $"{(int)age.TotalMinutes}m";
+            if (age.TotalDays < 1)
+                return $"{(int)age.TotalHours}h";
+            return $"{Math.Max(1, (int)age.TotalDays)}d";
+        }
+    }
 
     private string ConfidencePercent =>
         _result?.Recognition.Confidence is float confidence ? confidence.ToString("P0") : string.Empty;
@@ -389,48 +448,53 @@
             ? updated.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
             : Localizer["Unknown"];
 
-    private string RecommendationTone =>
+    private string VerdictWord =>
         _result?.Recommendation.Type switch
         {
-            RecommendationType.KeepForQuest => "tone-quest",
-            RecommendationType.KeepForHideout => "tone-hideout",
-            RecommendationType.SellOnFlea or RecommendationType.SellToTrader => "tone-sell",
-            RecommendationType.PriceUnavailable => "tone-warning",
-            _ => "tone-neutral",
+            RecommendationType.KeepForQuest or RecommendationType.KeepForHideout => Localizer["VerdictKeep"],
+            RecommendationType.QuestAvailableSoon => Localizer["VerdictNeededSoon"],
+            RecommendationType.NeededLater => Localizer["VerdictNeededLater"],
+            RecommendationType.MaybeNeeded => Localizer["VerdictMaybeNeeded"],
+            RecommendationType.SellOnFlea or RecommendationType.SellToTrader => Localizer["VerdictSell"],
+            _ => Localizer["VerdictCheck"],
         };
 
-    private string RecommendationSummary
+    private string VerdictReason
     {
         get
         {
             if (_result is null)
                 return string.Empty;
 
+            string traderName = _result.Trader?.Name ?? Localizer["TraderLabel"];
             return _result.Recommendation.Type switch
             {
-                RecommendationType.KeepForQuest when _result.Quests.RemainingRequired is int needed =>
-                    Localizer.Format("ActiveQuestRequirementSummary", needed),
-                RecommendationType.KeepForHideout when _result.Hideout.RemainingRequired is int needed =>
-                    Localizer.Format("HideoutRequirementSummary", needed),
+                RecommendationType.KeepForQuest or RecommendationType.QuestAvailableSoon
+                or RecommendationType.NeededLater or RecommendationType.MaybeNeeded =>
+                    _result.Recommendation.Explanation,
+                RecommendationType.KeepForHideout =>
+                    Localizer.Format("HideoutRequirementSummary", _result.Hideout.RemainingRequired ?? 0),
+                RecommendationType.SellOnFlea when Difference is > 0 =>
+                    $"+{PriceFormatter.Format(Difference)} {Localizer.Format("VsTrader", traderName)}",
+                RecommendationType.SellOnFlea =>
+                    _result.Recommendation.Explanation,
+                RecommendationType.SellToTrader when Difference is < 0 =>
+                    $"+{PriceFormatter.Format(-Difference.Value)} {Localizer.Format("VsTrader", Localizer["FleaMarket"])}",
+                RecommendationType.SellToTrader =>
+                    Localizer["FleaAndTraderMatch"],
                 _ => _result.Recommendation.Explanation,
             };
         }
     }
 
-    private string MarketDifferenceText
-    {
-        get
+    private string VerdictTone =>
+        _result?.Recommendation.Type switch
         {
-            if (Difference is not int value)
-                return string.Empty;
-            string traderName = _result?.Trader?.Name ?? Localizer["TraderLabel"];
-            if (value > 0)
-                return Localizer.Format("FleaMarketPaysMore", PriceFormatter.Format(value), traderName);
-            if (value < 0)
-                return Localizer.Format("TraderPaysMore", traderName, PriceFormatter.Format(-value));
-            return Localizer["FleaAndTraderMatch"];
-        }
-    }
+            RecommendationType.KeepForQuest or RecommendationType.KeepForHideout => "tone-keep",
+            RecommendationType.QuestAvailableSoon => "tone-accent",
+            RecommendationType.MaybeNeeded => "tone-warning",
+            _ => "tone-sell",
+        };
 
     // Recent scans are scan-time snapshots kept in a DI singleton, so they
     // survive navigation without retaining screenshots or decoded images.
@@ -539,24 +603,35 @@
     private static bool IsRequired(RequirementViewModel? value) =>
         value?.Status == RequirementStatus.Required;
 
-    private string RequirementSummary(RequirementViewModel value) =>
-        value.Status switch
-        {
-            RequirementStatus.Required => Localizer.Format("RequiredStillNeeded", value.RemainingRequired ?? 0),
-            RequirementStatus.NotRequired => Localizer["NotRequired"],
-            _ => Localizer["Unavailable"],
-        };
-
-    private string FirLabel(RequirementViewModel value)
+    /// <summary>
+    /// Multi-line FIR tooltip: the title plus a per-bucket breakdown so a
+    /// conditional FIR need never reads as a definite active one.
+    /// </summary>
+    private string FirTooltipText
     {
-        if (value.HasFirNeed && value.HasNonFirNeed)
-            return Localizer.Format("FirMixed", value.RequiresFoundInRaid, value.NonFoundInRaid);
-        if (value.HasFirNeed)
-            return Localizer["MustBeFoundInRaid"];
-        if (value.HasNonFirNeed)
-            return Localizer["NonFirOkay"];
-        return string.Empty;
+        get
+        {
+            if (_result is null)
+                return string.Empty;
+
+            QuestNeedReport report = _result.Quests.Report;
+            List<string> lines = [Localizer["FirBadgeTitle"]];
+            if (report.ActiveNowFir > 0)
+                lines.Add(Localizer.Format("FirBreakdownActive", report.ActiveNowFir));
+            if (report.AvailableNowFir > 0)
+                lines.Add(Localizer.Format("FirBreakdownAvailable", report.AvailableNowFir));
+            if (report.FutureKnownFir > 0)
+                lines.Add(Localizer.Format("FirBreakdownFuture", report.FutureKnownFir));
+            if (report.ConditionalUnknownFir > 0)
+                lines.Add(Localizer.Format("FirBreakdownConditional", report.ConditionalUnknownFir));
+            if (_result.Hideout.RequiresFoundInRaid > 0)
+                lines.Add(Localizer.Format("FirBreakdownHideout", _result.Hideout.RequiresFoundInRaid));
+            return lines.Count == 1 ? lines[0] : string.Join('\n', lines);
+        }
     }
+
+    private string HideoutChipTooltip =>
+        _result is null ? string.Empty : Localizer.Format("RecHideoutRequiredFull", _result.Hideout.RemainingRequired ?? 0);
 
     private static string ShortLabel(string? shortName, string? name)
     {
@@ -569,9 +644,49 @@
 
     private static void OpenUrl(string? url) => ExternalLinkLauncher.Open(url);
 
+    protected override async System.Threading.Tasks.Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _fitRef = DotNetObjectReference.Create(this);
+            try
+            {
+                // Best-effort: the fit watch must never break the page if the
+                // host script is not loaded yet or interop is unavailable.
+                await JSRuntime.InvokeVoidAsync("RatScanner.fitWatch.start", _fitRef);
+            }
+            catch (JSException)
+            {
+            }
+        }
+    }
+
+    /// <summary>
+    /// JS fit watch callback: forwards the scan page's required content height to the
+    /// host so the window can grow instead of clipping content behind a scrollbar.
+    /// </summary>
+    [JSInvokable]
+    public void OnContentFitChanged(double requiredCssHeight, double visibleCssHeight)
+    {
+        if (!_disposed)
+            AppState.ReportContentFit(requiredCssHeight, visibleCssHeight);
+    }
+
     public void Dispose()
     {
+        _disposed = true;
         MenuVM.PropertyChanged -= OnResultChanged;
         RecentScansStore.Changed -= OnRecentScansChanged;
+        try
+        {
+            _ = JSRuntime.InvokeVoidAsync("RatScanner.fitWatch.stop");
+        }
+        catch (JSException)
+        {
+        }
+
+        AppState.ClearContentFit();
+        _fitRef?.Dispose();
+        _fitRef = null;
     }
 }

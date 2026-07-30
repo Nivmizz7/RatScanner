@@ -5,19 +5,21 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         Title="Rat Scanner"
         AllowsTransparency="True"
-        Background="#121212"
+        Background="#111516"
         ResizeMode="CanResize"
         WindowStyle="None"
         mc:Ignorable="d">
+	<!-- ResizeBorderThickness is the invisible resize hit target (~7px) and must not
+	     shrink with the visible frame; the visible edge is the 1px WindowRoot margin. -->
 	<WindowChrome.WindowChrome>
-		<WindowChrome CaptionHeight="48"
+		<WindowChrome CaptionHeight="36"
 		              CornerRadius="0"
 		              GlassFrameThickness="0"
 		              ResizeBorderThickness="7"
 		              UseAeroCaptionButtons="False" />
 	</WindowChrome.WindowChrome>
 	<Grid x:Name="WindowRoot"
-	      Margin="7">
+	      Margin="1">
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
@@ -25,7 +27,7 @@
 
 		<Grid x:Name="TitleBar"
 		      Grid.Row="0"
-		      Height="48"
+		      Height="36"
 		      Background="{DynamicResource NativeTitleBarBackgroundBrush}">
 			<Grid.ColumnDefinitions>
 				<ColumnDefinition Width="Auto" />
@@ -37,9 +39,9 @@
 			<!-- Navigation toggle -->
 			<Button x:Name="NavToggleButton"
 			        Grid.Column="0"
-			        Width="40"
-			        Height="40"
-			        Margin="8,0,0,0"
+			        Width="30"
+			        Height="30"
+			        Margin="3,0,0,0"
 			        VerticalAlignment="Center"
 			        Click="OnToggleSidebar"
 			        FocusVisualStyle="{StaticResource FocusVisual}"
@@ -47,27 +49,35 @@
 			        Style="{DynamicResource TitleBarButtonStyle}"
 			        WindowChrome.IsHitTestVisibleInChrome="True">
 				<Path x:Name="NavToggleIcon"
-				      Width="18"
-				      Height="18"
+				      Width="14"
+				      Height="14"
 				      Stretch="Uniform"
 				      SnapsToDevicePixels="True"
 				      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-				      StrokeThickness="1.5" />
+				      StrokeThickness="1.4" />
 			</Button>
 
-			<!-- App identity -->
+			<!-- App identity: logo + name + version share one baseline -->
 			<StackPanel Grid.Column="1"
-			            Margin="6,0,0,0"
+			            Margin="8,0,0,0"
+			            VerticalAlignment="Center"
 			            Orientation="Horizontal">
-				<Image Width="20"
-				       Height="20"
-				       Margin="0,0,8,0"
+				<Image Width="16"
+				       Height="16"
+				       Margin="0,0,7,0"
 				       RenderOptions.BitmapScalingMode="HighQuality"
 				       Source="/Resources/RatLogoMedium.png" />
 
 				<TextBlock x:Name="BrandTextBlock"
 				           VerticalAlignment="Center"
-				           FontSize="12">
+				           FontSize="12.5"
+				           FontWeight="SemiBold">
+					<Run x:Name="BrandNameRun" />
+					<Run x:Name="BrandVersionRun"
+					     BaselineAlignment="Baseline"
+					     FontSize="10.5"
+					     FontWeight="Regular"
+					     Foreground="{DynamicResource NativeTitleBarVersionBrush}" />
 					<TextBlock.Style>
 						<Style TargetType="{x:Type TextBlock}">
 							<Style.Triggers>
@@ -87,72 +97,103 @@
 						</Style>
 					</TextBlock.Style>
 				</TextBlock>
-
-				<TextBlock x:Name="VersionTextBlock"
-				           VerticalAlignment="Center"
-				           FontSize="11"
-				           Margin="8,1,0,0"
-				           Foreground="{DynamicResource NativeTitleBarInactiveForegroundBrush}" />
 			</StackPanel>
 
 			<!-- Caption buttons -->
 			<StackPanel Grid.Column="3"
+			            Margin="0,0,3,0"
 			            Orientation="Horizontal">
 				<Button x:Name="MinimalUIButton"
-				        Width="46"
+				        Width="30"
+				        Height="30"
+				        Margin="1,0"
+				        VerticalAlignment="Center"
 				        Click="OnTitleBarMinimal"
 				        FocusVisualStyle="{StaticResource FocusVisual}"
 				        IsTabStop="True"
 				        Style="{DynamicResource TitleBarButtonStyle}"
 				        WindowChrome.IsHitTestVisibleInChrome="True">
 					<Path x:Name="MinimalUIIcon"
-					      Width="10"
-					      Height="10"
+					      Width="12"
+					      Height="12"
 					      Stretch="Uniform"
 					      SnapsToDevicePixels="True"
 					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-					      StrokeThickness="1" />
+					      StrokeThickness="1.25" />
 				</Button>
 
 				<Rectangle Width="1"
-				           Height="16"
-				           Margin="4,0"
+				           Height="14"
+				           Margin="3,0"
 				           VerticalAlignment="Center"
 				           Fill="{DynamicResource NativeTitleBarInactiveForegroundBrush}"
-				           Opacity="0.25" />
+				           Opacity="0.3" />
 
 				<Button x:Name="MinimizeButton"
-				        Width="46"
+				        Width="30"
+				        Height="30"
+				        Margin="1,0"
+				        VerticalAlignment="Center"
 				        Click="OnTitleBarMinimize"
 				        FocusVisualStyle="{StaticResource FocusVisual}"
 				        IsTabStop="True"
 				        Style="{DynamicResource TitleBarButtonStyle}"
 				        WindowChrome.IsHitTestVisibleInChrome="True">
-					<Path Width="10"
-					      Height="10"
+					<Path Width="12"
+					      Height="12"
 					      Stretch="Uniform"
 					      SnapsToDevicePixels="True"
 					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-					      StrokeThickness="1"
-					      Data="M 4,17 H 20" />
+					      StrokeThickness="1.25"
+					      Data="M 5,15.5 H 19" />
+				</Button>
+
+				<Button x:Name="MaxRestoreButton"
+				        Width="30"
+				        Height="30"
+				        Margin="1,0"
+				        VerticalAlignment="Center"
+				        Click="OnTitleBarMaxRestore"
+				        FocusVisualStyle="{StaticResource FocusVisual}"
+				        IsTabStop="True"
+				        Style="{DynamicResource TitleBarButtonStyle}"
+				        WindowChrome.IsHitTestVisibleInChrome="True">
+					<Path x:Name="MaxRestoreIcon"
+					      Width="12"
+					      Height="12"
+					      Stretch="Uniform"
+					      SnapsToDevicePixels="True"
+					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
+					      StrokeThickness="1.25"
+					      Data="M 6,6 H 18 V 18 H 6 Z" />
 				</Button>
 
 				<Button x:Name="CloseButton"
-				        Width="46"
+				        Width="30"
+				        Height="30"
+				        Margin="1,0"
+				        VerticalAlignment="Center"
 				        Click="OnTitleBarClose"
 				        FocusVisualStyle="{StaticResource FocusVisual}"
 				        IsTabStop="True"
 				        Style="{DynamicResource TitleBarCloseButtonStyle}"
 				        WindowChrome.IsHitTestVisibleInChrome="True">
-					<Path Width="10"
-					      Height="10"
+					<Path Width="12"
+					      Height="12"
 					      Stretch="Uniform"
 					      SnapsToDevicePixels="True"
 					      Stroke="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType=Button}, Path=Foreground}"
-					      StrokeThickness="1"
-					      Data="M 4,4 L 20,20 M 4,20 L 20,4" />
+					      StrokeThickness="1.25"
+					      Data="M 7,7 L 17,17 M 7,17 L 17,7" />
 				</Button>
 			</StackPanel>
+
+			<!-- Subtle bottom divider separating chrome from content -->
+			<Border Grid.Column="0"
+			        Grid.ColumnSpan="4"
+			        VerticalAlignment="Bottom"
+			        Height="1"
+			        Background="#2B3334" />
 		</Grid>
 
 		<ContentControl x:Name="ContentControl"

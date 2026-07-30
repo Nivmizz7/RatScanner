@@ -8,7 +8,7 @@ internal sealed record ScanResultViewModel(
     PricingViewModel Pricing,
     TraderViewModel? Trader,
     RecommendationViewModel Recommendation,
-    RequirementViewModel Quests,
+    QuestNeedViewModel Quests,
     RequirementViewModel Hideout,
     AcquisitionViewModel Acquisition,
     DateTimeOffset? ScannedAt,
@@ -47,6 +47,9 @@ internal enum RecommendationType
 {
     KeepForQuest,
     KeepForHideout,
+    QuestAvailableSoon,
+    NeededLater,
+    MaybeNeeded,
     SellOnFlea,
     SellToTrader,
     PriceUnavailable,
@@ -78,6 +81,20 @@ internal sealed record RequirementViewModel(
 {
     public bool HasFirNeed => RequiresFoundInRaid > 0;
     public bool HasNonFirNeed => NonFoundInRaid > 0;
+}
+
+/// <summary>
+/// Applicability-aware quest need view. Counts are never merged across buckets
+/// so conditional/future needs can never masquerade as active ones.
+/// </summary>
+/// <param name="WeaponUsableAdvisory">
+/// True when the scanned item is a weapon with an open giveItem/buildWeapon need;
+/// RatScanner cannot verify the assembly (vital parts) state of the scanned weapon.
+/// </param>
+internal sealed record QuestNeedViewModel(QuestNeedReport Report, bool WeaponUsableAdvisory)
+{
+    public bool AnyQuestNeed => Report.GrandTotal > 0;
+    public bool HasFirNeed => Report.FirTotal > 0;
 }
 
 /// <summary>

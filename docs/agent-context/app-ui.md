@@ -31,7 +31,8 @@ Package version: see App `.csproj` only.
 
 | Area | Location |
 | --- | --- |
-| App shell (collapsible sidebar, PVP/PVE selector) | `Shared/AppLayout.razor(+.css)` |
+| App shell (collapsible sidebar, scanner section with the real PvP/PvE selector) | `Shared/AppLayout.razor(+.css)` |
+| PVP/PVE segmented selector (authoritative) + compact current-mode indicator | `Shared/GameModeSwitch.razor(+.css)`, `Shared/GameModeIndicator.razor(+.css)` |
 | Mud providers / shared theme | `Shared/MainLayout.razor` |
 | Settings chrome | `Shared/SettingsLayout.razor(+.css)` |
 | Overlay shell | `Shared/OverlayLayout.razor`, passive tooltip page |
@@ -85,12 +86,16 @@ Do not use `!important` to paper over conflicting selectors. Recent search-field
 
 ## Sidebar collapse behavior
 
-`AppLayout` exposes a single collapsible sidebar that works at every viewport width; the native WPF title bar (`PageSwitcher.xaml`) supplies app identity, window drag, and caption buttons at all widths, so the Blazor shell no longer renders a duplicate compact header. The only toggle is the WPF title-bar `NavToggleButton`, which routes through `AppStateService` (`SidebarToggleRequested`) — there is no sidebar-header collapse button and no floating expand button in the Blazor shell.
+`AppLayout` exposes a single collapsible sidebar that works at every viewport width; shared horizontal page gutters come from `--rs-page-gutter-x` / `--rs-page-gutter-x-compact` (`theme.css`), with no reserved scrollbar gutter (`.main-content` must stay free of `scrollbar-gutter: stable` so non-scrolling pages keep symmetric insets); the native WPF title bar (`PageSwitcher.xaml`) supplies app identity, window drag, and caption buttons at all widths, so the Blazor shell no longer renders a duplicate compact header. The only toggle is the WPF title-bar `NavToggleButton`, which routes through `AppStateService` (`SidebarToggleRequested`) — there is no sidebar-header collapse button and no floating expand button in the Blazor shell.
 
 - The narrow/docked breakpoint is **680px**, applied consistently by `wwwroot/index.html` (`matchMedia("(max-width: 680px)")`), `AppLayout.razor.css`, `Index.razor.css`, and `theme.css`.
 - Sidebar state is one of four discrete names reported to JS via `RatScanner.setSidebarState` (see `AppLayout.GetSidebarStateName`): `expanded` (desktop, docked full width), `rail` (desktop, collapsed icon rail), `narrow-open` (overlay drawer), `narrow-closed` (overlay hidden). At desktop widths `main-content` reserves `--rs-sidebar-width` via the `sidebar-docked` class and the sidebar is non-modal; below 680px the sidebar is an overlay drawer with a scrim.
 - `--rs-sidebar-active-width` on `:root` is kept in sync by `wwwroot/index.html` from the current state name so MudBlazor dialogs center in the actual content pane. `AppLayout` registers a `DotNetObjectReference` to receive breakpoint crossings via `OnViewportNarrow` and drawer-close requests via `CloseDrawerFromJs`.
 - While the narrow drawer is open, `<main>` gets `aria-hidden="true"`, CSS `pointer-events: none`, and `inert` (splat via `AppLayout.MainAttributes`, recomputed each render); a JS Tab-trap (plus Escape-to-close) in `index.html` keeps focus inside the sidebar.
+
+## Content-fit window height
+
+The scan page reports the natural height of its content through a JS fit watch (`RatScanner.fitWatch` in `wwwroot/index.html`: ResizeObserver + MutationObserver on `.scan-page`; probe-induced mutation records are drained via `takeRecords` so they cannot self-trigger). Reports flow `OnContentFitChanged` → `AppStateService.ContentFitChanged` → `PageSwitcher`, which ratchets `MinHeight` to the content height and smoothly resizes the window (ease-out cubic retargeting timer, ~240ms) in BOTH directions: grow when content gets taller (result renders, Details expands) and retract when it shrinks again. Retraction only happens while the last resize was fit-driven (`_fitAnchor`): any user drag stops a running animation and ends fit ownership until the next content-driven growth re-anchors, so user-chosen taller sizes always win. IMPORTANT: setting `MinHeight` above the current `Height` makes WPF coerce `Height` up instantly (no animation), so growth defers the floor ratchet until the animation completes; lowering the floor is always immediate. Fit is capped at the owning monitor's working area and suspended while maximized or in minimal UI; leaving the scan page resets the floor to `MinimumHeight` (380). Natural height is measured with `.scan-page` momentarily at `height:auto` and flex sizing neutralized, so the short-window media queries (≤620px height, ≤460px width) that deliberately strip min-heights/paddings are respected instead of fought.
 
 ## Visual smoke-test surfaces
 
@@ -110,7 +115,7 @@ Capture is **not** in Razor; UI only reflects scan state. Capture orchestration:
 
 Settings use control-specific persistence through `SettingsVM` and `SettingsPersistenceService` into `RatConfig` / `config.cfg`; there is no page-level Save or Cancel bar. Complete choices (switches, selects, presets, game mode) apply immediately and are saved asynchronously with per-setting rollback on failure. Editable capture fields keep draft text, validate on blur/Enter, and persist only when valid. TarkovTracker credentials are an explicit exception: they remain local drafts until a successful connection test.
 
-The always-visible PVP/PVE selector in `AppLayout` switches mode-specific tarkov.dev caches and the matching TarkovTracker.org progress context immediately, then persists the selection. Stale tracker requests are canceled or rejected by configuration generation before they can overwrite the active mode.
+The PVP/PVE selector (`GameModeSwitch`, the single authoritative control in the expanded sidebar) switches mode-specific tarkov.dev caches and the matching TarkovTracker.org progress context immediately, then persists the selection. Stale tracker requests are canceled or rejected by configuration generation before they can overwrite the active mode. When the sidebar is not expanded (rail or closed narrow drawer), the toolbar instead shows a compact `GameModeIndicator` button: it reflects the current mode, opens the sidebar to the scanner section on click, and hides whenever the sidebar itself is visible, so the two representations never coexist.
 
 ## Package ownership (UI-related)
 
