@@ -36,11 +36,7 @@ public static class MapDataLoader
             {
                 // LogWarning: map overlay data is optional. LogError would call Environment.Exit.
                 Logger.LogWarning($"maps.json not found at {mapsJsonPath}; interactive maps will be unavailable.");
-                _parsedMapsDataCache = new();
-                _parsedMapsDataWriteTimeUtc = currentWriteTimeUtc;
-                _mapsByIdCache = new();
-                _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
-                return _mapsByIdCache;
+                return ResetCache(currentWriteTimeUtc);
             }
 
             // Keep the parsed JSON independently of the id-matching cache so retries while the
@@ -72,12 +68,17 @@ public static class MapDataLoader
         {
             // LogWarning: corrupt or unreadable map data must not terminate the process.
             Logger.LogWarning("Failed to load maps.json; interactive maps will be unavailable.", e);
-            _parsedMapsDataCache = new();
-            _parsedMapsDataWriteTimeUtc = currentWriteTimeUtc;
-            _mapsByIdCache = new();
-            _mapsByIdCacheWriteTimeUtc = currentWriteTimeUtc;
-            return _mapsByIdCache;
+            return ResetCache(currentWriteTimeUtc);
         }
+    }
+
+    private static Dictionary<string, InteractiveMapData.Map> ResetCache(DateTime writeTimeUtc)
+    {
+        _parsedMapsDataCache = new();
+        _parsedMapsDataWriteTimeUtc = writeTimeUtc;
+        _mapsByIdCache = new();
+        _mapsByIdCacheWriteTimeUtc = writeTimeUtc;
+        return _mapsByIdCache;
     }
 
     /// <summary>

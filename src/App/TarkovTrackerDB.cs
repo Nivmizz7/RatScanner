@@ -157,11 +157,7 @@ public class TarkovTrackerDB : IDisposable
 
         lock (_stateLock)
         {
-            if (
-                string.Equals(_configuredToken, token, StringComparison.Ordinal)
-                && string.Equals(_configuredEndpoint, endpoint, StringComparison.Ordinal)
-                && _configuredMode == mode
-            )
+            if (IsCurrentConfiguration(token, endpoint, mode))
                 return _configurationGeneration;
 
             _configurationCancellation.Cancel();
@@ -188,6 +184,11 @@ public class TarkovTrackerDB : IDisposable
         lock (_stateLock)
             return generation == _configurationGeneration;
     }
+
+    private bool IsCurrentConfiguration(string? token, string endpoint, GameMode mode) =>
+        string.Equals(_configuredToken, token, StringComparison.Ordinal)
+        && string.Equals(_configuredEndpoint, endpoint, StringComparison.Ordinal)
+        && _configuredMode == mode;
 
     public bool Init() => InitAsync().GetAwaiter().GetResult();
 
@@ -330,11 +331,7 @@ public class TarkovTrackerDB : IDisposable
 
             lock (_stateLock)
             {
-                if (
-                    string.Equals(_configuredToken, token, StringComparison.Ordinal)
-                    && string.Equals(_configuredEndpoint, endpoint, StringComparison.Ordinal)
-                    && _configuredMode == mode
-                )
+                if (IsCurrentConfiguration(token, endpoint, mode))
                     _token = response;
             }
             return TrackerValidationResult.Success;

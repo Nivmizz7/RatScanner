@@ -33,14 +33,26 @@ internal static class JsonApiModels
 
     // Hideout and traders are id→object maps at data root (no nested key).
 
-    internal sealed class RawItem
+    internal abstract class Identifiable
     {
         [JsonProperty("id")]
         public string? Id { get; set; }
+    }
 
+    internal abstract class Entity : Identifiable
+    {
         [JsonProperty("name")]
         public string? Name { get; set; }
+    }
 
+    internal abstract class NamedEntity : Entity
+    {
+        [JsonProperty("normalizedName")]
+        public string? NormalizedName { get; set; }
+    }
+
+    internal sealed class RawItem : Entity
+    {
         [JsonProperty("shortName")]
         public string? ShortName { get; set; }
 
@@ -111,29 +123,14 @@ internal static class JsonApiModels
         public int? Price { get; set; }
     }
 
-    internal sealed class RawTrader
+    internal sealed class RawTrader : NamedEntity
     {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
-        [JsonProperty("name")]
-        public string? Name { get; set; }
-
-        [JsonProperty("normalizedName")]
-        public string? NormalizedName { get; set; }
-
         [JsonProperty("imageLink")]
         public string? ImageLink { get; set; }
     }
 
-    internal sealed class RawTask
+    internal sealed class RawTask : Entity
     {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
-        [JsonProperty("name")]
-        public string? Name { get; set; }
-
         [JsonProperty("wikiLink")]
         public string? WikiLink { get; set; }
 
@@ -150,32 +147,20 @@ internal static class JsonApiModels
         public List<JObject>? Objectives { get; set; }
     }
 
-    internal sealed class RawHideoutStation
+    internal sealed class RawHideoutStation : Entity
     {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
-        [JsonProperty("name")]
-        public string? Name { get; set; }
-
         [JsonProperty("levels")]
         public List<RawHideoutLevel>? Levels { get; set; }
     }
 
-    internal sealed class RawHideoutLevel
+    internal sealed class RawHideoutLevel : Identifiable
     {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
         [JsonProperty("itemRequirements")]
         public List<RawHideoutItemReq>? ItemRequirements { get; set; }
     }
 
-    internal sealed class RawHideoutItemReq
+    internal sealed class RawHideoutItemReq : Identifiable
     {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
         [JsonProperty("item")]
         public string? Item { get; set; }
 
@@ -192,15 +177,5 @@ internal static class JsonApiModels
         public bool FoundInRaid { get; set; }
     }
 
-    internal sealed class RawMap
-    {
-        [JsonProperty("id")]
-        public string? Id { get; set; }
-
-        [JsonProperty("name")]
-        public string? Name { get; set; }
-
-        [JsonProperty("normalizedName")]
-        public string? NormalizedName { get; set; }
-    }
+    internal sealed class RawMap : NamedEntity { }
 }

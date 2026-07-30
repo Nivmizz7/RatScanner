@@ -190,12 +190,10 @@ internal static class UserActivityHelper
             // If SetWindowsHookEx fails
             if (hMouseHook == 0)
             {
-                // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
                 int errorCode = Marshal.GetLastWin32Error();
                 // Do cleanup
                 Stop(true, false, false);
-                // Initializes and throws a new instance of the Win32Exception class with the specified error
-                throw new Win32Exception(errorCode);
+                ThrowLastWin32Error(errorCode);
             }
 
             mouseHookInstalledHere = true;
@@ -216,13 +214,11 @@ internal static class UserActivityHelper
             // If SetWindowsHookEx fails
             if (hKeyboardHook == 0)
             {
-                // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
                 int errorCode = Marshal.GetLastWin32Error();
                 // Roll back the mouse hook if this call installed it, so a partial failure
                 // leaves the hook state as it was before Start was called.
                 Stop(mouseHookInstalledHere, true, false);
-                // Initializes and throws a new instance of the Win32Exception class with the specified error
-                throw new Win32Exception(errorCode);
+                ThrowLastWin32Error(errorCode);
             }
         }
     }
@@ -248,10 +244,7 @@ internal static class UserActivityHelper
             // If failed and exception must be thrown
             if (!retMouse && throwExceptions)
             {
-                // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
-                int errorCode = Marshal.GetLastWin32Error();
-                // Initializes and throws a new instance of the Win32Exception class with the specified error
-                throw new Win32Exception(errorCode);
+                ThrowLastWin32Error();
             }
         }
 
@@ -267,13 +260,13 @@ internal static class UserActivityHelper
             // If failed and exception must be thrown
             if (!retKeyboard && throwExceptions)
             {
-                // Returns the error code returned by the last unmanaged function called using platform invoke that has the DllImportAttribute.SetLastError flag set
-                int errorCode = Marshal.GetLastWin32Error();
-                // Initializes and throws a new instance of the Win32Exception class with the specified error
-                throw new Win32Exception(errorCode);
+                ThrowLastWin32Error();
             }
         }
     }
+
+    private static void ThrowLastWin32Error(int? errorCode = null) =>
+        throw new Win32Exception(errorCode ?? Marshal.GetLastWin32Error());
 
     private static nint KeyboardHookProc(int nCode, nint wParam, nint lParam)
     {

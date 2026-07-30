@@ -159,14 +159,7 @@ internal static class Logger
     {
         while (true)
         {
-            lock (SyncObject)
-            {
-                StringBuilder batch = new();
-                while (Backlog.TryDequeue(out string? entry))
-                    batch.Append(entry);
-                if (batch.Length > 0)
-                    AppendToLogRaw(batch.ToString());
-            }
+            FlushBacklogLocked();
 
             Interlocked.Exchange(ref _processingBacklog, 0);
             if (Backlog.IsEmpty || Interlocked.CompareExchange(ref _processingBacklog, 1, 0) != 0)
@@ -174,7 +167,9 @@ internal static class Logger
         }
     }
 
-    internal static void Flush()
+    internal static void Flush() => FlushBacklogLocked();
+
+    private static void FlushBacklogLocked()
     {
         lock (SyncObject)
         {
