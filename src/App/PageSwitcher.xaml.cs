@@ -811,7 +811,8 @@ public partial class PageSwitcher : Window
     private readonly DispatcherTimer _fitAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     private bool _fitAnimationRunning;
     private bool _fitApplying;
-    private double? _fitWrittenHeight;
+    private bool _fitWritePendingLayout;
+    private long _fitWriteGeneration;
     private double? _fitAnchor;
     private DateTime _fitAnimationStart;
     private double _fitAnimationFrom;
@@ -882,17 +883,14 @@ public partial class PageSwitcher : Window
 
     private void OnWindowSizeChangedForFit(object? sender, SizeChangedEventArgs e)
     {
-        // Programmatic fit writes are flagged; anything else is a user resize
-        // (or maximize/restore) which stops the animator and ends fit ownership.
-        if (
-            _fitApplying
-            || _fitWrittenHeight is double writtenHeight && Math.Abs(e.NewSize.Height - writtenHeight) <= 1.0
-        )
+        // A Height write may raise SizeChanged synchronously or during the next
+        // layout pass. Ignore only that operation-scoped event; user input runs
+        // after the pending layout marker has been cleared.
+        if (_fitApplying || _fitWritePendingLayout)
         {
-            _fitWrittenHeight = null;
+            _fitWritePendingLayout = false;
             return;
         }
-        _fitWrittenHeight = null;
         if (_fitAnimationRunning)
         {
             _fitAnimationTimer.Stop();
@@ -904,7 +902,8 @@ public partial class PageSwitcher : Window
 
     private void SetFitHeight(double height)
     {
-        _fitWrittenHeight = height;
+        long generation = ++_fitWriteGeneration;
+        _fitWritePendingLayout = true;
         _fitApplying = true;
         try
         {
@@ -914,6 +913,15 @@ public partial class PageSwitcher : Window
         {
             _fitApplying = false;
         }
+
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            () =>
+            {
+                if (_fitWriteGeneration == generation)
+                    _fitWritePendingLayout = false;
+            }
+        );
     }
 
     private void StartFitAnimation(double target)

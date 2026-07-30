@@ -168,7 +168,13 @@
             return;
         }
 
-        if (_visibleState == _state || _pendingState == _state)
+        if (_visibleState == _state)
+        {
+            CancelPendingShow();
+            return;
+        }
+
+        if (_pendingState == _state)
             return;
 
         CancelPendingShow();
