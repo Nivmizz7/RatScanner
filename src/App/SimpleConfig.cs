@@ -111,11 +111,11 @@ internal class SimpleConfig
         throw new InvalidDataException($"Configuration value '{Section}.{key}' is too long.");
     }
 
-    internal string ReadString(string key, string defaultValue)
+    private T ReadOrDefault<T>(Func<T> read, T defaultValue)
     {
         try
         {
-            return ReadStringInternal(key);
+            return read();
         }
         catch (Exception)
         {
@@ -123,78 +123,48 @@ internal class SimpleConfig
         }
     }
 
-    internal string ReadSecureString(string key, string defaultValue)
-    {
-        try
-        {
-            string hexString = ReadStringInternal(key);
-            if (string.IsNullOrEmpty(hexString))
-                return "";
-            byte[] encryptedBytes = Convert.FromHexString(hexString);
-            byte[] decryptedBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(decryptedBytes);
-        }
-        catch (Exception)
-        {
-            return defaultValue;
-        }
-    }
+    internal string ReadString(string key, string defaultValue) =>
+        ReadOrDefault(() => ReadStringInternal(key), defaultValue);
 
-    internal int ReadInt(string key, int defaultValue)
-    {
-        try
-        {
-            return int.Parse(ReadStringInternal(key), CultureInfo.InvariantCulture);
-        }
-        catch (Exception)
-        {
-            return defaultValue;
-        }
-    }
+    internal string ReadSecureString(string key, string defaultValue) =>
+        ReadOrDefault(
+            () =>
+            {
+                string hexString = ReadStringInternal(key);
+                if (string.IsNullOrEmpty(hexString))
+                    return "";
+                byte[] encryptedBytes = Convert.FromHexString(hexString);
+                byte[] decryptedBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(decryptedBytes);
+            },
+            defaultValue
+        );
 
-    internal float ReadFloat(string key, float defaultValue)
-    {
-        try
-        {
-            return float.Parse(ReadStringInternal(key), CultureInfo.InvariantCulture);
-        }
-        catch (Exception)
-        {
-            return defaultValue;
-        }
-    }
+    internal int ReadInt(string key, int defaultValue) =>
+        ReadOrDefault(() => int.Parse(ReadStringInternal(key), CultureInfo.InvariantCulture), defaultValue);
 
-    internal bool ReadBool(string key, bool defaultValue)
-    {
-        try
-        {
-            return bool.Parse(ReadStringInternal(key));
-        }
-        catch (Exception)
-        {
-            return defaultValue;
-        }
-    }
+    internal float ReadFloat(string key, float defaultValue) =>
+        ReadOrDefault(() => float.Parse(ReadStringInternal(key), CultureInfo.InvariantCulture), defaultValue);
+
+    internal bool ReadBool(string key, bool defaultValue) =>
+        ReadOrDefault(() => bool.Parse(ReadStringInternal(key)), defaultValue);
 
     internal IEnumerable<TEnum> ReadEnumerableEnum<TEnum>(string key, IEnumerable<TEnum> defaultValue)
-        where TEnum : struct, Enum
-    {
-        try
-        {
-            string[]? readStrings = ReadStringInternal(key)?.Split(EnumerableSeparator);
-            if (readStrings == null || readStrings.Length == 0)
-                return defaultValue;
-            if (readStrings[0] == "null")
-                return Enumerable.Empty<TEnum>();
-            if (readStrings.Length == 1 && readStrings[0] == "")
-                return defaultValue;
-            return readStrings.Select(Enum.Parse<TEnum>);
-        }
-        catch (Exception)
-        {
-            return defaultValue;
-        }
-    }
+        where TEnum : struct, Enum =>
+        ReadOrDefault(
+            () =>
+            {
+                string[]? readStrings = ReadStringInternal(key)?.Split(EnumerableSeparator);
+                if (readStrings == null || readStrings.Length == 0)
+                    throw new InvalidOperationException("No enum values found.");
+                if (readStrings[0] == "null")
+                    return Enumerable.Empty<TEnum>();
+                if (readStrings.Length == 1 && readStrings[0] == "")
+                    throw new InvalidOperationException("No enum values found.");
+                return readStrings.Select(Enum.Parse<TEnum>);
+            },
+            defaultValue
+        );
 
     internal Hotkey ReadHotkey(string key, Hotkey? defaultValue)
     {

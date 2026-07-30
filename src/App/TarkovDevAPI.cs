@@ -153,7 +153,7 @@ public static class TarkovDevAPI
 
     #region Cache plumbing
 
-    private static bool TryLoadFromOfflineCache(string baseQueryKey, long ttl, Func<string, object?> materialize)
+    private static bool TryLoadFromOfflineCache(string baseQueryKey, long ttl)
     {
         if (Cache.ContainsKey(baseQueryKey))
             return true;
@@ -162,7 +162,7 @@ public static class TarkovDevAPI
         {
             try
             {
-                object? results = materialize(cachedResponse);
+                object? results = MaterializeCachedArray(baseQueryKey, cachedResponse);
                 if (results == null)
                     return false;
 
@@ -417,50 +417,14 @@ public static class TarkovDevAPI
     {
         Logger.LogInfo("Attempting to load API cache from offline storage...");
 
-        bool itemsLoaded = TryLoadFromOfflineCache(
-            ItemsQueryKey(),
-            RatConfig.MediumTTL,
-            json => JsonConvert.DeserializeObject<Item[]>(json, JsonSettings)
-        );
-        bool tasksLoaded = TryLoadFromOfflineCache(
-            TasksQueryKey(),
-            RatConfig.LongTTL,
-            json => JsonConvert.DeserializeObject<TTask[]>(json, JsonSettings)
-        );
-        bool hideoutLoaded = TryLoadFromOfflineCache(
-            HideoutStationsQueryKey(),
-            RatConfig.LongTTL,
-            json => JsonConvert.DeserializeObject<HideoutStation[]>(json, JsonSettings)
-        );
+        bool itemsLoaded = TryLoadFromOfflineCache(ItemsQueryKey(), RatConfig.MediumTTL);
+        bool tasksLoaded = TryLoadFromOfflineCache(TasksQueryKey(), RatConfig.LongTTL);
+        bool hideoutLoaded = TryLoadFromOfflineCache(HideoutStationsQueryKey(), RatConfig.LongTTL);
         // Maps are optional and off the cold-start path. Offline projected Map[] is tiny;
         // network refresh uses slim GraphQL with json blob fallback.
-        bool mapsLoaded = TryLoadFromOfflineCache(
-            MapsQueryKey(),
-            RatConfig.LongTTL,
-            json => JsonConvert.DeserializeObject<Map[]>(json, JsonSettings)
-        );
-        bool craftsLoaded = TryLoadFromOfflineCache(
-            CraftsQueryKey(),
-            RatConfig.LongTTL,
-            json =>
-            {
-                Craft[]? crafts = JsonConvert.DeserializeObject<Craft[]>(json, JsonSettings);
-                if (crafts != null)
-                    RebuildCraftIndex(crafts);
-                return crafts;
-            }
-        );
-        bool bartersLoaded = TryLoadFromOfflineCache(
-            BartersQueryKey(),
-            RatConfig.LongTTL,
-            json =>
-            {
-                Barter[]? barters = JsonConvert.DeserializeObject<Barter[]>(json, JsonSettings);
-                if (barters != null)
-                    RebuildBarterIndex(barters);
-                return barters;
-            }
-        );
+        bool mapsLoaded = TryLoadFromOfflineCache(MapsQueryKey(), RatConfig.LongTTL);
+        bool craftsLoaded = TryLoadFromOfflineCache(CraftsQueryKey(), RatConfig.LongTTL);
+        bool bartersLoaded = TryLoadFromOfflineCache(BartersQueryKey(), RatConfig.LongTTL);
 
         // Scanner-critical caches only. Maps are deferred; craft/barter chips degrade if missing.
         bool allLoaded = itemsLoaded && tasksLoaded && hideoutLoaded;
@@ -1094,18 +1058,11 @@ public static class TarkovDevAPI
     #region Craft / barter document fetch
 
     /// <summary>Loads craft recipes used to index craftable product item ids.</summary>
-    internal static async Task<Craft[]> FetchCraftsAsync(GameMode gameMode = GameMode.Regular)
-    {
-        string json = await GetJsonString($"{GameModePath(gameMode)}/crafts").ConfigureAwait(false);
-        var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<List<JObject>>>(json, JsonSettings);
-        List<JObject>? list = envelope?.Data;
-        // A missing data envelope indicates a transient/malformed response; throw so the request
-        // layer retries with backoff instead of caching emptiness. An explicit empty list is a
-        // valid "no crafts" answer and still yields Array.Empty below.
-        if (list == null)
-            throw new InvalidOperationException("Crafts response contained no data envelope.");
-
-        return list.Select(o => new Craft
+    internal static Task<Craft[]> FetchCraftsAsync(GameMode gameMode = GameMode.Regular) =>
+        FetchJObjectListAsync(
+            $"{GameModePath(gameMode)}/crafts",
+            "Crafts",
+            o => new Craft
             {
                 Id = o.Value<string>("id") ?? string.Empty,
                 StationId = o.Value<string>("station"),
@@ -1120,23 +1077,29 @@ public static class TarkovDevAPI
                         Count = r["count"]?.Value<int>() ?? 0,
                     })
                     .ToList(),
-            })
-            .ToArray();
-    }
+            }
+        );
 
-    /// <summary>Loads barters used to index barterable product item ids.</summary>
-    internal static async Task<Barter[]> FetchBartersAsync(GameMode gameMode = GameMode.Regular)
+    private static async Task<T[]> FetchJObjectListAsync<T>(string path, string name, Func<JObject, T> map)
     {
-        string json = await GetJsonString($"{GameModePath(gameMode)}/barters").ConfigureAwait(false);
+        string json = await GetJsonString(path).ConfigureAwait(false);
         var envelope = JsonConvert.DeserializeObject<JsonApiModels.Envelope<List<JObject>>>(json, JsonSettings);
         List<JObject>? list = envelope?.Data;
         // A missing data envelope indicates a transient/malformed response; throw so the request
         // layer retries with backoff instead of caching emptiness. An explicit empty list is a
-        // valid "no barters" answer and still yields Array.Empty below.
+        // valid answer and still yields Array.Empty below.
         if (list == null)
-            throw new InvalidOperationException("Barters response contained no data envelope.");
+            throw new InvalidOperationException($"{name} response contained no data envelope.");
 
-        return list.Select(o => new Barter
+        return list.Select(map).ToArray();
+    }
+
+    /// <summary>Loads barters used to index barterable product item ids.</summary>
+    internal static Task<Barter[]> FetchBartersAsync(GameMode gameMode = GameMode.Regular) =>
+        FetchJObjectListAsync(
+            $"{GameModePath(gameMode)}/barters",
+            "Barters",
+            o => new Barter
             {
                 Id = o.Value<string>("id") ?? string.Empty,
                 TraderId = o.Value<string>("trader"),
@@ -1150,9 +1113,8 @@ public static class TarkovDevAPI
                         Count = r["count"]?.Value<int>() ?? 0,
                     })
                     .ToList(),
-            })
-            .ToArray();
-    }
+            }
+        );
 
     #endregion
 }

@@ -173,22 +173,9 @@ public static class ItemExtensions
             return Math.Max(0, needed);
         }
 
-        if (objective.Type == "mark")
+        if (objective.Type is "mark" or "buildWeapon")
         {
-            if (objective.MarkerItemId != item.Id)
-                return 0;
-            if (!showNonFir)
-                return 0;
-            requiresFir = false;
-            needed = Math.Max(1, objective.Count);
-            foreach (Progress p in progress.TaskObjectives.Where(p => p.Id == objective.Id))
-                needed -= 1;
-            return Math.Max(0, needed);
-        }
-
-        if (objective.Type == "buildWeapon")
-        {
-            if (objective.BuildItemId != item.Id)
+            if (objective.MarkerItemId != item.Id && objective.BuildItemId != item.Id)
                 return 0;
             if (!showNonFir)
                 return 0;
