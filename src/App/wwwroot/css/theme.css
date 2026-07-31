@@ -1,17 +1,31 @@
 :root {
-    --rs-bg: #0b0f14; --rs-sidebar: #101620; --rs-surface: #141b25;
-    --rs-surface-2: #18212d; --rs-elevated: #1c2633;
-    --rs-border: #293341; --rs-border-subtle: #202a36; --rs-divider: #26303c;
-    --rs-text: #f4f7fa; --rs-text-2: #a8b0bc; --rs-muted: #778291;
-    --rs-purple: #9272f8; --rs-purple-hover: #a58bfa; --rs-purple-surface: rgba(146,114,248,.15);
-    --rs-success: #58d17b; --rs-success-strong: #42bc69; --rs-success-surface: rgba(88,209,123,.10);
-    --rs-warning: #e7ad55; --rs-danger: #eb6c73; --rs-info: #68a7f4;
+    /* Neutral dark surfaces — lifted just enough that the app stays visible
+       against a dark desktop without looking lifted from the game palette. */
+    --rs-bg: #111516; --rs-sidebar: #14191a; --rs-surface: #191e1f;
+    --rs-surface-2: #202627; --rs-elevated: #22292a;
+    --rs-border: #343c3d; --rs-border-subtle: #262d2e; --rs-divider: #2b3334;
+    --rs-border-strong: #41494a;
+    --rs-text: #eef1ef; --rs-text-2: #a6afac; --rs-muted: #77817e;
+    /* Interaction accent = muted brass. Green is reserved for semantics. */
+    --rs-accent: #a69a77; --rs-accent-hover: #b8ac8c; --rs-accent-surface: rgba(166,154,119,.15);
+    --rs-success: #70a77c; --rs-success-strong: #70a77c; --rs-success-surface: rgba(112,167,124,.12);
+    --rs-warning: #c59a59; --rs-warning-surface: rgba(197,154,89,.10);
+    --rs-danger: #c96f72; --rs-danger-surface: rgba(201,111,114,.12);
+    --rs-info: var(--rs-text-2);
+    --rs-purple: var(--rs-accent); --rs-purple-hover: var(--rs-accent-hover);
+    --rs-purple-surface: var(--rs-accent-surface);
     --rs-radius-sm: 8px; --rs-radius: 12px;
     --rs-sidebar-width: 184px; --rs-sidebar-rail-width: 56px;
     /* Effective sidebar inset for main content. Updated at runtime by JS
        (RatScanner.setSidebarState) to the rail width, full width, or 0 so
        dialogs center in the actual content area. */
     --rs-sidebar-active-width: var(--rs-sidebar-width);
+
+    /* Shared horizontal page gutters: every page shell (utility row and
+       content) uses the same symmetric inset. The compact value applies
+       below the narrow breakpoint (680px), matching Index.razor.css. */
+    --rs-page-gutter-x: 16px;
+    --rs-page-gutter-x-compact: 10px;
 }
 
 html, body, #app { height: 100%; margin: 0; background: var(--rs-bg); color: var(--rs-text); }
@@ -20,6 +34,19 @@ body { font-family: "Segoe UI", system-ui, sans-serif; }
 :focus-visible { outline: 2px solid var(--rs-purple); outline-offset: 2px; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
+
+/* Visually hidden but announced to assistive tech. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 
 /*

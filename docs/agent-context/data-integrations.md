@@ -80,6 +80,11 @@ Intentional dual path (documented on `TarkovDevAPI`):
 - `.org` token metadata (`gameMode`, with token-prefix fallback for legacy responses) must match the intended PvP/PvE slot before the key is saved.
 - `APIClient` performs bearer GETs with the shared UA, cancellation, and distinct unauthorized / forbidden permission / rate-limit / service failure mapping.
 - Models: `FetchModels/TarkovTracker/*`.
+- Progress payload facts the UI relies on: `/progress` exposes task/objective completion (including `failed` / `invalid` flags), `playerLevel`, `pmcFaction`, and `gameEdition`. It does **not** expose trader standing, Scav karma, or task-completion timestamps, so reputation-gated and timed tasks can never be classified as definitely active.
+
+### Quest requirement classification
+
+`QuestNeedClassifier` (`src/App/QuestNeedClassifier.cs`) is the single place that turns task gates + tracker progress into per-item need buckets: active (started), available (unstarted but unlocked), future (level/prerequisite locked), conditional (trader-standing / faction-unknown / unmodeled gates), plus counts for kappa and weapon hand-ins. Buckets must never be merged into one "needed" number; conditional needs must never present as active. Task gate fields (level, prerequisites, trader requirements, faction) come from json.tarkov.dev tasks and are projected in `TarkovDev/Models.cs`; the offline tasks cache key is versioned (`tasks_v2_…`) — bump it when the projected task shape changes.
 
 Never log API keys. A failed replacement leaves the previously stored key untouched.
 

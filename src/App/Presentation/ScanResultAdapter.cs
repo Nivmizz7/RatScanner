@@ -12,7 +12,7 @@ internal static class ScanResultAdapter
 
     internal static ScanResultViewModel Map(ItemScan scan, MenuVM menu, bool isHistoricalResult)
     {
-        RequirementBreakdown quests = scan.Item.GetTaskRequirementBreakdown();
+        QuestNeedReport quests = scan.Item.GetQuestNeedReport();
         RequirementBreakdown hideout = scan.Item.GetHideoutRequirementBreakdown();
         AcquisitionInfo acquisition = scan.Item.GetAcquisitionInfo();
         return Map(scan, quests, hideout, acquisition, isHistoricalResult);
@@ -26,7 +26,7 @@ internal static class ScanResultAdapter
     ) =>
         Map(
             scan,
-            new RequirementBreakdown(questRemaining, questRemaining, 0),
+            new QuestNeedReport { ActiveNow = questRemaining, ActiveNowFir = questRemaining },
             new RequirementBreakdown(hideoutRemaining, 0, hideoutRemaining),
             scan.Item.GetAcquisitionInfo(),
             isHistoricalResult
@@ -34,12 +34,16 @@ internal static class ScanResultAdapter
 
     internal static ScanResultViewModel Map(
         ItemScan scan,
-        RequirementBreakdown quests,
+        QuestNeedReport quests,
         RequirementBreakdown hideout,
         AcquisitionInfo acquisition,
         bool isHistoricalResult
     )
     {
+        // The advisory applies to any unverifiable assembly need (current OR future/conditional):
+        // a bare receiver must never read as a guaranteed quest hand-in.
+        bool isWeapon = scan.Item.Types?.Contains("gun", StringComparer.OrdinalIgnoreCase) == true;
+        bool weaponUsableAdvisory = isWeapon && quests.WeaponHandInTotal > 0;
         var item = scan.Item;
         int slots = Math.Max(1, item.Width * item.Height);
         bool manual = scan is DefaultItemScan;
@@ -89,7 +93,7 @@ internal static class ScanResultAdapter
                 ? null
                 : new TraderViewModel(trader?.Name, trader?.Trader?.ImageLink, traderPrice, traderPrice / slots),
             RecommendationSelector.Select(fleaPrice, traderPrice, trader?.Name, quests, hideout, acquisition),
-            MapRequirement(quests),
+            new QuestNeedViewModel(quests, weaponUsableAdvisory),
             MapRequirement(hideout),
             new AcquisitionViewModel(
                 acquisition.CanCraft,

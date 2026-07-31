@@ -95,6 +95,38 @@ public sealed class Task
     public bool? KappaRequired { get; set; }
     public string? TraderImageLink { get; set; }
     public IReadOnlyList<TaskObjective>? Objectives { get; set; }
+
+    /// <summary>Minimum PMC level required to unlock the task (0/1 = no meaningful gate).</summary>
+    public int MinPlayerLevel { get; set; }
+
+    /// <summary>Faction restriction ("USEC" / "BEAR" / "Any" / null).</summary>
+    public string? FactionName { get; set; }
+
+    /// <summary>Prerequisite tasks with the states that satisfy them.</summary>
+    public IReadOnlyList<TaskPrerequisite>? TaskRequirements { get; set; }
+
+    /// <summary>Trader standing gates (rep / loyalty) — player data for these is NOT available from the tracker API.</summary>
+    public IReadOnlyList<TaskTraderRequirement>? TraderRequirements { get; set; }
+
+    /// <summary>
+    /// True when the task has gates RatScanner cannot model (dialogue unlocks,
+    /// timed availability, Lightkeeper) — must be treated as conditional.
+    /// </summary>
+    public bool HasUnmodeledRequirements { get; set; }
+}
+
+public sealed class TaskPrerequisite
+{
+    public string TaskId { get; set; } = string.Empty;
+    public IReadOnlyList<string> Statuses { get; set; } = System.Array.Empty<string>();
+}
+
+public sealed class TaskTraderRequirement
+{
+    public string? RequirementType { get; set; }
+    public string? CompareMethod { get; set; }
+    public double Value { get; set; }
+    public string? TraderId { get; set; }
 }
 
 /// <summary>
@@ -108,6 +140,10 @@ public sealed class TaskObjective
     public string? Description { get; set; }
     public int Count { get; set; }
     public bool FoundInRaid { get; set; }
+
+    /// <summary>Optional objectives are not strictly required and never add to needed counts.</summary>
+    public bool Optional { get; set; }
+
     public IReadOnlyList<string>? ItemIds { get; set; }
     public string? MarkerItemId { get; set; }
     public string? BuildItemId { get; set; }

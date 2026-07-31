@@ -22,6 +22,15 @@
 				<span>@Localizer["ScanNav"]</span>
 			</NavLink>
 
+			<!-- Scanner context: the sidebar is the single authoritative mode
+			     selector; the toolbar only carries a compact current-mode
+			     indicator (visible when this sidebar is not). -->
+			<div class="sidebar-mode"
+			     aria-label="@Localizer["ScannerSectionLabel"]">
+				<span class="sidebar-mode-label">@Localizer["ScannerSectionLabel"]</span>
+				<GameModeSwitch />
+			</div>
+
 			<NavLink href="/app/settings/general"
 			         @onclick="CloseDrawerAfterNavAsync"
 			         title="@Localizer["SettingsNavGroup"]">

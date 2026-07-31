@@ -5,11 +5,17 @@
 						 xmlns:local="clr-namespace:RatScanner"
              StartupUri="PageSwitcher.xaml">
 	<Application.Resources>
-		<SolidColorBrush x:Key="NativeTitleBarBackgroundBrush" Color="#FFFFFF" />
-		<SolidColorBrush x:Key="NativeTitleBarForegroundBrush" Color="#000000" />
-		<SolidColorBrush x:Key="NativeTitleBarInactiveForegroundBrush" Color="#777777" />
-		<SolidColorBrush x:Key="NativeTitleBarHoverBrush" Color="#E5E5E5" />
-		<SolidColorBrush x:Key="NativeTitleBarPressedBrush" Color="#CACACA" />
+		<SolidColorBrush x:Key="NativeTitleBarBackgroundBrush" Color="#15191A" />
+		<SolidColorBrush x:Key="NativeTitleBarForegroundBrush" Color="#EEF1EF" />
+		<SolidColorBrush x:Key="NativeTitleBarInactiveForegroundBrush" Color="#77817E" />
+		<SolidColorBrush x:Key="NativeTitleBarControlHoverBrush" Color="#262C2D" />
+		<SolidColorBrush x:Key="NativeTitleBarControlPressedBrush" Color="#1A1F20" />
+		<SolidColorBrush x:Key="NativeTitleBarControlBorderBrush" Color="#3A4445" />
+		<SolidColorBrush x:Key="NativeTitleBarCloseHoverBrush" Color="#A04548" />
+		<SolidColorBrush x:Key="NativeTitleBarClosePressedBrush" Color="#7E3638" />
+		<SolidColorBrush x:Key="NativeTitleBarCloseHoverBorderBrush" Color="#C96F72" />
+		<SolidColorBrush x:Key="NativeTitleBarCloseForegroundBrush" Color="#F4EBEB" />
+		<SolidColorBrush x:Key="NativeTitleBarVersionBrush" Color="#77817E" />
 		<view:IntToLongPriceConverter x:Key="IntToLongPriceConverter" />
 
 		<Style x:Key="FocusVisual">
@@ -76,7 +82,9 @@
 					<ControlTemplate TargetType="{x:Type Button}">
 						<Border x:Name="border"
 						        Background="Transparent"
-						        BorderThickness="0"
+						        BorderBrush="Transparent"
+						        BorderThickness="1"
+						        CornerRadius="6"
 						        SnapsToDevicePixels="true">
 							<ContentPresenter x:Name="contentPresenter"
 							                  Margin="0"
@@ -90,13 +98,19 @@
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="{DynamicResource NativeTitleBarHoverBrush}" />
+								        Value="{DynamicResource NativeTitleBarControlHoverBrush}" />
+								<Setter TargetName="border"
+								        Property="BorderBrush"
+								        Value="{DynamicResource NativeTitleBarControlBorderBrush}" />
 							</Trigger>
 							<Trigger Property="IsPressed"
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="{DynamicResource NativeTitleBarPressedBrush}" />
+								        Value="{DynamicResource NativeTitleBarControlPressedBrush}" />
+								<Setter TargetName="border"
+								        Property="BorderBrush"
+								        Value="{DynamicResource NativeTitleBarControlBorderBrush}" />
 							</Trigger>
 							<DataTrigger
 								Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"
@@ -125,7 +139,9 @@
 					<ControlTemplate TargetType="{x:Type Button}">
 						<Border x:Name="border"
 						        Background="Transparent"
-						        BorderThickness="0"
+						        BorderBrush="Transparent"
+						        BorderThickness="1"
+						        CornerRadius="6"
 						        SnapsToDevicePixels="true">
 							<ContentPresenter x:Name="contentPresenter"
 							                  Margin="0"
@@ -139,17 +155,20 @@
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="#E81123" />
+								        Value="{DynamicResource NativeTitleBarCloseHoverBrush}" />
+								<Setter TargetName="border"
+								        Property="BorderBrush"
+								        Value="{DynamicResource NativeTitleBarCloseHoverBorderBrush}" />
 								<Setter Property="Foreground"
-								        Value="#FFFFFF" />
+								        Value="{DynamicResource NativeTitleBarCloseForegroundBrush}" />
 							</Trigger>
 							<Trigger Property="IsPressed"
 							         Value="true">
 								<Setter TargetName="border"
 								        Property="Background"
-								        Value="#F1707A" />
+								        Value="{DynamicResource NativeTitleBarClosePressedBrush}" />
 								<Setter Property="Foreground"
-								        Value="#FFFFFF" />
+								        Value="{DynamicResource NativeTitleBarCloseForegroundBrush}" />
 							</Trigger>
 							<DataTrigger
 								Binding="{Binding Path=IsActive, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Window}}}"

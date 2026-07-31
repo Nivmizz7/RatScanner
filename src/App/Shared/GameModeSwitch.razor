@@ -1,5 +1,6 @@
 ﻿@inject LocalizationService Localizer
 @inject ISnackbar Snackbar
+@implements IDisposable
 
 <div class="game-mode-switch">
 	<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
@@ -7,7 +8,7 @@
 	                ValueChanged="SetGameModeAsync"
 	                Disabled="@_switching"
 	                Size="Size.Small"
-	                Color="Color.Primary"
+	                Color="Color.Default"
 	                CheckMark="false"
 	                FixedContent="false">
 		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
@@ -21,6 +22,22 @@
 
 @code {
 	private bool _switching;
+
+	protected override void OnInitialized()
+	{
+		// Re-render when a mode switch completes from another component.
+		RatConfig.SettingsChanged += OnSettingsChanged;
+	}
+
+	private void OnSettingsChanged()
+	{
+		_ = InvokeAsync(StateHasChanged);
+	}
+
+	public void Dispose()
+	{
+		RatConfig.SettingsChanged -= OnSettingsChanged;
+	}
 
 	private async System.Threading.Tasks.Task SetGameModeAsync(RatScanner.TarkovDev.GameMode gameMode)
 	{

@@ -106,6 +106,38 @@ public sealed class AppStateService : INotifyPropertyChanged
 
     public void RequestFocusNavigationToggle() => FocusNavigationToggleRequested?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>
+    /// Raised by the scan page when its content's required CSS height changes (result
+    /// rendered, Details/Links expanded, viewport resized). The WPF host ratchets its
+    /// minimum window height and smoothly grows the window so content is never
+    /// clipped behind a scrollbar. CSS pixels map 1:1 to WPF DIPs under the
+    /// BlazorWebView composition control's automatic rasterization scaling.
+    /// </summary>
+    public event EventHandler<ContentFitChangedEventArgs>? ContentFitChanged;
+
+    /// <summary>Raised when the scan page deactivates so the host resets its floor.</summary>
+    public event EventHandler? ContentFitCleared;
+
+    internal void ReportContentFit(double requiredCssHeight, double visibleCssHeight) =>
+        ContentFitChanged?.Invoke(this, new ContentFitChangedEventArgs(requiredCssHeight, visibleCssHeight));
+
+    internal void ClearContentFit() => ContentFitCleared?.Invoke(this, EventArgs.Empty);
+
+    public sealed class ContentFitChangedEventArgs : EventArgs
+    {
+        public ContentFitChangedEventArgs(double requiredCssHeight, double visibleCssHeight)
+        {
+            RequiredCssHeight = requiredCssHeight;
+            VisibleCssHeight = visibleCssHeight;
+        }
+
+        /// <summary>Total CSS height the app shell needs to show everything without scrolling.</summary>
+        public double RequiredCssHeight { get; }
+
+        /// <summary>Current viewport (web client) CSS height.</summary>
+        public double VisibleCssHeight { get; }
+    }
+
     private void RaiseSidebarOpenChanged()
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSidebarOpen)));

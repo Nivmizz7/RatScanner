@@ -621,7 +621,9 @@ public static class TarkovDevAPI
 
     private static string TasksQueryKey() => TasksQueryKey(LocaleCode(), RatConfig.GameMode);
 
-    private static string TasksQueryKey(string locale, GameMode gameMode) => $"tasks_{locale}_{gameMode}";
+    // v2: task gate fields (level, prerequisites, trader requirements, objective optional
+    // flags) now drive requirement classification; stale v1 projected caches must be ignored.
+    private static string TasksQueryKey(string locale, GameMode gameMode) => $"tasks_v2_{locale}_{gameMode}";
 
     private static string HideoutStationsQueryKey() => HideoutStationsQueryKey(LocaleCode(), RatConfig.GameMode);
 
@@ -806,6 +808,7 @@ public static class TarkovDevAPI
                                 ?? o.Value<string>("description"),
                             Count = o.Value<int?>("count") ?? 1,
                             FoundInRaid = o.Value<bool?>("foundInRaid") ?? false,
+                            Optional = o.Value<bool?>("optional") ?? false,
                             ItemIds = itemIds,
                             MarkerItemId = markerItem,
                             BuildItemId = buildItem,
@@ -821,6 +824,46 @@ public static class TarkovDevAPI
             )
                 traderImage = trader.ImageLink;
 
+            List<TaskPrerequisite>? prerequisites = null;
+            if (raw.TaskRequirements is { Count: > 0 })
+            {
+                prerequisites = new List<TaskPrerequisite>(raw.TaskRequirements.Count);
+                foreach (JObject r in raw.TaskRequirements)
+                {
+                    // Upstream emits either a bare task id string or an object with `id`.
+                    JToken? taskTok = r["task"];
+                    string? taskId =
+                        taskTok?.Type == JTokenType.String ? taskTok.Value<string>() : taskTok?["id"]?.Value<string>();
+                    if (string.IsNullOrEmpty(taskId))
+                        continue;
+                    string[] statuses = r["status"] is JArray statusArr
+                        ? statusArr.Values<string>().Where(s => !string.IsNullOrEmpty(s)).Cast<string>().ToArray()
+                        : [];
+                    prerequisites.Add(new TaskPrerequisite { TaskId = taskId, Statuses = statuses });
+                }
+                if (prerequisites.Count == 0)
+                    prerequisites = null;
+            }
+
+            List<TaskTraderRequirement>? traderRequirements = null;
+            if (raw.TraderRequirements is { Count: > 0 })
+            {
+                traderRequirements = raw
+                    .TraderRequirements.Select(r => new TaskTraderRequirement
+                    {
+                        RequirementType = r.RequirementType,
+                        CompareMethod = r.CompareMethod,
+                        Value = r.Value,
+                        TraderId = r.Trader,
+                    })
+                    .ToList();
+            }
+
+            bool hasUnmodeled =
+                raw.OtherRequirements is { Count: > 0 }
+                || raw.AvailableDelaySecondsMax is > 0
+                || raw.LightkeeperRequired == true;
+
             projected.Add(
                 new TTask
                 {
@@ -831,6 +874,11 @@ public static class TarkovDevAPI
                     KappaRequired = raw.KappaRequired,
                     TraderImageLink = traderImage,
                     Objectives = objectives,
+                    MinPlayerLevel = raw.MinPlayerLevel,
+                    FactionName = raw.FactionName,
+                    TaskRequirements = prerequisites,
+                    TraderRequirements = traderRequirements,
+                    HasUnmodeledRequirements = hasUnmodeled,
                 }
             );
         }

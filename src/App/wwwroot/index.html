@@ -78,6 +78,100 @@
 			window.RatScanner.registerViewportRef = (ref) => { narrowRef = ref; };
 			window.RatScanner.disposeViewportRef = () => { narrowRef = null; };
 
+			// Content-fit watch: reports the scan page's required content height so the
+			// host window can keep its height at least as tall as the content instead
+			// of clipping it behind an internal scrollbar. ResizeObserver covers
+			// window/size changes; MutationObserver covers result swaps and animated
+			// collapses (Details/Links expand via inline style/class churn). Reports
+			// are rAF-coalesced and de-duplicated to the nearest CSS pixel.
+			window.RatScanner.fitWatch = (() => {
+				let resizeObserver = null;
+				let mutationObserver = null;
+				let fitRef = null;
+				let rafId = 0;
+				let lastSent = -1;
+				let probing = false;
+
+				// scrollHeight is floored at clientHeight and flex:1 sections stretch
+				// to the viewport, so neither ever reports the content's NATURAL
+				// height. Measure the page itself at height:auto with flex sizing
+				// momentarily neutralized instead — one synchronous frame, pre-paint
+				// (no flicker). Gaps, paddings and min-heights are all included.
+				const compute = () => {
+					const page = document.querySelector(".scan-page");
+					if (!page) return null;
+					probing = true;
+					const prevHeight = page.style.height;
+					const prevMinHeight = page.style.minHeight;
+					const prevFlexes = [];
+					page.style.height = "auto";
+					page.style.minHeight = "0px";
+					for (const child of page.children) {
+						prevFlexes.push(child.style.flex);
+						child.style.flex = "0 0 auto";
+					}
+					const contentHeight = page.offsetHeight;
+					for (let i = 0; i < page.children.length; i++)
+						page.children[i].style.flex = prevFlexes[i];
+					page.style.height = prevHeight;
+					page.style.minHeight = prevMinHeight;
+					mutationObserver && mutationObserver.takeRecords(); // drop probe-induced records
+					probing = false;
+					const chrome =
+						document.documentElement.clientHeight - page.clientHeight;
+					return Math.ceil(contentHeight + chrome);
+				};
+
+				const report = () => {
+					rafId = 0;
+					if (!fitRef || probing) return;
+					const required = compute();
+					if (required === null || Math.abs(required - lastSent) < 1) return;
+					lastSent = required;
+					fitRef
+						.invokeMethodAsync(
+							"OnContentFitChanged",
+							required,
+							document.documentElement.clientHeight
+						)
+						.catch(() => {});
+				};
+
+				const schedule = () => {
+					if (!rafId && !probing) rafId = requestAnimationFrame(report);
+				};
+
+				return {
+					start(dotnetRef) {
+						this.stop();
+						fitRef = dotnetRef;
+						lastSent = -1;
+						const page = document.querySelector(".scan-page");
+						if (!page) { fitRef = null; return; }
+						resizeObserver = new ResizeObserver(schedule);
+						resizeObserver.observe(page);
+						mutationObserver = new MutationObserver(schedule);
+						mutationObserver.observe(page, {
+							childList: true,
+							subtree: true,
+							attributes: true,
+							characterData: true,
+							attributeFilter: ["style", "class"],
+						});
+						schedule();
+					},
+					stop() {
+						resizeObserver?.disconnect();
+						mutationObserver?.disconnect();
+						resizeObserver = null;
+						mutationObserver = null;
+						fitRef = null;
+						if (rafId) cancelAnimationFrame(rafId);
+						rafId = 0;
+					},
+				};
+			})();
+
 			// Trap focus inside the open overlay drawer and close it on Escape.
 			document.addEventListener("keydown", (e) => {
 				const sidebar = document.getElementById("primary-sidebar");

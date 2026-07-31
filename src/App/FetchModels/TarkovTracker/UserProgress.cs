@@ -12,6 +12,14 @@ public class UserProgress
     [JsonProperty("displayName")]
     public string DisplayName { get; set; } = "Tarkov Citizen";
 
+    /// <summary>PMC level as tracked by TarkovTracker. Null when the API omits the field.</summary>
+    [JsonProperty("playerLevel")]
+    public int? PlayerLevel { get; set; }
+
+    /// <summary>PMC faction ("USEC" / "BEAR") as tracked by TarkovTracker.</summary>
+    [JsonProperty("pmcFaction")]
+    public string? PmcFaction { get; set; }
+
     [JsonProperty("tasksProgress", NullValueHandling = NullValueHandling.Ignore)]
     public List<Progress> Tasks { get; set; } = new();
 

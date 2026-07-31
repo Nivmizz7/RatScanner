@@ -1,10 +1,16 @@
 @using RatScanner.Display
+@using System.Threading
 @inject NavigationManager Navigation
 @inject LocalizationService Localizer
 @implements IDisposable
 @using Task = System.Threading.Tasks.Task
 
-<div class="scanner-status-root @(_open ? "open" : null)" @onkeydown="OnKeyDown" aria-live="polite">
+<div class="scanner-status-root @(_open ? "open" : null) @(_visibleState is null ? "empty" : null)" @onkeydown="OnKeyDown">
+    @* Announce meaningful status changes, including resolution, without
+       reserving layout space for the healthy state. *@
+    <span class="sr-only" role="status" aria-live="polite">@_announcement</span>
+    @if (_visibleState is not null)
+    {
     <button type="button"
             @ref="_control"
             class="scanner-status-control @_stateClass expanded"
@@ -17,8 +23,9 @@
         <span class="scanner-status-dot" aria-hidden="true"></span>
         <span class="scanner-status-label">@_label</span>
     </button>
+    }
 
-    @if (_open)
+    @if (_open && _visibleState is not null)
     {
         <button type="button"
                 class="scanner-status-scrim"
@@ -41,15 +48,25 @@
 </div>
 
 @code {
+    // Debounce for new non-ready states so initialization probes and quick
+    // config reloads never flash a status pill. Resolutions apply instantly.
+    private const int ShowDebounceMilliseconds = 650;
+
     private bool _open;
     private bool _subscribed;
-    private ScannerState _state = ScannerState.Paused;
+    private ScannerState _state = ScannerState.Ready;
+    private ScannerState? _visibleState;
+    private string _announcement = string.Empty;
+    private CancellationTokenSource? _pendingShowCts;
+    private ScannerState? _pendingState;
     private ElementReference _control;
     private ElementReference _popover;
     private ElementReference _action;
 
+    private ScannerState EffectiveState => _visibleState ?? _state;
+
     private string _stateClass =>
-        _state switch
+        EffectiveState switch
         {
             ScannerState.Ready => "state-ready",
             ScannerState.Paused => "state-paused",
@@ -58,7 +75,7 @@
         };
 
     private string _label =>
-        _state switch
+        EffectiveState switch
         {
             ScannerState.Ready => Localizer["StatusReady"],
             ScannerState.Paused => Localizer["StatusPaused"],
@@ -67,7 +84,7 @@
         };
 
     private string _title =>
-        _state switch
+        EffectiveState switch
         {
             ScannerState.Ready => Localizer["ScannerReady"],
             ScannerState.Paused => Localizer["ScannerPaused"],
@@ -76,7 +93,7 @@
         };
 
     private string _detail =>
-        _state switch
+        EffectiveState switch
         {
             ScannerState.Ready =>
                 Localizer["ScannerReadyDetail"],
@@ -87,12 +104,12 @@
         };
 
     private string _actionLabel =>
-        _state == ScannerState.Attention
+        EffectiveState == ScannerState.Attention
             ? Localizer["ReviewDisplaySettings"]
             : Localizer["OpenScannerSettings"];
 
     private string _settingsPath =>
-        _state == ScannerState.Attention ? "/app/settings/general" : "/app/settings/scanning";
+        EffectiveState == ScannerState.Attention ? "/app/settings/general" : "/app/settings/scanning";
 
     private string _hoverTitle => $"{_title}. {_detail}";
 
@@ -135,6 +152,69 @@
             _state = ScannerState.Attention;
         else
             _state = ScannerState.Ready;
+
+        ApplyVisibility();
+    }
+
+    private void ApplyVisibility()
+    {
+        if (_state == ScannerState.Ready)
+        {
+            CancelPendingShow();
+            bool wasVisible = _visibleState is not null || _open;
+            _visibleState = null;
+            _open = false;
+            _announcement = wasVisible ? $"{Localizer["ScannerReady"]}." : string.Empty;
+            return;
+        }
+
+        if (_visibleState == _state)
+        {
+            CancelPendingShow();
+            return;
+        }
+
+        if (_pendingState == _state)
+            return;
+
+        CancelPendingShow();
+        _pendingState = _state;
+        _pendingShowCts = new CancellationTokenSource();
+        _ = ShowAfterDebounceAsync(_state, _pendingShowCts.Token);
+    }
+
+    private void CancelPendingShow()
+    {
+        _pendingShowCts?.Cancel();
+        _pendingShowCts?.Dispose();
+        _pendingShowCts = null;
+        _pendingState = null;
+    }
+
+    private async Task ShowAfterDebounceAsync(ScannerState state, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(ShowDebounceMilliseconds, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        await InvokeAsync(() =>
+        {
+            if (cancellationToken.IsCancellationRequested || _state != state || state == ScannerState.Ready)
+                return Task.CompletedTask;
+
+            _visibleState = state;
+            _pendingShowCts?.Dispose();
+            _pendingShowCts = null;
+            _pendingState = null;
+            _announcement = $"{_title}. {_detail}".Trim();
+            StateHasChanged();
+            return Task.CompletedTask;
+        });
     }
 
     private string FormatDisplayProblem()
@@ -160,6 +240,8 @@
     private async Task ToggleAsync()
     {
         RefreshState();
+        if (_visibleState is null)
+            return;
         _open = !_open;
         await InvokeAsync(StateHasChanged);
         if (!_open)
@@ -244,6 +326,7 @@
 
     public void Dispose()
     {
+        CancelPendingShow();
         if (!_subscribed)
             return;
         RatConfig.GameDisplayConfigurationChanged -= OnDisplayChanged;

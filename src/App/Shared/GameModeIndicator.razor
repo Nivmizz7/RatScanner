@@ -1,0 +1,62 @@
+@inject AppStateService AppState
+@inject LocalizationService Localizer
+@implements IDisposable
+
+@* Compact current-mode indicator for the toolbar. The sidebar GameModeSwitch
+   is the single authoritative selector; this is only visible when the sidebar
+   is collapsed (rail) or unavailable (closed narrow drawer). Clicking it
+   opens the sidebar to the scanner section so the mode can be changed. *@
+@if (ShowIndicator)
+{
+    <button type="button"
+            class="mode-indicator"
+            aria-label="@AccessibleLabel"
+            title="@AccessibleLabel"
+            @onclick="OpenScannerSection">
+        @CurrentModeText
+    </button>
+}
+
+@code {
+    /// <summary>
+    /// Real navigation state from AppStateService (not viewport width):
+    /// hidden while the sidebar is expanded (it shows the selector itself)
+    /// and while the narrow overlay drawer is open (the drawer shows it).
+    /// </summary>
+    private bool ShowIndicator => AppState.IsNarrow ? !AppState.DrawerOpen : !AppState.DesktopSidebarOpen;
+
+    private string CurrentModeText =>
+        RatConfig.GameMode == TarkovDev.GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"];
+
+    private string AccessibleLabel => string.Format(Localizer["CurrentGameModeOpen"], CurrentModeText);
+
+    protected override void OnInitialized()
+    {
+        AppState.SidebarOpenChanged += OnSidebarChanged;
+        RatConfig.SettingsChanged += OnSettingsChanged;
+    }
+
+    private void OnSidebarChanged(object? sender, bool open)
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnSettingsChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenScannerSection()
+    {
+        // Route through the title-bar toggle path so AppLayout performs the
+        // transition (drawer open on narrow, expand from rail on desktop),
+        // keeping JS sidebar state, focus, and scrim handling consistent.
+        AppState.ToggleSidebar();
+    }
+
+    public void Dispose()
+    {
+        AppState.SidebarOpenChanged -= OnSidebarChanged;
+        RatConfig.SettingsChanged -= OnSettingsChanged;
+    }
+}

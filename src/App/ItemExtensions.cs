@@ -8,17 +8,6 @@ namespace RatScanner;
 
 public static class ItemExtensions
 {
-    // Collector / special tasks that should not drive item need counts (shared by
-    // total remaining and kappa-only breakdown so the lists cannot drift apart).
-    private static readonly HashSet<string> ExcludedTasks = new(StringComparer.Ordinal)
-    {
-        "61e6e5e0f5b9633f6719ed95",
-        "61e6e60223374d168a4576a6",
-        "61e6e621bfeab00251576265",
-        "61e6e615eea2935bc018a2c5",
-        "61e6e60c5ca3b3783662be27",
-    };
-
     private static UserProgress GetUserProgress()
     {
         TarkovTrackerDB db = RatScannerMain.Instance.TarkovTrackerDB;
@@ -33,28 +22,41 @@ public static class ItemExtensions
 
     public static (int count, int kappaCount) GetTaskRemaining(this Item item, UserProgress? progress = null)
     {
-        RequirementBreakdown breakdown = item.GetTaskRequirementBreakdown(progress);
-        int kappa = item.GetTaskRemainingKappa(progress);
-        return (breakdown.Total, kappa);
+        QuestNeedReport report = item.GetQuestNeedReport(progress);
+        return (report.CurrentTotal, report.KappaTotal);
     }
 
     /// <summary>
-    /// Remaining active quest needs, split by whether the objective requires found-in-raid.
+    /// Full applicability-aware quest need classification for the item.
     /// Does not inspect the scanned item's FIR state (no vision yet).
+    /// </summary>
+    internal static QuestNeedReport GetQuestNeedReport(this Item item, UserProgress? progress = null) =>
+        QuestNeedClassifier.Classify(
+            item,
+            TarkovDevAPI.GetTasks(),
+            progress ?? GetUserProgress(),
+            RatConfig.Tracking.ShowNonFIRNeeds
+        );
+
+    /// <summary>
+    /// Remaining active quest needs, split by whether the objective requires found-in-raid.
     /// </summary>
     public static RequirementBreakdown GetTaskRequirementBreakdown(this Item item, UserProgress? progress = null)
     {
         progress ??= GetUserProgress();
+        bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
+
+        TarkovDev.Task[] tasks = TarkovDevAPI.GetTasks();
+        IReadOnlyDictionary<string, TarkovDev.Task> tasksById = ToTaskMap(tasks);
 
         int fir = 0;
         int nonFir = 0;
-        bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
-
-        foreach (TarkovDev.Task task in TarkovDevAPI.GetTasks())
+        foreach (TarkovDev.Task task in tasks)
         {
-            if (progress.Tasks.Any(p => p.Id == task.Id && p.Complete))
+            if (task.Objectives == null)
                 continue;
-            if (ExcludedTasks.Contains(task.Id) || task.Objectives == null)
+            // Keep behavior consistent with the report: never count finished/invalid/future tasks here.
+            if (QuestNeedClassifier.ClassifyGate(task, tasksById, progress, out _) != QuestGate.ApplicableNow)
                 continue;
 
             RequirementBreakdown taskNeed = GetTaskRequirementBreakdown(item, task.Objectives, progress, showNonFir);
@@ -65,49 +67,75 @@ public static class ItemExtensions
         return new RequirementBreakdown(fir + nonFir, fir, nonFir);
     }
 
-    private static int GetTaskRemainingKappa(this Item item, UserProgress? progress)
-    {
-        progress ??= GetUserProgress();
-        int kappaCount = 0;
-        bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
+    internal static IReadOnlyDictionary<string, TarkovDev.Task> ToTaskMap(IReadOnlyList<TarkovDev.Task> tasks) =>
+        tasks.Where(t => !string.IsNullOrEmpty(t.Id)).ToDictionary(t => t.Id);
 
-        foreach (TarkovDev.Task task in TarkovDevAPI.GetTasks())
-        {
-            if (task.KappaRequired != true)
-                continue;
-            if (progress.Tasks.Any(p => p.Id == task.Id && p.Complete))
-                continue;
-            if (ExcludedTasks.Contains(task.Id) || task.Objectives == null)
-                continue;
+    /// <summary>Objective-level remaining counts for one task.</summary>
+    internal readonly record struct ObjectiveNeedBreakdown(
+        int Total,
+        int FoundInRaid,
+        int NonFoundInRaid,
+        int WeaponHandIn
+    );
 
-            kappaCount += GetTaskRequirementBreakdown(item, task.Objectives, progress, showNonFir).Total;
-        }
-
-        return kappaCount;
-    }
-
-    internal static RequirementBreakdown GetTaskRequirementBreakdown(
+    internal static ObjectiveNeedBreakdown GetObjectiveNeedBreakdown(
         Item item,
-        IReadOnlyList<TaskObjective> objectives,
+        IReadOnlyList<TaskObjective>? objectives,
         UserProgress progress,
         bool showNonFir
     )
     {
+        RequirementBreakdown breakdown = GetTaskRequirementBreakdown(
+            item,
+            objectives,
+            progress,
+            showNonFir,
+            out int weaponHandIn
+        );
+        return new ObjectiveNeedBreakdown(
+            breakdown.Total,
+            breakdown.FoundInRaid,
+            breakdown.NonFoundInRaid,
+            weaponHandIn
+        );
+    }
+
+    internal static RequirementBreakdown GetTaskRequirementBreakdown(
+        Item item,
+        IReadOnlyList<TaskObjective>? objectives,
+        UserProgress progress,
+        bool showNonFir
+    ) => GetTaskRequirementBreakdown(item, objectives, progress, showNonFir, out _);
+
+    private static RequirementBreakdown GetTaskRequirementBreakdown(
+        Item item,
+        IReadOnlyList<TaskObjective>? objectives,
+        UserProgress progress,
+        bool showNonFir,
+        out int weaponHandIn
+    )
+    {
+        weaponHandIn = 0;
+        if (objectives == null)
+            return new RequirementBreakdown(0, 0, 0);
+
         int fir = 0;
         int nonFir = 0;
+        bool isWeapon = item.Types?.Contains("gun", StringComparer.OrdinalIgnoreCase) == true;
         Dictionary<TaskObjective, TaskObjective> pairedFindByGive = [];
         HashSet<TaskObjective> pairedFindObjectives = [];
 
         foreach (
             TaskObjective giveObjective in objectives.Where(objective =>
-                objective.Type == "giveItem" && objective.ItemIds?.Contains(item.Id) == true
+                !objective.Optional && objective.Type == "giveItem" && objective.ItemIds?.Contains(item.Id) == true
             )
         )
         {
             // Current tarkov.dev find/give pairs share count and FIR flags;
             // loosen this match only if the upstream data starts emitting asymmetric pairs.
             TaskObjective? pairedFind = objectives.FirstOrDefault(candidate =>
-                candidate.Type == "findItem"
+                !candidate.Optional
+                && candidate.Type == "findItem"
                 && candidate.Count == giveObjective.Count
                 && candidate.FoundInRaid == giveObjective.FoundInRaid
                 && candidate.ItemIds?.Contains(item.Id) == true
@@ -139,6 +167,9 @@ public static class ItemExtensions
                 fir += needed;
             else
                 nonFir += needed;
+
+            if (isWeapon && objective.Type is "giveItem" or "buildWeapon")
+                weaponHandIn += needed;
         }
 
         return new RequirementBreakdown(fir + nonFir, fir, nonFir);
@@ -154,6 +185,10 @@ public static class ItemExtensions
     {
         requiresFir = false;
         int needed = 0;
+
+        // Optional objectives are nice-to-have, never a requirement.
+        if (objective.Optional)
+            return 0;
 
         if (objective.Type is "giveItem" or "findItem" or "plantItem")
         {

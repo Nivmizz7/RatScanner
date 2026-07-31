@@ -1,21 +1,26 @@
 .scan-page {
-    width: min(100%, 960px);
+    width: min(100%, 1080px);
     height: 100vh;
     height: 100dvh;
     margin: auto;
-    padding: 16px;
+    /* Compact chrome: the page top hugs the title bar divider. Horizontal
+       gutters come from the shared tokens so the utility row and content
+       always share one symmetric inset. */
+    padding: 10px var(--rs-page-gutter-x) 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     overflow: auto;
     scrollbar-width: thin;
 }
 
+/* Flex (not grid): the mode indicator and the healthy-hidden scanner
+   status contribute no track, gap, or reserved width when not rendered,
+   so the search row aligns exactly to the shared page gutters. */
 .utility-bar {
-    display: grid;
-    grid-template-columns: minmax(180px, 1fr) auto auto;
-    gap: 10px;
-    align-items: stretch;
+    display: flex;
+    gap: 8px;
+    align-items: center;
     min-width: 0;
 }
 
@@ -26,13 +31,26 @@
 .search {
     flex: 1 1 auto;
     min-width: 0;
+    min-height: 40px;
     padding: 0 10px;
     border: 1px solid var(--rs-border);
     border-radius: var(--rs-radius-sm);
     background: var(--rs-surface);
+    /* Subtle top highlight so inputs separate from the page. */
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--rs-text-2);
     display: flex;
     align-items: center;
+    transition: border-color 0.12s ease;
+}
+
+.search:hover {
+    border-color: var(--rs-border-strong);
+}
+
+.search:focus-within {
+    border-color: var(--rs-accent);
+    outline: none;
 }
 
 .recent {
@@ -66,11 +84,21 @@
     color: var(--rs-text-2);
     font: inherit;
     font-size: 12px;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.thumb:hover {
+    background: var(--rs-surface-2);
+    border-color: var(--rs-border);
+}
+
+.thumb:active {
+    background: var(--rs-bg);
 }
 
 .thumb.selected {
-    border-color: var(--rs-purple);
-    background: var(--rs-purple-surface);
+    border-color: var(--rs-accent);
+    background: var(--rs-accent-surface);
     color: var(--rs-text);
 }
 
@@ -94,7 +122,7 @@
     grid-template-columns: auto auto;
     gap: 16px;
     align-items: center;
-    border: 1px dashed var(--rs-border);
+    border: 1px dashed var(--rs-border-subtle);
     border-radius: 14px;
     color: var(--rs-muted);
 }
@@ -121,9 +149,9 @@
     flex-wrap: wrap;
     padding: 10px 14px;
     border: 1px solid var(--rs-border);
-    border-left: 3px solid var(--rs-purple);
+    border-left: 3px solid var(--rs-accent);
     border-radius: var(--rs-radius);
-    background: var(--rs-purple-surface);
+    background: var(--rs-accent-surface);
 }
 
 .state-banner span {
@@ -132,7 +160,7 @@
 
 .state-banner.warning {
     border-left-color: var(--rs-warning);
-    background: rgba(231, 173, 85, 0.1);
+    background: var(--rs-warning-surface);
 }
 
 .banner-copy {
@@ -150,105 +178,119 @@
 .banner-btn {
     min-height: 32px;
     padding: 0 12px;
-    border: 1px solid rgba(231, 173, 85, 0.45);
+    border: 1px solid rgba(197, 154, 89, 0.45);
     border-radius: 8px;
-    background: transparent;
+    background: var(--rs-surface);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     color: var(--rs-text);
     font: inherit;
     font-size: 13px;
     font-weight: 600;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .banner-btn:hover {
-    background: rgba(231, 173, 85, 0.12);
+    background: var(--rs-warning-surface);
+    border-color: rgba(197, 154, 89, 0.6);
 }
+
+.banner-btn:active {
+    background: var(--rs-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Result card: identity + verdict on top, market + chips below,       */
+/* quiet actions at the foot. Two-column body on wide windows.         */
+/* ------------------------------------------------------------------ */
 
 .result-card {
     flex: 0 1 auto;
     min-height: 0;
     margin: 0;
-    padding: 16px 18px;
+    padding: 14px 16px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    border: 1px solid var(--rs-border);
-    border-radius: 14px;
+    gap: 12px;
+    /* Slightly quieter than --rs-border so the border doesn't compete with content */
+    border: 1px solid var(--rs-border-subtle);
+    border-radius: var(--rs-radius);
     background: var(--rs-surface);
 }
 
-.result-header {
+.result-main {
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) minmax(260px, 300px);
-    gap: 16px;
-    align-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+    gap: 14px;
+    align-items: stretch;
 }
 
-.item-art-wrap {
-    display: grid;
-    place-items: center;
+.identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
 }
 
 .item-art {
-    width: 72px;
-    height: 72px;
+    flex: none;
+    width: 88px;
+    height: 64px;
     position: relative;
     display: grid;
     place-items: center;
-    border: 1px solid var(--rs-border);
-    border-radius: 10px;
+    border: 1px solid var(--rs-border-subtle);
+    border-radius: 8px;
     background: var(--rs-surface-2);
 }
 
 .item-art img {
-    max-width: 88%;
-    max-height: 88%;
+    max-width: calc(100% - 10px);
+    max-height: calc(100% - 10px);
     object-fit: contain;
 }
 
 .item-art small {
     position: absolute;
-    right: 4px;
-    bottom: 4px;
-    padding: 2px 5px;
+    right: 3px;
+    bottom: 3px;
+    padding: 1px 5px;
     border-radius: 5px;
     background: rgba(0, 0, 0, 0.72);
     font-size: 11px;
 }
 
-.identity {
+.identity-text {
     min-width: 0;
     display: grid;
-    gap: 6px;
+    gap: 3px;
     align-content: center;
 }
 
 h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: 19px;
     line-height: 1.2;
     font-weight: 650;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
-.identity-meta,
-.identity-source {
+.identity-meta {
     margin: 0;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0;
     color: var(--rs-muted);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.35;
-}
-
-.identity-source {
-    color: var(--rs-text-2);
 }
 
 .sep {
     display: inline-block;
-    width: 0.35rem;
-    height: 0.35rem;
+    width: 0.3rem;
+    height: 0.3rem;
     margin-inline: 0.45rem;
     border-radius: 50%;
     background: var(--rs-muted);
@@ -256,119 +298,144 @@ h1 {
     vertical-align: middle;
 }
 
-.recommendation {
+/* Dominant keep/sell verdict */
+
+.verdict {
     min-width: 0;
-    min-height: 72px;
-    padding: 12px 14px;
-    border-radius: var(--rs-radius);
+    border-radius: var(--rs-radius-sm);
     border: 1px solid var(--rs-border-subtle);
+    border-left-width: 3px;
     background: var(--rs-surface-2);
-    display: grid;
-    align-content: center;
-    gap: 4px;
 }
 
-.recommendation h2 {
-    margin: 0;
+.verdict-inner {
+    height: 100%;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.verdict-word {
+    flex: none;
     font-size: 18px;
-    line-height: 1.25;
-    font-weight: 650;
-    color: var(--rs-text);
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    line-height: 1;
 }
 
-.recommendation p {
-    margin: 0;
+.verdict-reason {
+    min-width: 0;
     color: var(--rs-text-2);
     font-size: 13px;
-    line-height: 1.35;
+    line-height: 1.3;
 }
 
-.recommendation.tone-quest {
-    border-color: rgba(88, 209, 123, 0.35);
+.verdict.tone-keep {
+    border-left-color: var(--rs-success);
     background: var(--rs-success-surface);
 }
 
-.recommendation.tone-quest h2 {
+.verdict.tone-keep .verdict-word {
     color: var(--rs-success);
 }
 
-.recommendation.tone-hideout {
-    border-color: rgba(146, 114, 248, 0.4);
-    background: var(--rs-purple-surface);
+.verdict.tone-accent {
+    border-left-color: var(--rs-accent);
+    background: var(--rs-accent-surface);
 }
 
-.recommendation.tone-hideout h2 {
-    color: var(--rs-purple-hover);
+.verdict.tone-accent .verdict-word {
+    color: var(--rs-accent-hover);
 }
 
-.recommendation.tone-sell h2 {
-    color: var(--rs-info);
+.verdict.tone-sell {
+    border-left-color: var(--rs-muted);
 }
 
-.recommendation.tone-warning {
-    border-color: rgba(231, 173, 85, 0.35);
-    background: rgba(231, 173, 85, 0.08);
+.verdict.tone-sell .verdict-word {
+    color: var(--rs-text);
 }
 
-.recommendation.tone-warning h2 {
+.verdict.tone-warning {
+    border-left-color: var(--rs-warning);
+    background: var(--rs-warning-surface);
+}
+
+.verdict.tone-warning .verdict-word {
     color: var(--rs-warning);
 }
 
-.recommendation.tone-neutral h2 {
-    color: var(--rs-text-2);
+/* Market + requirements share one row on wide windows */
+
+.result-data {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: start;
+    padding-top: 12px;
+    border-top: 1px solid var(--rs-divider);
 }
 
 .market {
     display: grid;
-    gap: 10px;
-    padding-top: 14px;
-    border-top: 1px solid var(--rs-divider);
-}
-
-.market-columns {
-    display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px 28px;
+    min-width: 0;
 }
 
-.market-column {
+.market-cell {
     display: grid;
-    gap: 4px;
+    gap: 2px;
     align-content: start;
+    min-width: 0;
 }
 
-label {
-    display: block;
-    margin: 0;
+.market-cell + .market-cell {
+    padding-left: 16px;
+    border-left: 1px solid var(--rs-divider);
+}
+
+.market-label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
     color: var(--rs-muted);
     font-size: 12px;
     font-weight: 600;
 }
 
-.market-column .price,
-.market-column .trader-name {
-    font-size: 22px;
+.freshness {
+    flex: none;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--rs-muted);
+    opacity: 0.85;
+}
+
+.price {
+    font-size: 20px;
     line-height: 1.15;
-    font-variant-numeric: tabular-nums;
     font-weight: 650;
-}
-
-.market-column .price.banned {
-    font-size: 16px;
-    color: var(--rs-warning);
-    font-weight: 600;
-}
-
-.market-column .trader-name {
-    font-size: 18px;
-}
-
-.supporting-price {
-    display: block;
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--rs-text);
     font-variant-numeric: tabular-nums;
+    color: var(--rs-text);
+    overflow-wrap: anywhere;
+}
+
+.price.banned {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--rs-warning);
+}
+
+.trader-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rs-text-2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .supporting {
@@ -377,147 +444,87 @@ label {
     line-height: 1.3;
 }
 
-.market-difference {
-    margin: 0;
-    padding: 6px 10px;
-    border-radius: 8px;
-    background: rgba(88, 209, 123, 0.06);
-    color: var(--rs-text-2);
-    font-size: 13px;
-    font-weight: 550;
-    line-height: 1.35;
+/* Requirement / acquisition strip: compact chips, no nested cards */
+
+.status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    align-content: start;
+    max-width: 380px;
 }
 
-.market-difference.positive {
-    color: var(--rs-success);
-    background: rgba(88, 209, 123, 0.08);
-}
-
-.market-difference.negative {
-    color: var(--rs-warning);
-    background: rgba(231, 173, 85, 0.08);
-}
-
-.requirements.has-required {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-.requirement-chip {
-    display: grid;
-    gap: 3px;
-    padding: 7px 12px;
+.chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-height: 26px;
+    padding: 3px 10px;
     border: 1px solid var(--rs-border-subtle);
-    border-radius: 10px;
+    border-radius: 999px;
     background: var(--rs-surface-2);
-}
-
-.requirement-chip strong {
-    font-size: 13px;
-    font-weight: 600;
     color: var(--rs-text-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
 }
 
-.requirement-chip.required {
-    border-color: rgba(88, 209, 123, 0.3);
+.chip strong {
+    font-weight: 700;
+    color: var(--rs-text);
+}
+
+.chip-required {
+    border-color: rgba(112, 167, 124, 0.35);
     background: var(--rs-success-surface);
-}
-
-.requirement-chip.required strong {
     color: var(--rs-success);
 }
 
-.requirement-chip.muted strong {
-    color: var(--rs-muted);
+.chip-required strong {
+    color: var(--rs-success);
+}
+
+.chip-fir,
+.fir-badge {
+    border-color: rgba(197, 154, 89, 0.45);
+    background: var(--rs-warning-surface);
+    color: var(--rs-warning);
+}
+
+.fir-badge {
+    align-items: center;
+    gap: 5px;
+    padding-right: 8px;
+}
+
+.fir-badge .fir-icon {
+    width: 12px;
+    height: 12px;
+    flex: none;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.chip-advisory {
+    border-color: rgba(197, 154, 89, 0.4);
+    background: transparent;
+    color: var(--rs-warning);
     font-weight: 500;
 }
 
-.requirement-chip.fir {
-    border-color: rgba(231, 173, 85, 0.45);
-}
-
-.req-meta {
-    font-size: 11px;
-    color: var(--rs-muted);
-    line-height: 1.3;
-}
-
-.requirement-chip.fir .req-meta {
-    color: var(--rs-warning);
-    font-weight: 600;
-}
-
-.acquisition {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.acq-chip {
-    display: grid;
-    gap: 2px;
-    padding: 7px 12px;
-    border: 1px solid var(--rs-border-subtle);
-    border-radius: 10px;
-    background: var(--rs-surface-2);
-    min-width: 0;
-    flex: 1 1 140px;
-}
-
-.acq-chip strong {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+.chip-later {
+    border-color: var(--rs-border-subtle);
+    background: transparent;
     color: var(--rs-text-2);
+    font-weight: 500;
 }
 
-.acq-chip span {
-    font-size: 12px;
-    color: var(--rs-muted);
-    line-height: 1.3;
-}
-
-.acq-chip.fir {
-    border-color: rgba(231, 173, 85, 0.45);
-    background: rgba(231, 173, 85, 0.08);
-}
-
-.acq-chip.fir strong {
-    color: var(--rs-warning);
-}
-
-.acq-chip.craft {
-    border-color: rgba(124, 108, 240, 0.4);
-    background: rgba(124, 108, 240, 0.08);
-}
-
-.acq-chip.craft strong {
-    color: var(--rs-purple, #9b8cff);
-}
-
-.acq-chip.barter {
-    border-color: rgba(88, 180, 209, 0.4);
-    background: rgba(88, 180, 209, 0.08);
-}
-
-.acq-chip.barter strong {
-    color: #7ec8e3;
-}
-
-.requirements.all-clear {
-    padding: 0;
-}
-
-.requirements-inline {
-    margin: 0;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    color: var(--rs-muted);
-    font-size: 13px;
-}
+/* Quiet secondary actions */
 
 .actions {
     display: flex;
@@ -525,9 +532,8 @@ label {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding-top: 4px;
+    padding-top: 10px;
     border-top: 1px solid var(--rs-divider);
-    margin-top: 0;
 }
 
 .action-links {
@@ -539,18 +545,19 @@ label {
 
 .link-btn,
 .details-toggle {
-    min-height: 32px;
-    padding: 0 10px;
+    min-height: 30px;
+    padding: 0 8px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 0;
+    border: 1px solid var(--rs-border-subtle);
     border-radius: 6px;
     background: transparent;
     color: var(--rs-text-2);
     font: inherit;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
 }
 
 .link-btn ::deep .mud-icon-root,
@@ -562,12 +569,36 @@ label {
 .link-btn:hover:not(:disabled),
 .details-toggle:hover {
     background: var(--rs-surface-2);
+    border-color: var(--rs-border);
     color: var(--rs-text);
+}
+
+.link-btn:active:not(:disabled),
+.details-toggle:active {
+    background: var(--rs-bg);
 }
 
 .details-toggle {
     color: var(--rs-muted);
 }
+
+/* Overflow links menu — narrow windows only (hidden by default) */
+
+.links-menu {
+    display: none;
+}
+
+/* stylelint-disable-next-line selector-pseudo-element-no-unknown -- Blazor CSS isolation combinator */
+.links-menu ::deep .mud-button-root {
+    min-height: 30px;
+    padding: 0 8px;
+    color: var(--rs-text-2);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: none;
+}
+
+/* Expandable details */
 
 .details {
     display: grid;
@@ -592,6 +623,10 @@ label {
 
 .details-rows label {
     font-size: 11px;
+    display: block;
+    margin: 0;
+    color: var(--rs-muted);
+    font-weight: 600;
 }
 
 .details-rows {
@@ -645,12 +680,19 @@ label {
     font: inherit;
     font-size: 11px;
     font-weight: 600;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
 .copy-btn:hover {
     background: var(--rs-surface-2);
     color: var(--rs-text);
 }
+
+.copy-btn:active {
+    background: var(--rs-bg);
+}
+
+/* Search autocomplete dropdown rows */
 
 .search-result {
     min-height: 48px;
@@ -678,35 +720,35 @@ label {
     padding: 12px;
 }
 
-@media (max-width: 799px) {
-    .result-header {
-        grid-template-columns: 72px minmax(0, 1fr);
+/* ------------------------------------------------------------------ */
+/* Medium: verdict stacks under the identity row so the item name      */
+/* keeps its full width; chips drop below the market cells.            */
+/* ------------------------------------------------------------------ */
+@media (max-width: 900px) {
+    .result-main {
+        grid-template-columns: 1fr;
+        gap: 10px;
     }
 
-    .recommendation {
+    .result-data {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .status-strip {
+        max-width: none;
+        justify-content: flex-start;
         grid-column: 1 / -1;
-        min-height: 0;
     }
 }
 
-/* Narrow window (sidebar becomes an overlay drawer at 680px). Compact the
-   scan result while keeping all content accessible: shrink art/type, let long
-   names and prices wrap, and keep the market columns side-by-side until the
-   very smallest width. */
+/* Narrow window (sidebar becomes an overlay drawer at 680px): verdict
+   moves full-width under the identity row so it is seen first; external
+   links collapse into the Links overflow menu. */
 @media (max-width: 680px) {
     .scan-page {
-        padding: 10px;
+        padding: 8px var(--rs-page-gutter-x-compact) 10px;
         gap: 8px;
-    }
-
-    .utility-bar {
-        grid-template-columns: minmax(0, 1fr) auto;
-    }
-
-    .utility-bar ::deep .scanner-status-root {
-        grid-column: 1 / -1;
-        justify-self: start;
-        height: 26px;
     }
 
     .recent {
@@ -716,78 +758,48 @@ label {
     .result-card {
         padding: 12px;
         gap: 10px;
-        border-radius: 12px;
-    }
-
-    .result-header {
-        grid-template-columns: 52px minmax(0, 1fr);
-        gap: 10px;
     }
 
     .item-art {
-        width: 52px;
-        height: 52px;
+        width: 72px;
+        height: 54px;
     }
 
     h1 {
-        font-size: 17px;
-        overflow-wrap: anywhere;
-    }
-
-    .identity-meta,
-    .identity-source {
-        font-size: 12px;
-    }
-
-    .recommendation {
-        min-height: 0;
-        padding: 8px 10px;
-    }
-
-    .recommendation h2 {
-        font-size: 14px;
-    }
-
-    .recommendation p {
-        font-size: 12px;
-    }
-
-    .market {
-        gap: 8px;
-        padding-top: 10px;
-    }
-
-    .market-columns {
-        gap: 8px 14px;
-    }
-
-    .market-column .price,
-    .market-column .trader-name {
         font-size: 16px;
-        overflow-wrap: anywhere;
     }
 
-    .market-column .price.banned {
-        font-size: 14px;
+    .verdict-inner {
+        padding: 7px 10px;
     }
 
-    .supporting-price {
-        font-size: 14px;
+    .verdict-word {
+        font-size: 16px;
     }
 
-    .requirement-chip {
-        padding: 6px 10px;
-    }
-
-    .acq-chip {
-        flex: 1 1 100px;
-        padding: 6px 10px;
-    }
-
-    .link-btn,
-    .details-toggle {
-        min-height: 30px;
+    .verdict-reason {
         font-size: 12px;
+    }
+
+    .result-data {
+        padding-top: 10px;
+        gap: 10px;
+    }
+
+    .market-cell + .market-cell {
+        padding-left: 12px;
+    }
+
+    .price {
+        font-size: 18px;
+    }
+
+    .action-links {
+        display: none;
+    }
+
+    .links-menu {
+        display: block;
     }
 
     .details {
@@ -800,62 +812,20 @@ label {
     }
 }
 
-/* Small windows: single-column requirement chips; tighten type further. */
-@media (max-width: 520px) {
-    .requirements.has-required {
-        grid-template-columns: 1fr;
-        gap: 6px;
-    }
-
-    .requirement-chip {
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: baseline;
-        column-gap: 8px;
-    }
-
-    .requirement-chip .req-meta {
-        grid-column: 1 / -1;
-    }
-
-    .market-column .price,
-    .market-column .trader-name {
-        font-size: 15px;
-    }
-}
-
-/* Very small windows: single-column everything, compact empty state. */
+/* Very small windows: tighten the identity row further. */
 @media (max-width: 460px) {
     .scan-page {
-        padding: 8px;
+        padding: 8px var(--rs-page-gutter-x-compact);
         gap: 6px;
     }
 
-    .result-header {
-        grid-template-columns: 44px minmax(0, 1fr);
+    .utility-bar {
+        gap: 6px;
     }
 
     .item-art {
-        width: 44px;
-        height: 44px;
-    }
-
-    .recommendation {
-        grid-column: 1 / -1;
-    }
-
-    .market-columns {
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
-
-    .market-column {
-        grid-template-columns: auto minmax(0, 1fr);
-        align-items: baseline;
-        column-gap: 8px;
-    }
-
-    .market-column label {
-        grid-row: span 3;
+        width: 60px;
+        height: 46px;
     }
 
     .state-banner {
@@ -876,8 +846,8 @@ label {
     }
 }
 
-/* Short windows (e.g. half-height on a small laptop or snapped to a corner):
-   collapse vertical chrome so the result fits without scrolling. */
+/* Short windows (snapped to a corner, small laptop): collapse vertical
+   chrome so the decision fits without scrolling. */
 @media (max-height: 620px) {
     .scan-page {
         padding-top: 8px;
@@ -899,12 +869,12 @@ label {
         min-height: 0;
     }
 
-    .market {
+    .result-data {
         padding-top: 8px;
     }
 
     .actions {
-        padding-top: 2px;
+        padding-top: 6px;
     }
 
     .details {

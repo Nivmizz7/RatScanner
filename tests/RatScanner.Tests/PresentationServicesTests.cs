@@ -49,20 +49,88 @@ public class PresentationServicesTests
     }
 
     [Fact]
-    public void QuestFirNeedMentionsFoundInRaidAndCraft()
+    public void ActiveQuestNeedProducesKeepVerdict()
     {
         RecommendationViewModel result = RecommendationSelector.Select(
             10000,
             5000,
             "Mechanic",
-            new RequirementBreakdown(Total: 2, FoundInRaid: 2, NonFoundInRaid: 0),
+            new QuestNeedReport { ActiveNow = 2, ActiveNowFir = 2 },
             default,
             new AcquisitionInfo(CanCraft: true, CraftRecipeCount: 1, CanBarter: false, BarterOfferCount: 0)
         );
 
         Assert.Equal(RecommendationType.KeepForQuest, result.Type);
-        Assert.Contains("found in raid", result.Explanation, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Craftable", result.Explanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("2 still required for active quests.", result.Explanation);
+    }
+
+    [Fact]
+    public void FutureAndConditionalNeedsNeverMasqueradeAsKeep()
+    {
+        RecommendationViewModel later = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new QuestNeedReport { FutureKnown = 1 },
+            default,
+            default
+        );
+        Assert.Equal(RecommendationType.NeededLater, later.Type);
+        Assert.Equal("1 required later.", later.Explanation);
+
+        RecommendationViewModel conditional = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new QuestNeedReport { ConditionalUnknown = 2 },
+            default,
+            default
+        );
+        Assert.Equal(RecommendationType.MaybeNeeded, conditional.Type);
+        Assert.Equal("2 conditional.", conditional.Explanation);
+
+        RecommendationViewModel mixed = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new QuestNeedReport { FutureKnown = 1, ConditionalUnknown = 2 },
+            default,
+            default
+        );
+        Assert.Equal(RecommendationType.MaybeNeeded, mixed.Type);
+        Assert.Equal("1 required later · 2 conditional.", mixed.Explanation);
+    }
+
+    [Fact]
+    public void KnownHideoutNeedOutranksConditionalQuestNeed()
+    {
+        RecommendationViewModel result = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new QuestNeedReport { ConditionalUnknown = 1 },
+            new RequirementBreakdown(3, 0, 3),
+            default
+        );
+
+        Assert.Equal(RecommendationType.KeepForHideout, result.Type);
+        Assert.Contains("hideout", result.Explanation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AvailableButUnstartedQuestIsSoonNotKeep()
+    {
+        RecommendationViewModel result = RecommendationSelector.Select(
+            10000,
+            5000,
+            "Mechanic",
+            new QuestNeedReport { AvailableNow = 1 },
+            default,
+            default
+        );
+
+        Assert.Equal(RecommendationType.QuestAvailableSoon, result.Type);
+        Assert.Equal("1 can be started now.", result.Explanation);
     }
 
     [Fact]
@@ -650,7 +718,7 @@ public class ItemExtensionTests
 
         Assert.Equal(item.Id, result.Item.Id);
         Assert.Equal(item.WikiLink, result.Item.WikiUrl);
-        Assert.Equal(2, result.Quests.RemainingRequired);
+        Assert.Equal(2, result.Quests.Report.ActiveNow);
         Assert.Equal(RecommendationType.KeepForQuest, result.Recommendation.Type);
     }
 }
