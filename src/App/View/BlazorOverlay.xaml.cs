@@ -153,6 +153,11 @@ public partial class BlazorOverlay : Window
         SetWindowStyle();
         _webViewReady = true;
 
+        // If we are running in a development/debugger mode, open dev tools to help out.
+        // Run before any early return so the debugger hook always fires on navigation.
+        if (Debugger.IsAttached)
+            _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
+
         // If a tooltip is already visible, show it immediately — do not make
         // the user wait for the bootstrap grace period.
         if (HasVisibleTooltip())
@@ -180,10 +185,6 @@ public partial class BlazorOverlay : Window
             UpdateWindowVisibility();
         };
         _initialSuspendTimer.Start();
-
-        // If we are running in a development/debugger mode, open dev tools to help out
-        if (Debugger.IsAttached)
-            _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
     private bool HasVisibleTooltip() =>
