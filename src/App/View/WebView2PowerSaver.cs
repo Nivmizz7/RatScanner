@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
@@ -14,9 +15,24 @@ namespace RatScanner.View;
 internal static class WebView2PowerSaver
 {
     /// <summary>
+    /// Per-core suspend/resume state. All calls happen on the WPF UI thread,
+    /// so no locking is needed — the async continuation from TrySuspendAsync
+    /// also resumes on the dispatcher.
+    /// </summary>
+    private sealed class PowerState
+    {
+        public Task? PendingSuspend;
+        public bool ResumeRequested;
+    }
+
+    private static readonly ConditionalWeakTable<CoreWebView2, PowerState> _powerStates = new();
+
+    /// <summary>
     /// Marks the WebView invisible (WPF keeps IsVisible=true for minimized
-    /// windows, which would make suspension fail), drops its memory target,
-    /// and suspends the renderer process.
+    /// windows, which would make suspension fail) and suspends the renderer
+    /// process. TrySuspendAsync itself drops the memory target to Low; do not
+    /// set MemoryUsageTargetLevel separately (Microsoft recommends using only
+    /// one mechanism).
     /// </summary>
     public static void Suspend(WebView2CompositionControl? webView)
     {
@@ -28,22 +44,19 @@ internal static class WebView2PowerSaver
         // never triggers a re-measure of the Blazor surface.
         webView.Visibility = Visibility.Hidden;
 
-        try
-        {
-            core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
-        }
-        catch (Exception e)
-        {
-            Logger.LogWarning("Unable to lower the WebView2 memory target.", e);
-        }
+        PowerState state = _powerStates.GetOrCreateValue(core);
+        if (state.PendingSuspend is not null || core.IsSuspended)
+            return;
 
-        if (!core.IsSuspended)
-            _ = SuspendCoreAsync(core);
+        state.ResumeRequested = false;
+        state.PendingSuspend = SuspendCoreAsync(core, state);
     }
 
     /// <summary>
-    /// Restores visibility, memory target, and resumes the renderer so the
-    /// surface is ready to present before its host window is shown.
+    /// Restores visibility and resumes the renderer so the surface is ready
+    /// to present before its host window is shown. If a suspend is still in
+    /// flight, the resume intent is recorded and applied once the suspend
+    /// lands — preventing a frozen renderer on a quick hide-then-show.
     /// </summary>
     public static void Resume(WebView2CompositionControl? webView)
     {
@@ -53,11 +66,32 @@ internal static class WebView2PowerSaver
 
         webView.Visibility = Visibility.Visible;
 
+        if (!_powerStates.TryGetValue(core, out PowerState? state))
+        {
+            TryResumeCore(core);
+            return;
+        }
+
+        if (state.PendingSuspend is not null && !state.PendingSuspend.IsCompleted)
+        {
+            // Suspend is still in flight; mark intent so the continuation
+            // resumes the renderer once the suspend lands.
+            state.ResumeRequested = true;
+            return;
+        }
+
+        state.PendingSuspend = null;
+        TryResumeCore(core);
+    }
+
+    private static void TryResumeCore(CoreWebView2 core)
+    {
+        if (!core.IsSuspended)
+            return;
+
         try
         {
-            core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
-            if (core.IsSuspended)
-                core.Resume();
+            core.Resume();
         }
         catch (Exception e)
         {
@@ -65,7 +99,7 @@ internal static class WebView2PowerSaver
         }
     }
 
-    private static async Task SuspendCoreAsync(CoreWebView2 core)
+    private static async Task SuspendCoreAsync(CoreWebView2 core, PowerState state)
     {
         try
         {
@@ -76,6 +110,15 @@ internal static class WebView2PowerSaver
             // Suspension is best-effort: it fails while DevTools is open or if
             // the browser considers the page visible. The visibility change
             // above already stopped compositing, which is the main win.
+        }
+        finally
+        {
+            state.PendingSuspend = null;
+            if (state.ResumeRequested && core.IsSuspended)
+            {
+                state.ResumeRequested = false;
+                TryResumeCore(core);
+            }
         }
     }
 }

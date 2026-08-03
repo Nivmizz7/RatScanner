@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Forms;
@@ -19,6 +20,7 @@ public partial class BlazorOverlay : Window
 {
     private WebView2CompositionControl? _initializedWebView;
     private DispatcherOperation? _pendingDpiRefresh;
+    private DispatcherTimer? _initialSuspendTimer;
     private readonly MenuVM _menuViewModel;
     private bool _webViewReady;
     private bool _closing;
@@ -150,7 +152,25 @@ public partial class BlazorOverlay : Window
         // swallowing desktop/taskbar clicks.
         SetWindowStyle();
         _webViewReady = true;
-        UpdateWindowVisibility();
+
+        // NavigationCompleted fires when the document loads, but the Blazor JS
+        // runtime may still be completing its startup handshake. TrySuspendAsync
+        // waits for running scripts, but deferred microtasks/promises could be
+        // left half-finished if we freeze immediately. Defer the first suspend
+        // by 2 s so bootstrap completes; subsequent visibility updates (driven
+        // by MenuVM.PropertyChanged) happen immediately.
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(2),
+        };
+        _initialSuspendTimer.Tick += (_, _) =>
+        {
+            _initialSuspendTimer?.Stop();
+            _initialSuspendTimer = null;
+            UpdateWindowVisibility();
+        };
+        _initialSuspendTimer.Start();
 
         // If we are running in a development/debugger mode, open dev tools to help out
         if (Debugger.IsAttached)
@@ -159,6 +179,10 @@ public partial class BlazorOverlay : Window
 
     private void MenuViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        // A tooltip arriving during the bootstrap grace period cancels the
+        // deferred suspend; UpdateWindowVisibility will Resume/show instead.
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = null;
         _ = Dispatcher.BeginInvoke(UpdateWindowVisibility);
     }
 
@@ -207,6 +231,8 @@ public partial class BlazorOverlay : Window
     protected override void OnClosed(System.EventArgs e)
     {
         _closing = true;
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = null;
         _menuViewModel.PropertyChanged -= MenuViewModel_PropertyChanged;
         DpiChanged -= HostWindow_DpiChanged;
         WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
