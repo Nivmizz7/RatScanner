@@ -45,9 +45,13 @@ internal static class WebView2PowerSaver
         webView.Visibility = Visibility.Hidden;
 
         PowerState state = _powerStates.GetOrCreateValue(core);
-        if (state.PendingSuspend is not null || core.IsSuspended)
+        // A pending suspend that is still in flight blocks a new one; a
+        // completed task (including a sync failure) is stale and is cleared
+        // so the next Suspend can retry.
+        if (state.PendingSuspend is { IsCompleted: false } || core.IsSuspended)
             return;
 
+        state.PendingSuspend = null;
         state.ResumeRequested = false;
         state.PendingSuspend = SuspendCoreAsync(core, state);
     }

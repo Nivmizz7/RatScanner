@@ -153,12 +153,21 @@ public partial class BlazorOverlay : Window
         SetWindowStyle();
         _webViewReady = true;
 
+        // If a tooltip is already visible, show it immediately — do not make
+        // the user wait for the bootstrap grace period.
+        if (HasVisibleTooltip())
+        {
+            UpdateWindowVisibility();
+            return;
+        }
+
         // NavigationCompleted fires when the document loads, but the Blazor JS
         // runtime may still be completing its startup handshake. TrySuspendAsync
         // waits for running scripts, but deferred microtasks/promises could be
         // left half-finished if we freeze immediately. Defer the first suspend
-        // by 2 s so bootstrap completes; subsequent visibility updates (driven
-        // by MenuVM.PropertyChanged) happen immediately.
+        // by 2 s so bootstrap completes. A tooltip arriving during the grace
+        // period cancels the timer and shows immediately; unrelated model
+        // updates do not cancel it.
         _initialSuspendTimer?.Stop();
         _initialSuspendTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
@@ -177,8 +186,17 @@ public partial class BlazorOverlay : Window
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
     }
 
+    private bool HasVisibleTooltip() =>
+        _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
+
     private void MenuViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        // During the bootstrap grace period, only interrupt for an actual
+        // tooltip; unrelated model updates let the deferred suspend run so
+        // we don't freeze the renderer before Blazor startup has settled.
+        if (_initialSuspendTimer is not null && !HasVisibleTooltip())
+            return;
+
         // A tooltip arriving during the bootstrap grace period cancels the
         // deferred suspend; UpdateWindowVisibility will Resume/show instead.
         _initialSuspendTimer?.Stop();
@@ -191,9 +209,7 @@ public partial class BlazorOverlay : Window
         if (!_webViewReady || _closing)
             return;
 
-        bool hasVisibleTooltip =
-            _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
-        if (hasVisibleTooltip)
+        if (HasVisibleTooltip())
         {
             // Resume the renderer before the window is shown so the first
             // presented frame already contains the tooltip content.
