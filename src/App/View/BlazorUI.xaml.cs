@@ -213,9 +213,36 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     public void OnOpen()
     {
         UpdateElements();
+        WebView2PowerSaver.Resume(_initializedWebView);
     }
 
-    public void OnClose() { }
+    // Navigating away (minimal UI) detaches the control but keeps the WebView2
+    // renderer alive; suspend it so the compact overlay costs no GPU frames.
+    public void OnClose() => WebView2PowerSaver.Suspend(_initializedWebView);
+
+    /// <summary>
+    /// Suspends the main UI WebView renderer without creating the singleton.
+    /// Used when the host window is minimized or hidden to the tray.
+    /// </summary>
+    internal static void SuspendActiveWebView() => PeekInstance()?.OnClose();
+
+    /// <summary>
+    /// Resumes the main UI WebView renderer without creating the singleton.
+    /// </summary>
+    internal static void ResumeActiveWebView()
+    {
+        BlazorUI? instance = PeekInstance();
+        if (instance is not null)
+            WebView2PowerSaver.Resume(instance._initializedWebView);
+    }
+
+    private static BlazorUI? PeekInstance()
+    {
+        lock (InstanceLock)
+        {
+            return _shutdownStarted ? null : _instance;
+        }
+    }
 
     public void Dispose()
     {

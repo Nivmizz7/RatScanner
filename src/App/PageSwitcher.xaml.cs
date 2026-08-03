@@ -289,6 +289,14 @@ public partial class PageSwitcher : Window
         if (RatConfig.MinimizeToTray && WindowState == WindowState.Minimized)
             Hide();
 
+        // WPF reports minimized windows as still visible, so WebView2 keeps
+        // compositing GPU frames in the background. Suspend the renderer while
+        // minimized/hidden and resume it when the window comes back.
+        if (WindowState == WindowState.Minimized)
+            BlazorUI.SuspendActiveWebView();
+        else if (!_isMinimalUi)
+            BlazorUI.ResumeActiveWebView();
+
         // When maximized, Windows extends the window by the resize border
         // thickness on every side; absorb that compensation with the margin so
         // visible content fills the work area exactly instead of bleeding off-screen.

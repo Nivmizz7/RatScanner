@@ -171,6 +171,10 @@ public partial class BlazorOverlay : Window
             _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
         if (hasVisibleTooltip)
         {
+            // Resume the renderer before the window is shown so the first
+            // presented frame already contains the tooltip content.
+            WebView2PowerSaver.Resume(_initializedWebView);
+
             // Only enter the topmost band while the overlay has content. A permanently
             // topmost virtual-screen window suppresses the taskbar and interferes with
             // fullscreen-aware features such as variable refresh rate.
@@ -188,6 +192,9 @@ public partial class BlazorOverlay : Window
             Topmost = false;
             if (IsVisible)
                 Hide();
+            // Hiding the WPF window does not stop the Chromium compositor;
+            // suspend the renderer so an idle overlay draws no GPU frames.
+            WebView2PowerSaver.Suspend(_initializedWebView);
         }
     }
 
