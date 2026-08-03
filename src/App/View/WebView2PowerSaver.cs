@@ -64,24 +64,29 @@ internal static class WebView2PowerSaver
         if (webView is null || core is null)
             return;
 
-        webView.Visibility = Visibility.Visible;
-
+        // Resume the renderer before making the surface visible so the first
+        // presented frame already has content (no stale/blank flash).
         if (!_powerStates.TryGetValue(core, out PowerState? state))
         {
             TryResumeCore(core);
+            webView.Visibility = Visibility.Visible;
             return;
         }
 
         if (state.PendingSuspend is not null && !state.PendingSuspend.IsCompleted)
         {
             // Suspend is still in flight; mark intent so the continuation
-            // resumes the renderer once the suspend lands.
+            // resumes the renderer once the suspend lands. The surface is
+            // made visible now so the controller's auto-resume on
+            // IsVisible=true also helps resolve the pending suspend.
             state.ResumeRequested = true;
+            webView.Visibility = Visibility.Visible;
             return;
         }
 
         state.PendingSuspend = null;
         TryResumeCore(core);
+        webView.Visibility = Visibility.Visible;
     }
 
     private static void TryResumeCore(CoreWebView2 core)

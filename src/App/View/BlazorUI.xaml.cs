@@ -131,6 +131,14 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         coreWebView.Settings.AreDefaultContextMenusEnabled = false;
         coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
 
+        // If the host window was minimized before the WebView finished
+        // initializing, the earlier SuspendActiveWebView call was a no-op.
+        // Re-apply the current power state so the renderer does not start
+        // compositing in the background.
+        Window? hostWindow = Window.GetWindow(this);
+        if (hostWindow is not null && hostWindow.WindowState == WindowState.Minimized)
+            WebView2PowerSaver.Suspend(_initializedWebView);
+
         if (IsLoaded)
             QueueDpiRefresh();
     }
