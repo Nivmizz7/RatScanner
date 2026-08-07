@@ -23,7 +23,7 @@ The App owns capture, hotkeys, mapping to tarkov.dev catalog models, and UI. The
 3. Swaps engine under name/icon locks; disposes previous instance.
 4. Rebuilds when items cache updates or settings that affect processing change.
 
-Scan entrypoints (`NameScan`, `IconScan`, `NameScanScreen`) call `RatEyeEngine.NewInspection` / inventory icon processing, then wrap results in `ItemNameScan` / `ItemIconScan`.
+Scan entrypoints (`NameScan`, `IconScan`, `NameScanScreen`) call `RatEyeEngine.NewInspection` / inventory icon processing, then wrap results in `ItemNameScan` / `ItemIconScan`. `NameScan` and `IconScan` are rate-limited by a shared `ScanThrottle` (`RatConfig.NameScan.CooldownMs`, default 300 ms) so hotkey spam cannot drive the OCR pipeline and the overlay compositor at unbounded rate; `NameScanScreen` is exempt because it is opt-in and already debounced by the 500 ms auto-scan click window.
 
 Lock order (App): name scan (0) then icon scan (1).
 

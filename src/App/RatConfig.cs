@@ -75,6 +75,13 @@ internal static class RatConfig
         internal static bool EnableAuto = false;
         internal static Language Language = Language.English;
         internal static float ConfWarnThreshold = 0.85f;
+
+        // Minimum delay in milliseconds between accepted scans (applies to name
+        // scans, icon scans, and the shared ScanThrottle). Prevents hotkey spam
+        // from driving the OCR pipeline and overlay compositor at full rate,
+        // which can otherwise peg GPU utilization.
+        internal static int CooldownMs = 300;
+
         internal static int MarkerScanSize => (int)(50 * GameScale);
         internal static int TextWidth => (int)(600 * GameScale);
     }
@@ -285,6 +292,7 @@ internal static class RatConfig
         NameScan.Enable = config.ReadBool(nameof(NameScan.Enable), NameScan.Enable);
         NameScan.EnableAuto = config.ReadBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
         NameScan.Language = (Language)config.ReadInt(nameof(NameScan.Language), (int)NameScan.Language);
+        NameScan.CooldownMs = config.ReadInt(nameof(NameScan.CooldownMs), NameScan.CooldownMs);
 
         config.Section = nameof(IconScan);
         IconScan.Enable = config.ReadBool(nameof(IconScan.Enable), IconScan.Enable);
@@ -453,6 +461,7 @@ internal static class RatConfig
             config.WriteBool(nameof(NameScan.Enable), NameScan.Enable);
             config.WriteBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
             config.WriteInt(nameof(NameScan.Language), (int)NameScan.Language);
+            config.WriteInt(nameof(NameScan.CooldownMs), NameScan.CooldownMs);
 
             config.Section = nameof(IconScan);
             config.WriteBool(nameof(IconScan.Enable), IconScan.Enable);
