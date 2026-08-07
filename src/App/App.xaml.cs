@@ -162,6 +162,10 @@ public partial class App : Application, ISingleInstance
         }
     }
 
+    // Called only from OnStartup under #if !DEBUG; Debug builds compile the call
+    // site out, so IDE0051 reports this Release-only crash handler as unused
+    // (false positive under Debug analysis). Do not "fix" by deleting it.
+#pragma warning disable IDE0051
     private void SetupExceptionHandling()
     {
 #pragma warning disable IDE0053 // Use expression body for lambda expression
@@ -183,6 +187,7 @@ public partial class App : Application, ISingleInstance
             e.SetObserved();
         };
     }
+#pragma warning restore IDE0051
 
     private void LogUnhandledException(Exception exception, string source)
     {

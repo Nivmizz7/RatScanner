@@ -696,5 +696,6 @@ public class TarkovTrackerDB : IDisposable
             _configurationCancellation.Cancel();
             _configurationCancellation.Dispose();
         }
+        GC.SuppressFinalize(this);
     }
 }

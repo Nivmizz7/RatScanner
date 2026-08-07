@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shell;
 using System.Windows.Threading;
@@ -21,7 +20,7 @@ namespace RatScanner;
 /// <summary>
 /// Interaction logic for PageSwitcher.xaml
 /// </summary>
-public partial class PageSwitcher : Window
+public partial class PageSwitcher : Window, IDisposable
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
@@ -332,15 +331,22 @@ public partial class PageSwitcher : Window
             SizeChanged -= OnWindowSizeChangedForFit;
             _fitAnimationTimer.Stop();
         }
+        Dispose();
+
+        base.OnClosed(e);
+        ExitApplication();
+    }
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
         if (_notifyIcon != null)
         {
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
         }
-        _contextMenuStrip.Dispose();
 
-        base.OnClosed(e);
-        ExitApplication();
+        _contextMenuStrip.Dispose();
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

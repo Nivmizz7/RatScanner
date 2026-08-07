@@ -92,7 +92,9 @@ static class WindowBlurEffect
             data.SizeOfData = accentStructSize;
             data.Data = accentPtr;
 
-            SetWindowCompositionAttribute(windowHelper.Handle, ref data);
+            int result = SetWindowCompositionAttribute(windowHelper.Handle, ref data);
+            if (result != 0)
+                Logger.LogWarning($"Unable to apply window blur (HRESULT 0x{result:X8}).");
         }
         finally
         {

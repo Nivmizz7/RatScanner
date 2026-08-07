@@ -70,6 +70,8 @@ internal enum RequirementStatus
     Unavailable,
 }
 
+/// <param name="Status">Whether this requirement is active, conditional, or unavailable.</param>
+/// <param name="RemainingRequired">Remaining count still required, when known.</param>
 /// <param name="RequiresFoundInRaid">How many of the remaining needs mandate FIR.</param>
 /// <param name="NonFoundInRaid">Remaining needs that accept non-FIR items.</param>
 internal sealed record RequirementViewModel(
@@ -87,6 +89,7 @@ internal sealed record RequirementViewModel(
 /// Applicability-aware quest need view. Counts are never merged across buckets
 /// so conditional/future needs can never masquerade as active ones.
 /// </summary>
+/// <param name="Report">The quest-need report backing this view model.</param>
 /// <param name="WeaponUsableAdvisory">
 /// True when the scanned item is a weapon with an open giveItem/buildWeapon need;
 /// RatScanner cannot verify the assembly (vital parts) state of the scanned weapon.

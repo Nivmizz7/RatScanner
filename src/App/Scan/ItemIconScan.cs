@@ -19,7 +19,7 @@ public class ItemIconScan : ItemScan
         RatStash.Item iconItem = icon.Item;
         Item =
             TarkovDevAPI.GetItems().FirstOrDefault(item => item.Id == iconItem.Id)
-            ?? throw new Exception($"Unknown item: {icon.Item.Id}");
+            ?? throw new InvalidOperationException($"Unknown item: {icon.Item.Id}");
         ItemExtraInfo = icon.ItemExtraInfo;
         Confidence = icon.DetectionConfidence;
         Rotated = icon.Rotated;

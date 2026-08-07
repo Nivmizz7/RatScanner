@@ -16,7 +16,7 @@ internal static class UserActivityHelper
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(ref Win32Point pt);
 
-    [DllImport("kernel32.dll")]
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr GetModuleHandle(string name);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -279,7 +279,7 @@ internal static class UserActivityHelper
         bool handled = false;
 
         // Read structure KeyboardHookStruct at lParam
-        KBDLLHOOKSTRUCT keyboardHookStruct = (KBDLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(KBDLLHOOKSTRUCT))!;
+        KBDLLHOOKSTRUCT keyboardHookStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam)!;
 
         // Debug: log Shift/Ctrl/Alt key events (VK_SHIFT=0x10, VK_LSHIFT=0xA0, VK_RSHIFT=0xA1,
         // VK_CONTROL=0x11, VK_LCONTROL=0xA2, VK_RCONTROL=0xA3, VK_MENU=0x12, VK_LMENU=0xA4, VK_RMENU=0xA5)
@@ -361,8 +361,7 @@ internal static class UserActivityHelper
                 break;
             case WM.XBUTTONUP:
             case WM.XBUTTONDOWN:
-                MouseLLHookStruct mouseHookStruct = (MouseLLHookStruct)
-                    Marshal.PtrToStructure(lParam, typeof(MouseLLHookStruct))!;
+                MouseLLHookStruct mouseHookStruct = Marshal.PtrToStructure<MouseLLHookStruct>(lParam)!;
                 if (mouseHookStruct.mouseData == 0x10000)
                     virtualKeycode = 0x05;
                 else if (mouseHookStruct.mouseData == 0x20000)
@@ -684,7 +683,7 @@ internal class KeyUpEventArgs : EventArgs
         {
             string message = "Trying to access Key of non keyboard event. Check device property first.";
             if (Device != Device.Keyboard)
-                throw new Exception(message);
+                throw new InvalidOperationException(message);
             return KeyInterop.KeyFromVirtualKey(VKCode);
         }
     }
@@ -695,7 +694,7 @@ internal class KeyUpEventArgs : EventArgs
         {
             string message = "Trying to access MouseButton of non mouse event. Check device property first.";
             if (Device != Device.Mouse)
-                throw new Exception(message);
+                throw new InvalidOperationException(message);
             return UserActivityHelper.VKeyToMouseButton(VKCode);
         }
     }

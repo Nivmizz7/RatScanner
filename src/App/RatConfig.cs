@@ -554,7 +554,7 @@ internal static class RatConfig
     internal static string GetCachePath(string key)
     {
         byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        string hash = string.Concat(Array.ConvertAll(hashBytes, b => b.ToString("X2")));
+        string hash = Convert.ToHexString(hashBytes);
         return Path.Combine(Paths.CacheDir, hash + ".data");
     }
 

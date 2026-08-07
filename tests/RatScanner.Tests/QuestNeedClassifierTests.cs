@@ -1,6 +1,5 @@
 #nullable enable
 
-using RatScanner;
 using RatScanner.FetchModels.TarkovTracker;
 using RatScanner.TarkovDev;
 using Xunit;
