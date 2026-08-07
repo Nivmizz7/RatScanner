@@ -265,9 +265,10 @@ jobs:
           Set-Content -LiteralPath release-notes.md -Value $lines -Encoding utf8NoBOM
       - name: Publish Release
         # Pin must match an org selected-actions allowlist entry for softprops/action-gh-release.
+        # v3.x is the Node 24 runtime line (v2.x targets the deprecated Node 20 runtime).
         # The testing channel is opt-in and hidden from /releases/latest. The latest channel
         # is visible to every installed build that follows the maintained release feed.
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
