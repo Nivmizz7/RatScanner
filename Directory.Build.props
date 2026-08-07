@@ -1,0 +1,32 @@
+<Project>
+  <!--
+    Solution-wide code-quality baseline. Intentionally repo-wide: every project
+    under this directory (including the RatEye submodule checkout and scratch
+    projects) gets the same analyzer policy, so there is one quality standard.
+
+    AnalysisLevel is pinned to the .NET 10 ruleset so analyzer behavior is
+    deliberate: an SDK upgrade cannot silently introduce new rules. global.json
+    pins the SDK; bump the level together with deliberate SDK upgrades.
+
+    The curated rule set that actually gates builds lives in .editorconfig
+    (warning+ severities under the "Code-quality gate" section). The elevated
+    WarningsAsErrors list below turns those selected rules into CI failures;
+    everything else from 10.0-recommended is suggestion-level and IDE-only.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- XML documentation generation is required for IDE0005 (unused usings) to
+         participate in build analysis (roslyn#41640). CS1591 is intentionally
+         suppressed because XML documentation completeness is NOT an enforced
+         repository quality rule; the generated doc file is a build side effect. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- Curated correctness/dead-code rules are hard CI failures. This list must
+         match the warning-severity block in .editorconfig. New findings fail the
+         build instead of silently passing; demote a rule to suggestion (in
+         .editorconfig) if the signal is not worth gating on. -->
+    <WarningsAsErrors>$(WarningsAsErrors);IDE0005;IDE0051;IDE0052;CA1001;CA1068;CA1305;CA1310;CA1806;CA1816;CA2016;CA2101;CA2201;CA2211</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

@@ -61,6 +61,8 @@ jobs:
         run: dotnet csharpier check .
       - name: Build
         run: dotnet build RatScanner.sln -c Release --no-restore
+      - name: Build Debug (analyzer gate for #if-gated code)
+        run: dotnet build RatScanner.sln -c Debug --no-restore
       - name: Test
         run: dotnet test RatScanner.sln -c Release --no-build
       - name: Dependency vulnerability audit

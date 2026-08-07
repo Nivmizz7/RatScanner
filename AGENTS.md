@@ -75,7 +75,7 @@ Before calling material work done:
 
 | Change class | Minimum checks |
 | --- | --- |
-| Any code | `dotnet build RatScanner.sln` |
+| Any code | `dotnet build RatScanner.sln` (Debug + Release; curated analyzer set is a build-error gate via `Directory.Build.props` + `.editorconfig`) |
 | Behavior covered by tests | `dotnet test RatScanner.sln` |
 | C# style-sensitive edits | `dotnet tool restore` + `dotnet csharpier check .` (or format) |
 | Any `*.md` edit | `scripts\lint-markdown.ps1 -Fix` then check (tables, fence languages, trailing whitespace) |
@@ -112,6 +112,7 @@ Do not expand into subjective rewrites or unrelated features. Defer only for a c
 | Config, settings file, cache paths | [configuration-and-cache.md](docs/agent-context/configuration-and-cache.md) |
 | UI string localization | [localization.md](docs/agent-context/localization.md) |
 | Build, tests, fixtures, visual verification | [build-and-validation.md](docs/agent-context/build-and-validation.md) + `tests/AGENTS.md` |
+| Scan latency, overlay GPU load, startup time, slow-user reports | [performance-diagnostics.md](docs/agent-context/performance-diagnostics.md) |
 | Package / framework upgrades | [dependency-management.md](docs/agent-context/dependency-management.md) |
 | Versioning, publishing, releases | [release-and-versioning.md](docs/agent-context/release-and-versioning.md) |
 | Branches, commits, PRs, upstream | [contribution-workflow.md](docs/agent-context/contribution-workflow.md) |
