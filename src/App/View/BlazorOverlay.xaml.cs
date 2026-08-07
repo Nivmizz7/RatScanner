@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Forms;
@@ -19,6 +20,7 @@ public partial class BlazorOverlay : Window
 {
     private WebView2CompositionControl? _initializedWebView;
     private DispatcherOperation? _pendingDpiRefresh;
+    private DispatcherTimer? _initialSuspendTimer;
     private readonly MenuVM _menuViewModel;
     private bool _webViewReady;
     private bool _closing;
@@ -150,15 +152,56 @@ public partial class BlazorOverlay : Window
         // swallowing desktop/taskbar clicks.
         SetWindowStyle();
         _webViewReady = true;
-        UpdateWindowVisibility();
 
-        // If we are running in a development/debugger mode, open dev tools to help out
+        // If we are running in a development/debugger mode, open dev tools to help out.
+        // Run before any early return so the debugger hook always fires on navigation.
         if (Debugger.IsAttached)
             _initializedWebView?.CoreWebView2.OpenDevToolsWindow();
+
+        // If a tooltip is already visible, show it immediately — do not make
+        // the user wait for the bootstrap grace period.
+        if (HasVisibleTooltip())
+        {
+            UpdateWindowVisibility();
+            return;
+        }
+
+        // NavigationCompleted fires when the document loads, but the Blazor JS
+        // runtime may still be completing its startup handshake. TrySuspendAsync
+        // waits for running scripts, but deferred microtasks/promises could be
+        // left half-finished if we freeze immediately. Defer the first suspend
+        // by 2 s so bootstrap completes. A tooltip arriving during the grace
+        // period cancels the timer and shows immediately; unrelated model
+        // updates do not cancel it.
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(2),
+        };
+        _initialSuspendTimer.Tick += (_, _) =>
+        {
+            _initialSuspendTimer?.Stop();
+            _initialSuspendTimer = null;
+            UpdateWindowVisibility();
+        };
+        _initialSuspendTimer.Start();
     }
+
+    private bool HasVisibleTooltip() =>
+        _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
 
     private void MenuViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        // During the bootstrap grace period, only interrupt for an actual
+        // tooltip; unrelated model updates let the deferred suspend run so
+        // we don't freeze the renderer before Blazor startup has settled.
+        if (_initialSuspendTimer is not null && !HasVisibleTooltip())
+            return;
+
+        // A tooltip arriving during the bootstrap grace period cancels the
+        // deferred suspend; UpdateWindowVisibility will Resume/show instead.
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = null;
         _ = Dispatcher.BeginInvoke(UpdateWindowVisibility);
     }
 
@@ -167,10 +210,12 @@ public partial class BlazorOverlay : Window
         if (!_webViewReady || _closing)
             return;
 
-        bool hasVisibleTooltip =
-            _menuViewModel.ItemScans.GetNextExpiration(System.DateTimeOffset.Now.ToUnixTimeMilliseconds()) is not null;
-        if (hasVisibleTooltip)
+        if (HasVisibleTooltip())
         {
+            // Resume the renderer before the window is shown so the first
+            // presented frame already contains the tooltip content.
+            WebView2PowerSaver.Resume(_initializedWebView);
+
             // Only enter the topmost band while the overlay has content. A permanently
             // topmost virtual-screen window suppresses the taskbar and interferes with
             // fullscreen-aware features such as variable refresh rate.
@@ -188,6 +233,9 @@ public partial class BlazorOverlay : Window
             Topmost = false;
             if (IsVisible)
                 Hide();
+            // Hiding the WPF window does not stop the Chromium compositor;
+            // suspend the renderer so an idle overlay draws no GPU frames.
+            WebView2PowerSaver.Suspend(_initializedWebView);
         }
     }
 
@@ -200,6 +248,8 @@ public partial class BlazorOverlay : Window
     protected override void OnClosed(System.EventArgs e)
     {
         _closing = true;
+        _initialSuspendTimer?.Stop();
+        _initialSuspendTimer = null;
         _menuViewModel.PropertyChanged -= MenuViewModel_PropertyChanged;
         DpiChanged -= HostWindow_DpiChanged;
         WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);

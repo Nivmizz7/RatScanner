@@ -131,6 +131,14 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         coreWebView.Settings.AreDefaultContextMenusEnabled = false;
         coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
 
+        // If the host window was minimized before the WebView finished
+        // initializing, the earlier SuspendActiveWebView call was a no-op.
+        // Re-apply the current power state so the renderer does not start
+        // compositing in the background.
+        Window? hostWindow = Window.GetWindow(this);
+        if (hostWindow is not null && hostWindow.WindowState == WindowState.Minimized)
+            WebView2PowerSaver.Suspend(_initializedWebView);
+
         if (IsLoaded)
             QueueDpiRefresh();
     }
@@ -213,9 +221,36 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     public void OnOpen()
     {
         UpdateElements();
+        WebView2PowerSaver.Resume(_initializedWebView);
     }
 
-    public void OnClose() { }
+    // Navigating away (minimal UI) detaches the control but keeps the WebView2
+    // renderer alive; suspend it so the compact overlay costs no GPU frames.
+    public void OnClose() => WebView2PowerSaver.Suspend(_initializedWebView);
+
+    /// <summary>
+    /// Suspends the main UI WebView renderer without creating the singleton.
+    /// Used when the host window is minimized or hidden to the tray.
+    /// </summary>
+    internal static void SuspendActiveWebView() => PeekInstance()?.OnClose();
+
+    /// <summary>
+    /// Resumes the main UI WebView renderer without creating the singleton.
+    /// </summary>
+    internal static void ResumeActiveWebView()
+    {
+        BlazorUI? instance = PeekInstance();
+        if (instance is not null)
+            WebView2PowerSaver.Resume(instance._initializedWebView);
+    }
+
+    private static BlazorUI? PeekInstance()
+    {
+        lock (InstanceLock)
+        {
+            return _shutdownStarted ? null : _instance;
+        }
+    }
 
     public void Dispose()
     {
