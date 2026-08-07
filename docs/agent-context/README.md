@@ -19,9 +19,11 @@ Context docs are not a second source of product truth. Explicit maintainer decis
 | --- | --- |
 | [project-overview.md](project-overview.md) | Orienting on product purpose, platform, fork identity, non-goals |
 | [architecture.md](architecture.md) | Startup, process shape, WPF vs Blazor WebView, DI, lifecycle |
+| [architecture-analysis.md](architecture-analysis.md) | Current architecture register: findings, cleared leads, ranked priorities, sequencing |
 | [repository-map.md](repository-map.md) | Locating concerns and directories before a search binge |
 | [local-development.md](local-development.md) | Setup, `dev.bat`, data install, watch loop failures |
 | [build-and-validation.md](build-and-validation.md) | Restore/build/test/format, what to run per change type |
+| [performance-diagnostics.md](performance-diagnostics.md) | Scan/startup timings, overlay cost counters, user-supplied performance reports |
 | [app-ui.md](app-ui.md) | Razor, MudBlazor, CSS, themes, host pages, layouts |
 | [scan-engine.md](scan-engine.md) | OCR/icon pipeline and standalone RatEye boundary |
 | [data-integrations.md](data-integrations.md) | json.tarkov.dev, slim maps GraphQL, TarkovTracker, caches |
