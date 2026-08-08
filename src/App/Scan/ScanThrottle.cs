@@ -14,10 +14,9 @@ internal sealed class ScanThrottle
 {
     private readonly long _cooldownMs;
 
-    // 0 is a safe "never acquired" sentinel: real epoch-millisecond timestamps
-    // are far above any cooldown value, so the first acquire always passes and
-    // the addition cannot overflow for any realistic timestamp.
-    private long _lastAcceptedMs;
+    // A dedicated sentinel lets the first request pass even immediately after
+    // system startup, when the monotonic clock can still be below the cooldown.
+    private long _lastAcceptedMs = long.MinValue;
 
     internal ScanThrottle(long cooldownMs)
     {
@@ -27,13 +26,15 @@ internal sealed class ScanThrottle
     }
 
     /// <summary>
-    /// Returns true when a scan may start now. Passing the wall-clock time in
-    /// keeps the class deterministic and unit-testable.
+    /// Returns true when a scan may start now. <paramref name="nowMs"/> must be
+    /// elapsed milliseconds from a monotonic source such as
+    /// <see cref="Environment.TickCount64"/>. Supplying the timestamp keeps the
+    /// class deterministic in tests.
     /// </summary>
     internal bool TryAcquire(long nowMs)
     {
         long last = Interlocked.Read(ref _lastAcceptedMs);
-        if (nowMs < last + _cooldownMs)
+        if (last != long.MinValue && (nowMs < last || nowMs - last < _cooldownMs))
             return false;
         return Interlocked.CompareExchange(ref _lastAcceptedMs, nowMs, last) == last;
     }

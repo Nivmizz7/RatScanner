@@ -1,6 +1,5 @@
 using System;
 using System.Threading;
-using System.Threading.Tasks;
 using RatScanner.Scan;
 using Xunit;
 
@@ -9,10 +8,10 @@ namespace RatScanner.Tests;
 public sealed class ScanThrottleTests
 {
     [Fact]
-    public void First_acquire_is_allowed()
+    public void First_acquire_is_allowed_at_system_startup()
     {
         ScanThrottle throttle = new(300);
-        Assert.True(throttle.TryAcquire(1_000));
+        Assert.True(throttle.TryAcquire(0));
     }
 
     [Fact]
@@ -72,24 +71,41 @@ public sealed class ScanThrottleTests
     [Fact]
     public void Concurrent_acquires_have_a_single_winner()
     {
-        // Multiple hotkey handlers can race; exactly one may acquire per window.
+        // Dedicated threads avoid a ThreadPool-starvation deadlock: blocking
+        // ThreadPool workers on a Barrier can prevent the remaining participants
+        // from ever being scheduled on constrained CI runners.
         const int participants = 8;
         const long now = 1_000_000;
         ScanThrottle throttle = new(300);
-        using Barrier barrier = new(participants);
+        using CountdownEvent ready = new(participants);
+        using ManualResetEventSlim start = new(false);
+        Thread[] workers = new Thread[participants];
         int winners = 0;
 
-        Parallel.For(
-            0,
-            participants,
-            _ =>
+        for (int index = 0; index < workers.Length; index++)
+        {
+            workers[index] = new Thread(() =>
             {
-                barrier.SignalAndWait();
+                ready.Signal();
+                if (!start.Wait(TimeSpan.FromSeconds(5)))
+                    return;
                 if (throttle.TryAcquire(now))
                     Interlocked.Increment(ref winners);
-            }
-        );
+            })
+            {
+                IsBackground = true,
+            };
+            workers[index].Start();
+        }
 
+        bool allReady = ready.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        start.Set();
+        bool allJoined = true;
+        foreach (Thread worker in workers)
+            allJoined &= worker.Join(TimeSpan.FromSeconds(5));
+
+        Assert.True(allReady);
+        Assert.True(allJoined);
         Assert.Equal(1, winners);
     }
 }

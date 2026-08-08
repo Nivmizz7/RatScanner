@@ -77,9 +77,10 @@ internal static class RatConfig
         internal static float ConfWarnThreshold = 0.85f;
 
         // Minimum delay in milliseconds between accepted scans (applies to name
-        // scans, icon scans, and the shared ScanThrottle). Prevents hotkey spam
-        // from driving the OCR pipeline and overlay compositor at full rate,
-        // which can otherwise peg GPU utilization.
+        // scans, icon scans, and the shared ScanThrottle). This advanced value is
+        // loaded once at startup; config-file edits take effect after restart.
+        // Prevents hotkey spam from driving the OCR pipeline and overlay compositor
+        // at full rate, which can otherwise peg GPU utilization.
         internal static int CooldownMs = 300;
 
         internal static int MarkerScanSize => (int)(50 * GameScale);

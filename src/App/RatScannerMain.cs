@@ -466,7 +466,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <param name="position">Position on the screen at which to perform the scan</param>
     internal void NameScan(Vector2 position)
     {
-        if (!_scanThrottle.TryAcquire(DateTimeOffset.Now.ToUnixTimeMilliseconds()))
+        if (!_scanThrottle.TryAcquire(Environment.TickCount64))
         {
             Logger.LogDebug("NameScan: skipped (scan cooldown active)");
             return;
@@ -628,7 +628,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <returns><see langword="true"/> if a item was scanned successfully</returns>
     internal void IconScan(Vector2 position)
     {
-        if (!_scanThrottle.TryAcquire(DateTimeOffset.Now.ToUnixTimeMilliseconds()))
+        if (!_scanThrottle.TryAcquire(Environment.TickCount64))
         {
             Logger.LogDebug("IconScan: skipped (scan cooldown active)");
             return;
