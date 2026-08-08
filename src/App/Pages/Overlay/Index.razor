@@ -109,22 +109,11 @@
 </div>
 
 @code {
-    private string GetIconURL(ItemIconScan itemScan)
-    {
-        var path = itemScan.IconPath;
-
-        if (string.IsNullOrEmpty(path)) return itemScan.Item.BaseImageLink ?? "";
-
-        path = path.Replace("\\", "/", StringComparison.Ordinal);
-        const string dataPrefix = "Data/";
-        const string iconDirectory = dataPrefix + "icons/";
-        var iconDirectoryIndex = path.IndexOf(iconDirectory, StringComparison.OrdinalIgnoreCase);
-        if (iconDirectoryIndex < 0) return itemScan.Item.BaseImageLink ?? "";
-
-        var pathEnd = path[(iconDirectoryIndex + dataPrefix.Length)..];
-        var url = "https://local.data/" + pathEnd;
-        return url;
-    }
+    private string GetIconURL(ItemIconScan itemScan) =>
+        RatScanner.Presentation.ItemIconResolver.Resolve(
+            itemScan.IconPath,
+            itemScan.Item.Id,
+            itemScan.Item.BaseImageLink);
 
     protected override void OnInitialized()
     {
