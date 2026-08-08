@@ -139,3 +139,8 @@ finally {
         }
     }
 }
+
+# Native download/extraction fallbacks can leave a stale non-zero LASTEXITCODE
+# after a successful install. dev.ps1 invokes this script in-process and uses the
+# script exit code, so make successful completion explicit.
+exit 0

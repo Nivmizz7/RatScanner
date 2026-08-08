@@ -70,7 +70,7 @@ internal enum RequirementStatus
     Unavailable,
 }
 
-/// <param name="Status">Whether this requirement is active, conditional, or unavailable.</param>
+/// <param name="Status">Whether this requirement is not required, required, or unavailable.</param>
 /// <param name="RemainingRequired">Remaining count still required, when known.</param>
 /// <param name="RequiresFoundInRaid">How many of the remaining needs mandate FIR.</param>
 /// <param name="NonFoundInRaid">Remaining needs that accept non-FIR items.</param>

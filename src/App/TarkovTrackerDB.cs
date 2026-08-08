@@ -75,6 +75,7 @@ public class TarkovTrackerDB : IDisposable
     private string _self = "";
     private TrackerConnectionState _connectionState = TrackerConnectionState.NotConfigured;
     private DateTimeOffset? _lastSuccessfulValidationUtc;
+    private bool _disposed;
 
     private readonly record struct Configuration(
         string? Token,
@@ -693,6 +694,9 @@ public class TarkovTrackerDB : IDisposable
     {
         lock (_stateLock)
         {
+            if (_disposed)
+                return;
+            _disposed = true;
             _configurationCancellation.Cancel();
             _configurationCancellation.Dispose();
         }

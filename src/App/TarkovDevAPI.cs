@@ -127,7 +127,9 @@ public static class TarkovDevAPI
         {
             string trimmed = TrimBody(responseBody);
             throw new HttpRequestException(
-                $"tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}"
+                $"tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}",
+                null,
+                response.StatusCode
             );
         }
 

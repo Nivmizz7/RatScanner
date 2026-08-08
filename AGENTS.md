@@ -33,6 +33,7 @@ dotnet test RatScanner.sln
 dotnet tool restore
 dotnet csharpier check .
 dotnet csharpier format .
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-analyzer-gate.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
