@@ -26,12 +26,11 @@ namespace RatScanner.Presentation;
 internal static class ItemIconResolver
 {
     internal const string LocalHost = "https://local.data/";
-    private const string DataPrefix = "Data/";
-    private const string IconDirectory = DataPrefix + "icons/";
 
     /// <summary>
-    /// Caches icon-file existence. Rendering happens on every scan and the icon set
-    /// only changes when Data is reinstalled, so repeated disk probing is wasteful.
+    /// Caches confirmed icon files. Missing files are deliberately not cached so a
+    /// Data refresh performed during a long-running development session can become
+    /// visible without restarting the app.
     /// </summary>
     private static readonly ConcurrentDictionary<string, bool> IconExists = new(StringComparer.OrdinalIgnoreCase);
 
@@ -64,12 +63,42 @@ internal static class ItemIconResolver
             return false;
 
         string normalized = iconPath.Replace("\\", "/", StringComparison.Ordinal);
-        int index = normalized.IndexOf(IconDirectory, StringComparison.OrdinalIgnoreCase);
-        if (index < 0)
-            return false;
+        string[] suppliedSegments = normalized.Split('/');
+        foreach (string segment in suppliedSegments)
+        {
+            if (segment.Length == 0 || segment is "." or "..")
+                return false;
+        }
 
-        url = LocalHost + normalized[(index + DataPrefix.Length)..];
-        return true;
+        try
+        {
+            string iconRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(RatConfig.Paths.StaticIcon));
+            string fullPath = Path.GetFullPath(normalized, RatConfig.Paths.Base);
+            string rootPrefix = iconRoot + Path.DirectorySeparatorChar;
+            if (!fullPath.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (!string.Equals(Path.GetExtension(fullPath), ".png", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string relative = fullPath[rootPrefix.Length..];
+            string[] relativeSegments = relative.Split(
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.None
+            );
+            foreach (string segment in relativeSegments)
+            {
+                if (segment.Length == 0 || segment is "." or "..")
+                    return false;
+            }
+
+            url = LocalHost + "icons/" + string.Join("/", Array.ConvertAll(relativeSegments, Uri.EscapeDataString));
+            return true;
+        }
+        catch (Exception exception)
+            when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -83,7 +112,12 @@ internal static class ItemIconResolver
             {
                 try
                 {
-                    return IconExists.GetOrAdd(path, File.Exists);
+                    if (IconExists.ContainsKey(path))
+                        return true;
+                    if (!File.Exists(path))
+                        return false;
+                    IconExists.TryAdd(path, true);
+                    return true;
                 }
                 catch (Exception)
                 {

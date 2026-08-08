@@ -16,7 +16,7 @@ public sealed class ItemIconResolverTests
     public void Engine_icon_path_is_mapped_to_the_local_host()
     {
         bool mapped = ItemIconResolver.TryMapEngineIconPath(
-            @"C:\Games\RatScanner\Data\icons\5449016a4bdc2d6f028b456f.png",
+            Path.Combine(RatConfig.Paths.StaticIcon, "5449016a4bdc2d6f028b456f.png"),
             out string url
         );
 
@@ -34,8 +34,10 @@ public sealed class ItemIconResolverTests
     [Fact]
     public void Icon_directory_match_is_case_insensitive()
     {
-        Assert.True(ItemIconResolver.TryMapEngineIconPath(@"c:\app\DATA\ICONS\abc.png", out string url));
-        Assert.Equal("https://local.data/ICONS/abc.png", url);
+        string path = Path.Combine(RatConfig.Paths.StaticIcon.ToUpperInvariant(), "abc.png");
+
+        Assert.True(ItemIconResolver.TryMapEngineIconPath(path, out string url));
+        Assert.Equal("https://local.data/icons/abc.png", url);
     }
 
     [Theory]
@@ -58,12 +60,22 @@ public sealed class ItemIconResolverTests
         Assert.Equal("https://local.data/icons/abc.png", url);
     }
 
-    [Fact]
-    public void Resolve_falls_back_to_the_remote_link_when_no_local_icon_exists()
+    [Theory]
+    [InlineData("Data/icons/../unknown.png")]
+    [InlineData("Data/icons/./abc.png")]
+    [InlineData("Data/icons//abc.png")]
+    [InlineData("OtherData/icons/abc.png")]
+    [InlineData("Data/icons/abc.jpg")]
+    public void Unsafe_or_non_icon_engine_paths_are_rejected(string path)
     {
-        ItemIconResolver.ResetForTests();
+        Assert.False(ItemIconResolver.TryMapEngineIconPath(path, out string url));
+        Assert.Equal(string.Empty, url);
+    }
 
-        string url = ItemIconResolver.Resolve(null, "definitelymissing0123456", "https://assets.tarkov.dev/x.webp");
+    [Fact]
+    public void Resolve_falls_back_to_the_remote_link_when_no_item_id_is_available()
+    {
+        string url = ItemIconResolver.Resolve(null, null, "https://assets.tarkov.dev/x.webp");
 
         Assert.Equal("https://assets.tarkov.dev/x.webp", url);
     }
