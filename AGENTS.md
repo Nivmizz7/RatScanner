@@ -112,7 +112,6 @@ Do not expand into subjective rewrites or unrelated features. Defer only for a c
 | Config, settings file, cache paths | [configuration-and-cache.md](docs/agent-context/configuration-and-cache.md) |
 | UI string localization | [localization.md](docs/agent-context/localization.md) |
 | Build, tests, fixtures, visual verification | [build-and-validation.md](docs/agent-context/build-and-validation.md) + `tests/AGENTS.md` |
-| Scan latency, overlay GPU load, startup time, slow-user reports | [performance-diagnostics.md](docs/agent-context/performance-diagnostics.md) |
 | Package / framework upgrades | [dependency-management.md](docs/agent-context/dependency-management.md) |
 | Versioning, publishing, releases | [release-and-versioning.md](docs/agent-context/release-and-versioning.md) |
 | Branches, commits, PRs, upstream | [contribution-workflow.md](docs/agent-context/contribution-workflow.md) |

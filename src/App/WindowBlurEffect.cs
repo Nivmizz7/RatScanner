@@ -9,7 +9,8 @@ namespace RatScanner;
 static class WindowBlurEffect
 {
     [DllImport("user32.dll")]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
     //private const uint _blurOpacity = 1;
     //private const uint _blurBackgroundColor = 0x0FF000;
@@ -92,9 +93,8 @@ static class WindowBlurEffect
             data.SizeOfData = accentStructSize;
             data.Data = accentPtr;
 
-            int result = SetWindowCompositionAttribute(windowHelper.Handle, ref data);
-            if (result != 0)
-                Logger.LogWarning($"Unable to apply window blur (HRESULT 0x{result:X8}).");
+            if (!SetWindowCompositionAttribute(windowHelper.Handle, ref data))
+                Logger.LogWarning("Unable to apply window blur.");
         }
         finally
         {
