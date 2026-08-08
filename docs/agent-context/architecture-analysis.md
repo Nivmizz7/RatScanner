@@ -3,10 +3,9 @@
 ## Header
 
 - **Analyzed:** 2026-08-07
-- **Branch:** `fix/scan-cooldown`
-- **Analyzed commit:** `28328a7` (analyzer gate/fixes + RatEye `24f8806` + focused scan-cooldown commits)
+- **Analyzed source state:** original integration commit `ced3c8a` (the analyzer-gate work now in PR #37, layered over the scan-cooldown work now in PR #35)
 - **RatEye submodule:** `24f8806` (v4.0.0-27-g24f8806 — merged upstream PR #2 + RatEyeTest cleanup)
-- **Working tree at analysis time:** clean. Performance-diagnostics experiments were moved to a separate WIP branch and are not part of this evidence baseline.
+- **Working tree at analysis time:** analyzer gate and fixes committed; unrelated in-progress performance-diagnostics work (`RatScannerMain`, `PageSwitcher`, `src/App/Diagnostics/`, untracked test files) present uncommitted. Evidence below reflects that exact historical snapshot; refresh the evidence after PRs #35 and #37 merge before treating this as the new baseline.
 - **Method:** static evidence pass only — no source changes, no refactoring, no new dependencies. Every finding carries `Status` and `Last verified` so this document can serve as a living register instead of a one-time report.
 
 ## Dependency map (current)
@@ -29,7 +28,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 1. `RatScannerMain` god-singleton — UI service locator
 
-- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `src/App/RatScannerMain.cs` (987 LOC, 15 `lock` sites, owns `RatEyeEngine`, `TarkovTrackerDB`, `HotkeyManager`, 2 `Timer`s, CTS, `ItemQueue`, scan pipeline, tracker refresh, engine rebuild, UI notification); `MenuVM.cs:15` (`DataSource`), `ItemExtensions.cs:13`, `Pages/App/Settings/SettingsTracking.razor:250`, `Components/ChangeConnectionDialog.razor:177`, `Pages/App/Index.razor:579` all reach the singleton or `TarkovDevAPI` statics directly. Ctor runs on the WPF dispatcher and performs catalog load, hotkey setup, engine setup (`RatScannerMain.cs:105-180`, documented "the bulk of startup, all on this thread").
 - **Why it matters:** every subsystem depends on one class; UI→singleton means global state and implicit ordering; ctor cost blocks the UI thread at startup; the orchestration is impossible to unit-test (the existing `ScanPipelineImageHarnessTests` *mirrors* the pipeline precisely because it cannot be invoked).
 - **Current flow:** hooks/UI → `Instance` → methods mutate shared fields under heterogeneous locks.
@@ -39,7 +38,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 2. `RatConfig` — process-wide mutable static configuration hub
 
-- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `src/App/RatConfig.cs` (697 LOC, `internal static class`), mutable statics (`Enable`, `EnableAuto`, `Language`, `ConfWarnThreshold`, `CooldownMs`, screen/display values, `NameScan`/`IconScan`/`ToolTip`/`MinimalUi`/`Tracking` groups), static events (`RatConfig.cs:199,204`), mutated from `SettingsVM`, read from the scan hot path (`RatScannerMain.cs:567-580` reads `RatConfig.NameScan.*` per scan).
 - **Why it matters:** reads/writes race by design (no locking on most fields); "config changed" is a firehose event; engine rebuild triggers on catalog/config change; hard to snapshot or test.
 - **Target boundary:** immutable options snapshot per scan + a small `ConfigStore` with change notifications; migrate `RatConfig` reads to injected services.
@@ -48,7 +47,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 3. `TarkovDevAPI` — static 1168-LOC service with static caches and engine-rebuild coupling
 
-- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `TarkovDevAPI.cs` — `public static class`, static `Cache`/`InFlightRequests`/`BackoffUntil` `ConcurrentDictionary`s, static `HttpClient`, static `ItemsCacheUpdated` event; `RatScannerMain.cs:181` subscribes and `OnItemsCacheUpdated → SetupRatEye()` rebuilds the OCR engine mid-run (`RatScannerMain.cs:334-363`).
 - **Why it matters:** no interface/DI → tests can only hit pure JSON projections (`TarkovDevJsonApiTests`); a catalog refresh rebuilds the engine under nested locks while scans may be in flight; startup loads the offline cache synchronously on the UI thread (`RatScannerMain.cs:132`).
 - **Target boundary:** instance service + `ICatalogService`, cache behind a repository; engine rebuild becomes a versioned `IEngineHost` swap with quiesce.
@@ -57,7 +56,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 4. Scan pipeline threading model — fire-and-forget, sleep-under-lock, no cancellation
 
-- **Severity:** High | **Confidence:** Medium | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** High | **Confidence:** Medium | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** hook callbacks (installed on UI thread, `HotkeyManager.cs:21`) → `ActiveHotkey.OnKeyUp` → `Task.Run(...)` (`ActiveHotkey.cs:107`) → `RatScannerMain.NameScan`: `Monitor.Enter(NameScanLock)` then `Thread.Sleep(50)` (`RatScannerMain.cs:525,536`) + GDI+ capture + OCR; `NameScanScreen` same under lock; `_scanThrottle` (300 ms) caps entry rate only; no `CancellationToken` into the pipeline; `RefreshOverlay` fires `PropertyChanged` from a `System.Timers.Timer` thread (`RatScannerMain.cs:926-945`), relying on consumers to marshal.
 - **Why it matters:** hook events can queue unbounded `Task.Run`s (throttle is best-effort per entry point); the blocking sleep holds the static lock and stalls the other scan type; shutdown can race in-flight scans against engine disposal (mitigated by `_disposed` checks + `ObjectDisposedException` catch, but by convention, not contract).
 - **Target boundary:** dedicated scan worker with bounded concurrency (semaphore); move the settle-wait out of the lock; thread a cancellation token from `_lifetimeCancellation`.
@@ -66,7 +65,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 5. RatEye types leak into App/UI contracts
 
-- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `Scan/ItemScan.cs:27` `public abstract Vector2 GetToolTipPosition()` (RatEye `Vector2`); `Scan/ItemIconScan.cs:13,15` public `Vector2 ItemSize`, `ItemExtraInfo`; `ViewModel/SettingsVM.cs:308` writes `RatEye.Config.LogDebug`; `RatScannerMain.cs:334-341` writes `Config.Path.LogFile`, `TesseractLibSearchPath`, `Config.LogDebug`; `View/MinimalMenu.xaml.cs` imports `RatEye`.
 - **Why it matters:** the UI layer cannot compile/test without the engine's value types; engine config mutations leak two-way; a RatEye API change ripples into Blazor markup and settings.
 - **Target boundary:** app-level value types (`ScreenPosition`, `ItemSize`, `DetectionResult`) mapped at the boundary; engine config written only via a narrow `IEngineConfigurator`.
@@ -75,7 +74,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 6. Duplication — scan classes, market-data derivation, WPF-vs-Blazor rendering, wiring
 
-- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** (a) `ItemNameScan` vs `ItemIconScan` are ~70% identical (`diff` confirms parallel ctors/fields); (b) market-data derivation triplicated: `MenuVM` properties (`FleaPrice`, `BestTraderOffer`, `PricePerSlot`…, `MenuVM.cs:76-105`), `ItemExtensions` (`GetBestTraderOffer`, `GetAvg24hMarketPricePerSlot`, `GetTaskRemaining`), and `ScanResultAdapter` → `RecommendationSelector` (`Presentation/ScanResultAdapter.cs:98`); (c) the same scan result rendered in two stacks: WPF `MinimalMenu.xaml.cs` (TextBlocks bound to `MenuVM`) and Blazor `Index.razor`/`Overlay/Index.razor`; (d) manual `MenuVM.PropertyChanged` subscription + `StateHasChanged` wiring duplicated in `Pages/App/Index.razor:520-557` and `Pages/Overlay/Index.razor:126-137`.
 - **Why it matters:** fixes and formatting drift between parallel implementations; two rendering stacks double the UI maintenance surface.
 - **Target boundary:** one derived-result model (already exists: `ScanResultViewModel`) consumed by both stacks; decide the minimal-UI stack once.
@@ -84,7 +83,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 7. UI→static/service-locator calls in Razor and extensions
 
-- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** 39 `RatScannerMain.Instance` sites; `Pages/App/Index.razor:579` `TarkovDevAPI.GetItems()`; `ItemExtensions.cs:13`; `SettingsTracking.razor:250,368,403`; `ChangeConnectionDialog.razor:177,241`; `SettingsAdvanced.razor:200`.
 - **Why it matters:** pages cannot be rendered or tested in isolation; hidden ordering dependencies (the singleton must exist before first render).
 - **Target boundary:** inject the extracted services (the DI container already exists).
@@ -93,7 +92,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 8. File-level complexity hotspots
 
-- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `PageSwitcher.xaml.cs` 1166 (window chrome, tray, minimal-UI geometry, content-fit animation state machine), `TarkovDevAPI.cs` 1168, `RatScannerMain.cs` 987, `UserActivityHelper.cs` 741 (hooks + Win32 enums), `SettingsVM.cs` 718, `RatConfig.cs` 696, `Pages/App/Index.razor` 763, `Settings/SettingsTracking.razor` 725, `Shared/ScannerStatus.razor` 342.
 - **Why it matters:** review friction, merge conflicts, high defect-density zones; single-responsibility violations (`PageSwitcher` alone has four concerns).
 - **Target boundary:** split by concern (e.g. `WindowChromeManager`, `TrayIconController`, `ContentFitController`); extract Razor partials/components.
@@ -102,7 +101,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 9. Static service-class family and the fatal `Logger`
 
-- **Severity:** Medium | **Confidence:** Medium | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Medium | **Confidence:** Medium | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `Logger` (static queue + `Interlocked` single-flight `Task.Run`, `_crashed` latch, `LogError` is process-fatal — shows FAQ dialog, `Logger.cs:44-60`); `GitHubUpdateService` (static, writes PowerShell apply script that kills the app, `GitHubUpdateService.cs:436-439`); `WebView2PowerSaver`/`WebView2DpiWorkaround` (static).
 - **Why it matters:** global side effects (process death on `LogError`) are implicit; static state makes shutdown and test isolation hard.
 - **Target boundary:** instance-ize where testability matters (Logger via a sink interface); keep fatal-logging explicit and documented.
@@ -111,7 +110,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 10. Native hook layer exposes WPF Input types
 
-- **Severity:** Low | **Confidence:** High | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Low | **Confidence:** High | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** `UserActivityHelper` (static native hooks) raises `KeyUpEventArgs` carrying WPF `Key`/`MouseButton` (`Hotkey.cs:9-19`); the native→input abstraction boundary is expressed in UI-framework types.
 - **Why it matters:** the hook layer cannot be reused or tested outside a WPF process; framework coupling hides where the native boundary really is.
 - **Target boundary:** framework-neutral input value types (`InputKey`, `InputButton`, `InputDevice`) in the hook layer; WPF mapping at the edge.
@@ -120,7 +119,7 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 11. `TarkovTrackerDB` single-lock design and tracking refresh
 
-- **Severity:** Low–Medium | **Confidence:** Medium | **Status:** Open | **Last verified:** `28328a7`
+- **Severity:** Low–Medium | **Confidence:** Medium | **Status:** Open | **Last verified:** `ced3c8a`
 - **Evidence:** 23 `lock (_stateLock)` sites (`TarkovTrackerDB.cs`), CTS swapped on config change (`TarkovTrackerDB.cs:158-171`), refresh timer in `RatScannerMain`.
 - **Why it matters:** one lock serializes validation, refresh, and config swaps; generation-based state is correct today but hard to extend.
 - **Target boundary:** split state machine from transport; per-concern locks or an actor pattern.
