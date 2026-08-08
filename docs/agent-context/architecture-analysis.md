@@ -149,12 +149,12 @@ Preserved as a record of investigated false leads so future agents do not re-esc
 | 2 | `RatConfig` static config hub → snapshots + `ConfigStore` | High | Large | 1 |
 | 3 | `TarkovDevAPI` static service + engine-rebuild coupling | High | Large | 1 |
 | 4 | Scan threading: bounded worker, no sleep-under-lock, cancellation | High | Medium | 1–3 |
-| 5 | RatEye types in UI contracts → boundary value types | Med-High | Medium | 1 |
+| 5 | RatEye types in UI contracts → boundary value types | Medium | Medium | 1 |
 | 6 | Duplication: scan classes, derivation triplication, dual render stacks | Medium | Medium | 5 |
 | 7 | UI→singleton/static direct calls → DI | Medium | Small | 1 |
 | 8 | Complexity hotspots (6 files >700 LOC) → split by concern | Medium | Medium | 1–7 |
 | 9 | Static service family + fatal `Logger` contract | Medium | Medium | 1–3 |
-| 10 | `TarkovTrackerDB` single-lock design | Low-Med | Medium | 1 |
+| 10 | `TarkovTrackerDB` single-lock design | Low–Medium | Medium | 1 |
 
 Registered but below the ranked cut: finding #10 (hook-layer WPF types, Low severity) — fold into the #9 work when the static service family is touched.
 
