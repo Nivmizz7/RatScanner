@@ -61,6 +61,9 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     private BlazorUI()
     {
+        Diagnostics.PerfTrace startup = Diagnostics.PerfTraceStore.Startup;
+        using Diagnostics.PerfTrace.PerfScope constructorScope = startup.Measure("startup.blazor_ui_ctor");
+
         ServiceCollection serviceCollection = new();
         serviceCollection.AddWpfBlazorWebView();
         serviceCollection.AddMudServices();
@@ -103,10 +106,16 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         Resources.Add("services", _serviceProvider);
 
-        BlazorOverlay ??= new BlazorOverlay(_serviceProvider);
-        BlazorOverlay.Show();
+        // Constructing the overlay resolves MenuVM, which constructs RatScannerMain
+        // (catalog load + scan engine) synchronously on this thread.
+        using (startup.Measure("startup.create_overlay"))
+        {
+            BlazorOverlay ??= new BlazorOverlay(_serviceProvider);
+            BlazorOverlay.Show();
+        }
 
-        InitializeComponent();
+        using (startup.Measure("startup.blazor_ui_initialize_component"))
+            InitializeComponent();
         Loaded += BlazorUI_Loaded;
         Unloaded += BlazorUI_Unloaded;
     }

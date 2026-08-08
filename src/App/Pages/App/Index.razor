@@ -362,6 +362,12 @@
     private bool _detailsOpen;
     private bool _copiedId;
 
+    // Perf sequence of the scan this render is showing, plus when its notification
+    // arrived. Consumed after the next paint so the scan timeline records how long
+    // the main window took to actually show the result.
+    private long _pendingPerfSequence;
+    private double _pendingPerfStartedAtMs;
+
     private const float HighConfidence = 0.9f;
     private const float MediumConfidence = 0.7f;
 
@@ -525,7 +531,25 @@
     private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) =>
         await InvokeAsync(() =>
         {
+            long sequence = MenuVM.LastItemScan.PerfSequence;
+            if (sequence != 0 && sequence != _pendingPerfSequence)
+            {
+                _pendingPerfSequence = sequence;
+                _pendingPerfStartedAtMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs();
+            }
+
+            // Mapping runs the quest classifier, hideout breakdown and acquisition
+            // lookups, so it is a real cost and is charged to the scan explicitly.
+            double mapStartedAtMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs();
             RefreshResult();
+            if (sequence != 0)
+            {
+                RatScanner.Diagnostics.PerfTraceStore.RecordScanStage(
+                    sequence,
+                    "mainui.map_result",
+                    RatScanner.Diagnostics.PerfTrace.MonotonicMs() - mapStartedAtMs);
+            }
+
             StateHasChanged();
         });
 
@@ -667,6 +691,42 @@
             {
             }
         }
+
+        await ReportScanPaintAsync();
+    }
+
+    /// <summary>
+    /// Closes out the scan timeline for the render that just happened. This is the
+    /// last stage of a scan, so it also finalizes the trace and gets the summary
+    /// line into the log promptly instead of waiting for the store's timeout.
+    /// </summary>
+    private async System.Threading.Tasks.Task ReportScanPaintAsync()
+    {
+        long sequence = _pendingPerfSequence;
+        if (sequence == 0)
+            return;
+
+        double startedAtMs = _pendingPerfStartedAtMs;
+        _pendingPerfSequence = 0;
+
+        RatScanner.Diagnostics.PerfTraceStore.RecordScanStage(
+            sequence,
+            "mainui.blazor_render",
+            RatScanner.Diagnostics.PerfTrace.MonotonicMs() - startedAtMs);
+
+        try
+        {
+            await JSRuntime.InvokeAsync<double>("RatScannerPerf.awaitFrame");
+            RatScanner.Diagnostics.PerfTraceStore.RecordScanStage(
+                sequence,
+                "mainui.visible",
+                RatScanner.Diagnostics.PerfTrace.MonotonicMs() - startedAtMs);
+        }
+        catch (Exception exception) when (IsExpectedInteropShutdown(exception))
+        {
+        }
+
+        RatScanner.Diagnostics.PerfTraceStore.CompleteScan(sequence);
     }
 
     /// <summary>

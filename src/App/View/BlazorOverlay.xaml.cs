@@ -215,6 +215,8 @@ public partial class BlazorOverlay : Window
 
         if (HasVisibleTooltip())
         {
+            double startedAtMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs();
+
             // Resume the renderer before the window is shown so the first
             // presented frame already contains the tooltip content.
             WebView2PowerSaver.Resume(_initializedWebView);
@@ -229,13 +231,30 @@ public partial class BlazorOverlay : Window
                 SetSize();
             Topmost = true;
             if (!IsVisible)
+            {
                 Show();
+                RatScanner.Diagnostics.PerfTraceStore.Increment("overlay.shown");
+            }
+
+            // The overlay is a per-pixel-alpha layered window stretched over the whole
+            // virtual screen, so its area is the size of the surface being composited
+            // every frame while a tooltip is up. Record it: it is the primary input to
+            // the overlay's GPU cost.
+            RatScanner.Diagnostics.PerfTraceStore.SetGauge("overlay.surface_px", (long)(ActualWidth * ActualHeight));
+            RatScanner.Diagnostics.PerfTraceStore.RecordScanStage(
+                RatScanner.Diagnostics.PerfTraceStore.CurrentScanSequence,
+                "overlay.resume_and_show",
+                RatScanner.Diagnostics.PerfTrace.MonotonicMs() - startedAtMs
+            );
         }
         else
         {
             Topmost = false;
             if (IsVisible)
+            {
                 Hide();
+                RatScanner.Diagnostics.PerfTraceStore.Increment("overlay.hidden");
+            }
             // Hiding the WPF window does not stop the Chromium compositor;
             // suspend the renderer so an idle overlay draws no GPU frames.
             WebView2PowerSaver.Suspend(_initializedWebView);

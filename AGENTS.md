@@ -115,6 +115,7 @@ Do not expand into subjective rewrites or unrelated features. Defer only for a c
 | Screenshot, OCR, image processing, detection | [scan-engine.md](docs/agent-context/scan-engine.md) + `src/ScanEngine/AGENTS.md` |
 | tarkov.dev, maps, JSON/GraphQL, cache, locale data | [data-integrations.md](docs/agent-context/data-integrations.md) |
 | Config, settings file, cache paths | [configuration-and-cache.md](docs/agent-context/configuration-and-cache.md) |
+| Performance tracing, reports, and diagnostic exports | [performance-diagnostics.md](docs/agent-context/performance-diagnostics.md) |
 | UI string localization | [localization.md](docs/agent-context/localization.md) |
 | Build, tests, fixtures, visual verification | [build-and-validation.md](docs/agent-context/build-and-validation.md) + `tests/AGENTS.md` |
 | Package / framework upgrades | [dependency-management.md](docs/agent-context/dependency-management.md) |

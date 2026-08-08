@@ -20,8 +20,14 @@ public partial class App : Application, ISingleInstance
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // First timed point in the process: everything after this is attributable.
+        Diagnostics.PerfTrace startup = Diagnostics.PerfTraceStore.Startup;
+        startup.Mark("startup.on_startup_enter");
+
         // Setup single instance mode
-        bool isFirstInstance = this.InitializeAsFirstInstance(RatConfig.SINGLE_INSTANCE_GUID);
+        bool isFirstInstance;
+        using (startup.Measure("startup.single_instance"))
+            isFirstInstance = this.InitializeAsFirstInstance(RatConfig.SINGLE_INSTANCE_GUID);
         if (!isFirstInstance)
         {
             SingleInstance.Cleanup();
@@ -29,7 +35,8 @@ public partial class App : Application, ISingleInstance
             return;
         }
 
-        new SplashScreen("Resources\\RatLogoMedium.png").Show(true, true);
+        using (startup.Measure("startup.splash_show"))
+            new SplashScreen("Resources\\RatLogoMedium.png").Show(true, true);
         base.OnStartup(e);
 
         // Set current working directory to executable location
@@ -41,7 +48,10 @@ public partial class App : Application, ISingleInstance
 
         // Install off the WPF dispatcher so a stalled download/installer cannot freeze the UI pump.
         // Still block startup (UI cannot run without WebView2), but do the work on a worker thread.
-        if (!IsWebView2RuntimeAvailable() && !Task.Run(InstallWebView2Runtime).GetAwaiter().GetResult())
+        bool webViewAvailable;
+        using (startup.Measure("startup.webview2_probe"))
+            webViewAvailable = IsWebView2RuntimeAvailable();
+        if (!webViewAvailable && !Task.Run(InstallWebView2Runtime).GetAwaiter().GetResult())
         {
             MessageBox.Show(
                 "RatScanner requires the Microsoft Edge WebView2 Runtime. Automatic installation failed. "
@@ -53,6 +63,8 @@ public partial class App : Application, ISingleInstance
             Shutdown(3);
             return;
         }
+
+        startup.Mark("startup.on_startup_exit");
     }
 
     public void OnInstanceInvoked(string[] args)
@@ -201,6 +213,17 @@ public partial class App : Application, ISingleInstance
     {
         try
         {
+            // Final counter block: a session's cumulative churn is the part that
+            // explains sustained GPU/CPU cost, and it is only complete at exit.
+            try
+            {
+                Diagnostics.PerfTraceStore.LogCounters("session end");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning("Failed to log performance counters during exit.", ex);
+            }
+
             // Isolate each disposal so one failure cannot skip WebView/service cleanup.
             try
             {

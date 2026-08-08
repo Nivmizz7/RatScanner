@@ -25,6 +25,8 @@ Based on RatScanner, originally created by Moritz / Blightbuster. Support: [Disc
   - [The system cannot find the file specified](#the-system-cannot-find-the-file-specified)
 - Scanning issues
   - [Icon scanning gets a lot of wrong matches](#icon-scanning-gets-a-lot-of-wrong-matches)
+- Performance
+  - [Scanning or startup feels slow — what should I send?](#scanning-or-startup-feels-slow--what-should-i-send)
 
 ---
 
@@ -110,6 +112,24 @@ After you've uninstalled it (or removed the entries), restart your pc and instal
 Icon scanning still has some known issues, some which are not possible to fix.
 This currently leads to items like keys and small attachments matching wrong due to their similarity to other items.
 Also, when in the stash, the bright light in the top center of the screen interferes with the top left section of the stash which results in highly inaccurate matches.
+
+---
+
+## Performance
+
+### Scanning or startup feels slow — what should I send?
+
+Rat Scanner measures itself, so you usually do not need to reproduce anything on a call.
+
+1. Start Rat Scanner, then scan a few items the way you normally would.
+2. Close Rat Scanner.
+3. Attach **`Log.txt`** from the same folder as `RatScanner.exe`.
+
+That log already contains your display layout, refresh rates, graphics adapter, and WebView2 version, plus a timing breakdown of startup and one line per scan. A slow scan is expanded automatically into a full stage-by-stage timeline, so the log usually shows exactly which step was slow.
+
+For a richer bundle, open **Settings → Advanced → Export scan diagnostics**. The exported folder adds `performance.json` and `performance.txt` (per-stage median and worst case across your recent scans). It also contains a screenshot of the area that was scanned — review it before sharing.
+
+None of this is sent anywhere automatically. Nothing leaves your machine unless you attach it yourself.
 
 [download-section]: https://github.com/tarkovtracker-org/RatScanner#download
 [ratscanner-latest]: https://github.com/tarkovtracker-org/RatScanner/releases/latest/download/RatScanner.zip

@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using RatEye;
+using RatScanner.Diagnostics;
 using RatScanner.Display;
 using RatScanner.Scan;
 using RatStash;
@@ -102,6 +104,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private RatScannerMain()
     {
+        // This constructor currently runs on the WPF dispatcher (PageSwitcher ->
+        // BlazorUI -> BlazorOverlay -> MenuVM), so every span below is time the UI
+        // is frozen. Keep it measured until that ordering changes.
+        PerfTrace startup = PerfTraceStore.Startup;
+        using PerfTrace.PerfScope constructorScope = startup.Measure("startup.ratscanner_main_ctor");
+
         _instance = this;
         _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
         ItemScans.Changed += OnItemScansChanged;
@@ -121,44 +129,55 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // Try to load from offline cache first for faster startup. Start the network
         // refresh only after RatEye is listening for cache updates below.
         bool cacheRefreshNeeded;
-        if (TarkovDevAPI.TryInitializeCacheFromOffline())
+        using (startup.Measure("startup.offline_cache_load"))
         {
-            if (TarkovDevAPI.AnyCacheExpired())
+            if (TarkovDevAPI.TryInitializeCacheFromOffline())
             {
-                Logger.LogInfo("Offline cache loaded but stale, refreshing in background...");
-                cacheRefreshNeeded = true;
+                if (TarkovDevAPI.AnyCacheExpired())
+                {
+                    Logger.LogInfo("Offline cache loaded but stale, refreshing in background...");
+                    cacheRefreshNeeded = true;
+                }
+                else
+                {
+                    Logger.LogInfo("Offline cache loaded and fresh, skipping background refresh.");
+                    cacheRefreshNeeded = false;
+                }
             }
             else
             {
-                Logger.LogInfo("Offline cache loaded and fresh, skipping background refresh.");
-                cacheRefreshNeeded = false;
+                // No offline cache available, wait for network requests
+                Logger.LogWarning("No complete offline cache available, fetching from network...");
+                cacheRefreshNeeded = true;
             }
         }
-        else
-        {
-            // No offline cache available, wait for network requests
-            Logger.LogWarning("No complete offline cache available, fetching from network...");
-            cacheRefreshNeeded = true;
-        }
 
-        SeedInitialItem();
+        using (startup.Measure("startup.seed_initial_item"))
+            SeedInitialItem();
 
         Logger.LogInfo("Initializing tarkov tracker database");
-        TarkovTrackerDB = new TarkovTrackerDB();
-        // Configure synchronously so the UI's first render sees Untested (token
-        // present) or NotConfigured (no token) instead of the constructor default
-        // NotConfigured — preventing a false "not connected" banner flash before
-        // InitializeRuntimeAsync validates the key ~1s later.
-        ConfigureActiveTracker(RatConfig.GameMode);
+        using (startup.Measure("startup.tracker_db"))
+        {
+            TarkovTrackerDB = new TarkovTrackerDB();
+            // Configure synchronously so the UI's first render sees Untested (token
+            // present) or NotConfigured (no token) instead of the constructor default
+            // NotConfigured — preventing a false "not connected" banner flash before
+            // InitializeRuntimeAsync validates the key ~1s later.
+            ConfigureActiveTracker(RatConfig.GameMode);
+        }
 
         Logger.LogInfo("Initializing hotkey manager...");
-        HotkeyManager = new HotkeyManager(this);
-        HotkeyManager.UnregisterHotkeys();
+        using (startup.Measure("startup.hotkey_manager"))
+        {
+            HotkeyManager = new HotkeyManager(this);
+            HotkeyManager.UnregisterHotkeys();
+        }
 
         Logger.LogInfo("UI Ready!");
 
         Logger.LogInfo("Initializing RatEye...");
-        SetupRatEye();
+        using (startup.Measure("startup.rateye_setup"))
+            SetupRatEye();
         TarkovDevAPI.ItemsCacheUpdated += OnItemsCacheUpdated;
 
         if (cacheRefreshNeeded)
@@ -311,6 +330,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     [MemberNotNull(nameof(RatEyeEngine))]
     internal void SetupRatEye()
     {
+        double startedAtMs = PerfTrace.MonotonicMs();
         lock (_ratEyeSetupLock)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -333,6 +353,14 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             }
             previous?.Dispose();
         }
+
+        double elapsedMs = PerfTrace.MonotonicMs() - startedAtMs;
+        PerfTraceStore.Increment("engine.rebuild_total");
+        PerfTraceStore.SetGauge("engine.last_rebuild_ms", (long)elapsedMs);
+        // Attributed to whichever trace is open: the startup timeline during boot, or
+        // the in-flight scan when a viewport change forces a mid-scan rebuild.
+        PerfTraceStore.RecordScanStage(PerfTraceStore.CurrentScanSequence, "engine.rebuild", elapsedMs);
+        Logger.LogDebug($"SetupRatEye: completed in {elapsedMs:F1} ms");
     }
 
     private static RatEye.Config GetRatEyeConfig(bool highlighted = true)
@@ -463,29 +491,47 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// Perform a name scan at the give position
     /// </summary>
     /// <param name="position">Position on the screen at which to perform the scan</param>
-    internal void NameScan(Vector2 position)
+    /// <param name="hookObservedAtMs">
+    /// Monotonic timestamp captured in the input hook, used to measure how long the
+    /// click waited before scan work began. Zero when the caller is not a hotkey.
+    /// </param>
+    internal void NameScan(Vector2 position, double hookObservedAtMs = 0)
     {
         if (!_scanThrottle.TryAcquire(Environment.TickCount64))
         {
+            PerfTraceStore.Increment("scan.throttled");
             Logger.LogDebug("NameScan: skipped (scan cooldown active)");
             return;
         }
 
+        PerfTrace trace = PerfTraceStore.BeginScan("name-scan");
+        if (hookObservedAtMs > 0)
+            trace.RecordAt("hook.dispatch", 0, PerfTrace.MonotonicMs() - hookObservedAtMs);
+
         Logger.LogDebug($"NameScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
-        RefreshGameDisplayForScan();
+        // Set once a tooltip is on its way: from then on the overlay and main window
+        // own closing the trace. Without a tooltip nothing downstream will report, so
+        // the trace must be closed here or its total would just be the finalize delay.
+        bool awaitingUiReport = false;
+        using (trace.Measure("scan.display_refresh"))
+            RefreshGameDisplayForScan();
         Logger.LogDebug("NameScan: acquiring NameScanLock...");
-        lock (NameScanLock)
+        using (trace.Measure("scan.lock_wait"))
+            Monitor.Enter(NameScanLock);
+        try
         {
             Logger.LogDebug("NameScan: NameScanLock acquired");
             if (_disposed || !_ratEyeReady)
             {
+                trace.Note("outcome", _disposed ? "disposed" : "engine-not-ready");
                 Logger.LogDebug($"NameScan: early return (_disposed={_disposed} _ratEyeReady={_ratEyeReady})");
                 return;
             }
 
             Logger.LogDebug("Name scanning at: " + position);
             // Wait for game ui to update the click
-            Thread.Sleep(50);
+            using (trace.Measure("scan.settle_sleep"))
+                Thread.Sleep(50);
 
             // Get raw screenshot which includes the icon and text
             int markerScanSize = RatConfig.NameScan.MarkerScanSize;
@@ -494,25 +540,36 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             position -= new Vector2(markerScanSize / 2, markerScanSize / 2);
 
-            using Bitmap screenshot = GetScreenshot(position, new Size(sizeWidth, sizeHeight));
+            using Bitmap screenshot = ScreenshotFor(trace, position, new Size(sizeWidth, sizeHeight));
 
             // Scan the item
-            RatEye.Processing.Inspection inspection = RatEyeEngine.NewInspection(screenshot);
-            Item? detectedItem = inspection.Item;
-            _scanDiagnostics.Record(
-                "inspection",
-                screenshot,
-                position,
-                new Vector2(markerScanSize / 2, markerScanSize / 2),
-                [new(detectedItem?.Id, detectedItem?.Name, inspection.ItemConfidence)],
-                inspection.Timings.Snapshot(),
-                RatEyeEngine.Config,
-                RatConfig.GameDisplayConfiguration,
-                RatConfig.VersionDisplay
-            );
+            RatEye.Processing.Inspection inspection;
+            Item? detectedItem;
+            using (trace.Measure("scan.inspect"))
+            {
+                inspection = RatEyeEngine.NewInspection(screenshot);
+                detectedItem = inspection.Item;
+            }
+            trace.Merge("ratEye.", inspection.Timings.Snapshot());
+            trace.Note("item", detectedItem?.Name);
+            trace.Note("confidence", inspection.ItemConfidence.ToString("F2", CultureInfo.InvariantCulture));
+
+            using (trace.Measure("scan.diagnostics_record"))
+                _scanDiagnostics.Record(
+                    "inspection",
+                    screenshot,
+                    position,
+                    new Vector2(markerScanSize / 2, markerScanSize / 2),
+                    [new(detectedItem?.Id, detectedItem?.Name, inspection.ItemConfidence)],
+                    inspection.Timings.Snapshot(),
+                    RatEyeEngine.Config,
+                    RatConfig.GameDisplayConfiguration,
+                    RatConfig.VersionDisplay
+                );
 
             if (!inspection.ContainsMarker || detectedItem == null)
             {
+                trace.Note("outcome", inspection.ContainsMarker ? "no-item" : "no-marker");
                 Logger.LogDebug(
                     $"NameScan: no marker or item (ContainsMarker={inspection.ContainsMarker} Item={inspection.Item != null})"
                 );
@@ -529,10 +586,25 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             );
             toolTipPosition += position;
 
-            ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration);
+            ItemNameScan tempNameScan = new(inspection, toolTipPosition, RatConfig.ToolTip.Duration)
+            {
+                PerfSequence = trace.Sequence,
+            };
 
-            ItemScans.Enqueue(tempNameScan);
+            trace.Note("outcome", "ok");
+            awaitingUiReport = true;
+            // Enqueue raises PropertyChanged synchronously, so this span covers the
+            // whole notification fan-out to the overlay and the main window.
+            using (trace.Measure("scan.enqueue_notify"))
+                ItemScans.Enqueue(tempNameScan);
             Logger.LogDebug($"NameScan: enqueued scan for item={inspection.Item?.Name}");
+        }
+        finally
+        {
+            Monitor.Exit(NameScanLock);
+            trace.Mark("scan.lock_released");
+            if (!awaitingUiReport)
+                PerfTraceStore.CompleteScan(trace.Sequence);
         }
         Logger.LogDebug("NameScan: EXIT (lock released)");
     }
@@ -624,23 +696,40 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// Perform a icon scan at the given position
     /// </summary>
     /// <param name="position">Position on the screen at which to perform the scan</param>
+    /// <param name="hookObservedAtMs">
+    /// Monotonic timestamp captured in the input hook, used to measure how long the
+    /// click waited before scan work began. Zero when the caller is not a hotkey.
+    /// </param>
     /// <returns><see langword="true"/> if a item was scanned successfully</returns>
-    internal void IconScan(Vector2 position)
+    internal void IconScan(Vector2 position, double hookObservedAtMs = 0)
     {
         if (!_scanThrottle.TryAcquire(Environment.TickCount64))
         {
+            PerfTraceStore.Increment("scan.throttled");
             Logger.LogDebug("IconScan: skipped (scan cooldown active)");
             return;
         }
 
+        PerfTrace trace = PerfTraceStore.BeginScan("icon-scan");
+        if (hookObservedAtMs > 0)
+            trace.RecordAt("hook.dispatch", 0, PerfTrace.MonotonicMs() - hookObservedAtMs);
+
         Logger.LogDebug($"IconScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
-        RefreshGameDisplayForScan();
+        // Set once a tooltip is on its way: from then on the overlay and main window
+        // own closing the trace. Without a tooltip nothing downstream will report, so
+        // the trace must be closed here or its total would just be the finalize delay.
+        bool awaitingUiReport = false;
+        using (trace.Measure("scan.display_refresh"))
+            RefreshGameDisplayForScan();
         Logger.LogDebug("IconScan: acquiring IconScanLock...");
-        lock (IconScanLock)
+        using (trace.Measure("scan.lock_wait"))
+            Monitor.Enter(IconScanLock);
+        try
         {
             Logger.LogDebug("IconScan: IconScanLock acquired");
             if (_disposed || !_ratEyeReady)
             {
+                trace.Note("outcome", _disposed ? "disposed" : "engine-not-ready");
                 Logger.LogDebug($"IconScan: early return (_disposed={_disposed} _ratEyeReady={_ratEyeReady})");
                 return;
             }
@@ -651,31 +740,43 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             Vector2 screenshotPosition = new(x, y);
             Size size = new(RatConfig.IconScan.ScanWidth, RatConfig.IconScan.ScanHeight);
-            using Bitmap screenshot = GetScreenshot(screenshotPosition, size);
+            using Bitmap screenshot = ScreenshotFor(trace, screenshotPosition, size);
 
             // Scan the item
             using RatEye.Processing.Inventory inventory = RatEyeEngine.NewInventory(screenshot);
-            RatEye.Processing.Icon? icon = inventory.LocateIcon();
-            Item? detectedItem = icon?.Item;
+            RatEye.Processing.Icon? icon;
+            Item? detectedItem;
+            using (trace.Measure("scan.locate_icon"))
+            {
+                icon = inventory.LocateIcon();
+                detectedItem = icon?.Item;
+            }
             Dictionary<string, double> stageMilliseconds = new(inventory.Timings.Snapshot());
             if (icon is not null)
                 AddTimings(stageMilliseconds, icon.Timings.Snapshot());
-            _scanDiagnostics.Record(
-                "inventory",
-                screenshot,
-                screenshotPosition,
-                new Vector2(size.Width / 2, size.Height / 2),
-                icon is null ? [] : [new(detectedItem?.Id, detectedItem?.Name, icon.DetectionConfidence)],
-                stageMilliseconds,
-                RatEyeEngine.Config,
-                RatConfig.GameDisplayConfiguration,
-                RatConfig.VersionDisplay
-            );
+            trace.Merge("ratEye.", stageMilliseconds);
+            trace.Note("item", detectedItem?.Name);
+            if (icon is not null)
+                trace.Note("confidence", icon.DetectionConfidence.ToString("F2", CultureInfo.InvariantCulture));
+
+            using (trace.Measure("scan.diagnostics_record"))
+                _scanDiagnostics.Record(
+                    "inventory",
+                    screenshot,
+                    screenshotPosition,
+                    new Vector2(size.Width / 2, size.Height / 2),
+                    icon is null ? [] : [new(detectedItem?.Id, detectedItem?.Name, icon.DetectionConfidence)],
+                    stageMilliseconds,
+                    RatEyeEngine.Config,
+                    RatConfig.GameDisplayConfiguration,
+                    RatConfig.VersionDisplay
+                );
 
             if (detectedItem == null || icon!.DetectionConfidence < RatConfig.IconScan.MinAcceptConfidence)
             {
                 if (icon?.Item != null)
                 {
+                    trace.Note("outcome", "below-threshold");
                     Logger.LogDebug(
                         $"Icon scan rejected: best match {icon.Item.Name} at "
                             + $"{icon.DetectionConfidence:F3} is below the acceptance threshold. "
@@ -685,6 +786,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 }
                 else
                 {
+                    trace.Note("outcome", "no-icon");
                     Logger.LogDebug(
                         $"IconScan: no icon found (icon={icon != null} confidence={icon?.DetectionConfidence:F3})"
                     );
@@ -696,12 +798,27 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             toolTipPosition += icon.Position + icon.ItemPosition;
             toolTipPosition -= new Vector2(RatConfig.IconScan.ScanWidth, RatConfig.IconScan.ScanHeight) / 2;
 
-            ItemIconScan tempIconScan = new(icon, toolTipPosition, RatConfig.ToolTip.Duration);
+            ItemIconScan tempIconScan = new(icon, toolTipPosition, RatConfig.ToolTip.Duration)
+            {
+                PerfSequence = trace.Sequence,
+            };
 
-            ItemScans.Enqueue(tempIconScan);
+            trace.Note("outcome", "ok");
+            awaitingUiReport = true;
+            // Enqueue raises PropertyChanged synchronously, so this span covers the
+            // whole notification fan-out to the overlay and the main window.
+            using (trace.Measure("scan.enqueue_notify"))
+                ItemScans.Enqueue(tempIconScan);
             Logger.LogDebug(
                 $"IconScan: enqueued scan for item={icon.Item?.Name} confidence={icon.DetectionConfidence:F3}"
             );
+        }
+        finally
+        {
+            Monitor.Exit(IconScanLock);
+            trace.Mark("scan.lock_released");
+            if (!awaitingUiReport)
+                PerfTraceStore.CompleteScan(trace.Sequence);
         }
         Logger.LogDebug("IconScan: EXIT (lock released)");
     }
@@ -736,12 +853,27 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         return bmp;
     }
 
+    /// <summary>
+    /// Captures a screenshot and records the capture cost plus its pixel area on the
+    /// scan timeline. Capture area matters: it scales both the blit and OCR cost.
+    /// </summary>
+    private static Bitmap ScreenshotFor(PerfTrace trace, Vector2 position, Size size)
+    {
+        trace.Note("capture", $"{size.Width}x{size.Height}");
+        using (trace.Measure("scan.screenshot"))
+            return GetScreenshot(position, size);
+    }
+
     private void RefreshGameDisplayForScan()
     {
         bool viewportChanged = RatConfig.RefreshGameDisplayConfiguration();
         Logger.LogDebug($"RefreshGameDisplayForScan: viewportChanged={viewportChanged}");
         if (viewportChanged)
         {
+            // A rebuild here is on the scan critical path and reconstructs the whole
+            // item database plus the OCR engine, so it must be visible in the trace.
+            PerfTraceStore.Increment("engine.rebuild_on_scan_path");
+            PerfTraceStore.NoteScan(PerfTraceStore.CurrentScanSequence, "engineRebuild", "yes");
             Logger.LogDebug("RefreshGameDisplayForScan: calling SetupRatEye (may block on locks)...");
             SetupRatEye();
             Logger.LogDebug("RefreshGameDisplayForScan: SetupRatEye complete");
