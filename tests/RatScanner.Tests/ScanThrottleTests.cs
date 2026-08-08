@@ -79,12 +79,16 @@ public sealed class ScanThrottleTests
         using Barrier barrier = new(participants);
         int winners = 0;
 
-        Parallel.For(0, participants, _ =>
-        {
-            barrier.SignalAndWait();
-            if (throttle.TryAcquire(now))
-                Interlocked.Increment(ref winners);
-        });
+        Parallel.For(
+            0,
+            participants,
+            _ =>
+            {
+                barrier.SignalAndWait();
+                if (throttle.TryAcquire(now))
+                    Interlocked.Increment(ref winners);
+            }
+        );
 
         Assert.Equal(1, winners);
     }

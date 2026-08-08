@@ -292,7 +292,7 @@ internal static class RatConfig
         NameScan.Enable = config.ReadBool(nameof(NameScan.Enable), NameScan.Enable);
         NameScan.EnableAuto = config.ReadBool(nameof(NameScan.EnableAuto), NameScan.EnableAuto);
         NameScan.Language = (Language)config.ReadInt(nameof(NameScan.Language), (int)NameScan.Language);
-        NameScan.CooldownMs = config.ReadInt(nameof(NameScan.CooldownMs), NameScan.CooldownMs);
+        NameScan.CooldownMs = Math.Max(0, config.ReadInt(nameof(NameScan.CooldownMs), NameScan.CooldownMs));
 
         config.Section = nameof(IconScan);
         IconScan.Enable = config.ReadBool(nameof(IconScan.Enable), IconScan.Enable);
