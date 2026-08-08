@@ -14,16 +14,13 @@ description: Launch and runtime-verify RatScanner UI changes with an isolated We
        throw 'Close the existing RatScanner instance; verification must not attach to or stop an unrelated process.'
    }
 
-   $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-   $listener.Start()
-   $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
-   $listener.Stop()
-
    $verifyRoot = Join-Path $env:TEMP ("RatScanner-verify-" + [Guid]::NewGuid().ToString('N'))
    $profile = Join-Path $verifyRoot 'WebView2'
    New-Item -ItemType Directory -Path $profile -Force | Out-Null
 
-   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=$port"
+   # Port 0 lets Chromium reserve an available port atomically. It publishes the
+   # selected port and browser websocket path in the profile's DevToolsActivePort file.
+   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=0'
    $env:WEBVIEW2_USER_DATA_FOLDER=$profile
    $devScript = (Resolve-Path '.\scripts\dev.ps1').Path
    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$devScript`" -Once"
@@ -38,7 +35,24 @@ description: Launch and runtime-verify RatScanner UI changes with an isolated We
    }
    ```
 
-3. Poll `http://127.0.0.1:$port/json/version` until it returns `webSocketDebuggerUrl`. Connect to that browser websocket, call `Target.getTargets`, and attach with `flatten: true` to the `page` target whose URL pathname is `/app`. Select by pathname instead of hard-coding the private host origin (the current .NET 10 WebView package uses `https://0.0.0.1/app`).
+3. Poll beneath `$profile` for `DevToolsActivePort` (normally `$profile\EBWebView\DevToolsActivePort`), then read the selected port:
+
+   ```powershell
+   $deadline = [DateTime]::UtcNow.AddMinutes(10)
+   do {
+       $portFile = Get-ChildItem -LiteralPath $profile -Filter DevToolsActivePort -File -Recurse -ErrorAction SilentlyContinue |
+           Select-Object -First 1
+       if ($portFile) { break }
+       if ($launcher.HasExited) { throw 'RatScanner exited before WebView2 opened its debugging port; inspect the captured logs.' }
+       Start-Sleep -Milliseconds 250
+   } while ([DateTime]::UtcNow -lt $deadline)
+   if (-not $portFile) { throw 'Timed out waiting for WebView2 DevToolsActivePort.' }
+   $portLine = Get-Content -LiteralPath $portFile.FullName -TotalCount 1
+   $port = [Convert]::ToInt32($portLine)
+   $version = Invoke-RestMethod "http://127.0.0.1:$port/json/version"
+   ```
+
+   Connect to `$version.webSocketDebuggerUrl`, call `Target.getTargets`, and attach with `flatten: true` to the `page` target whose URL pathname is `/app`. Select by pathname instead of hard-coding the private host origin (the current .NET 10 WebView package uses `https://0.0.0.1/app`).
 4. Use `Runtime.evaluate` to inspect and operate the real rendered DOM. Use `Page.captureScreenshot` for visual evidence and inspect the resulting image.
 5. Drive the changed flow plus at least one adjacent failure or state transition. For Recent scans, use the locale-independent `.rs-search-field input` selector to choose real catalog items; verify navigation persistence, five-item eviction, and duplicate promotion.
 6. Always clean up only the process tree and profile created above, including after a failed probe:
