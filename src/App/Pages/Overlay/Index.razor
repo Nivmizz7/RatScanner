@@ -35,7 +35,7 @@
                             var mHeight = iconScan.Rotated ? width : height;
                         }
                         <div style="position: absolute; width: 100%; height: 100%; left: 0px; top: 0px; z-index: -1;">
-                            <img src="@GetIconURL(iconScan)" style="width: @(mWidth)px; height: @(mHeight)px;
+                            <img @key="item.Id" src="@GetIconURL(iconScan)" style="width: @(mWidth)px; height: @(mHeight)px;
 	                                                                background-color: #121212; transform-origin: top left; @iconStyle">
                         </div>
 
@@ -109,22 +109,11 @@
 </div>
 
 @code {
-    private string GetIconURL(ItemIconScan itemScan)
-    {
-        var path = itemScan.IconPath;
-
-        if (string.IsNullOrEmpty(path)) return itemScan.Item.BaseImageLink ?? "";
-
-        path = path.Replace("\\", "/", StringComparison.Ordinal);
-        const string dataPrefix = "Data/";
-        const string iconDirectory = dataPrefix + "icons/";
-        var iconDirectoryIndex = path.IndexOf(iconDirectory, StringComparison.OrdinalIgnoreCase);
-        if (iconDirectoryIndex < 0) return itemScan.Item.BaseImageLink ?? "";
-
-        var pathEnd = path[(iconDirectoryIndex + dataPrefix.Length)..];
-        var url = "https://local.data/" + pathEnd;
-        return url;
-    }
+    private string GetIconURL(ItemIconScan itemScan) =>
+        RatScanner.Presentation.ItemIconResolver.Resolve(
+            itemScan.IconPath,
+            itemScan.Item.Id,
+            itemScan.Item.BaseImageLink);
 
     protected override void OnInitialized()
     {

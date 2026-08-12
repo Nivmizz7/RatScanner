@@ -73,7 +73,10 @@ internal static class ScanResultAdapter
                 item.Id,
                 item.Name,
                 item.ShortName,
-                item.IconLink,
+                // Prefer the locally installed icon. The remote catalog link costs a
+                // network round trip, during which the reused <img> element still
+                // shows the previous scan's icon next to this scan's name and price.
+                ItemIconResolver.Resolve(scan.IconPath, item.Id, item.IconLink),
                 item.Link,
                 item.GetWikiLink(),
                 itemType,
