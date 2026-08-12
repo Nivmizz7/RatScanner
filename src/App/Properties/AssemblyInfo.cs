@@ -1,4 +1,7 @@
+using System.Resources;
 using System.Runtime.InteropServices;
+
+[assembly: NeutralResourcesLanguage("en")]
 
 [assembly: System.Windows.ThemeInfo(
     System.Windows.ResourceDictionaryLocation.None,

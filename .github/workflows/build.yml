@@ -27,7 +27,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
           cache: true
           cache-dependency-path: |
             **/*.csproj
@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-agent-docs.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Analyzer gate consistency
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-analyzer-gate.ps1
       - name: RatScannerData validation tests
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-data-validation.ps1
       - name: Setup Node
@@ -61,6 +63,8 @@ jobs:
         run: dotnet csharpier check .
       - name: Build
         run: dotnet build RatScanner.sln -c Release --no-restore
+      - name: Build Debug (analyzer gate for #if-gated code)
+        run: dotnet build RatScanner.sln -c Debug --no-restore
       - name: Test
         run: dotnet test RatScanner.sln -c Release --no-build
       - name: Dependency vulnerability audit

@@ -37,3 +37,60 @@ resharper_place_expr_method_on_single_line=true
 indent_style=space
 indent_size=4
 tab_width=4
+
+# ---- Code-quality gate (keep in sync with Directory.Build.props) ----
+# Only rules at warning+ severity participate in builds (EnforceCodeStyleInBuild).
+# The WarningsAsErrors list in Directory.Build.props turns this explicit warning
+# set into CI failures. scripts/check-analyzer-gate.ps1 verifies that the two
+# definitions cannot drift; other reviewed signals remain suggestion-level.
+
+[*.cs]
+# Dead / unnecessary code
+# IDE0051/IDE0052 are reviewed per finding (WPF/XAML and #if-gated members can
+# look dead under one configuration); never blanket auto-fix them.
+dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0051.severity = warning
+dotnet_diagnostic.IDE0052.severity = warning
+
+# Correctness: fix or explicitly justify new findings
+# (CA2201=reserved exceptions, CA1305/CA1310=locale, CA1001=disposal,
+# CA2016/CA1068=CancellationToken, CA2101=P/Invoke marshaling,
+# CA1806=ignored results, CA2211=mutable static state, CA1816=SuppressFinalize)
+dotnet_diagnostic.CA1001.severity = warning
+dotnet_diagnostic.CA1068.severity = warning
+dotnet_diagnostic.CA1305.severity = warning
+dotnet_diagnostic.CA1310.severity = warning
+dotnet_diagnostic.CA1806.severity = warning
+dotnet_diagnostic.CA1816.severity = warning
+dotnet_diagnostic.CA2016.severity = warning
+dotnet_diagnostic.CA2101.severity = warning
+dotnet_diagnostic.CA2201.severity = warning
+dotnet_diagnostic.CA2211.severity = warning
+
+# Design/cleanup signals - visible in the IDE, not CI-blocking
+dotnet_diagnostic.CA1051.severity = suggestion
+dotnet_diagnostic.CA1512.severity = suggestion
+dotnet_diagnostic.CA1711.severity = suggestion
+dotnet_diagnostic.CA1720.severity = suggestion
+dotnet_diagnostic.CA1805.severity = suggestion
+dotnet_diagnostic.CA1822.severity = suggestion
+dotnet_diagnostic.CA1824.severity = suggestion
+dotnet_diagnostic.CA1826.severity = suggestion
+dotnet_diagnostic.CA1837.severity = suggestion
+dotnet_diagnostic.CA1838.severity = suggestion
+dotnet_diagnostic.CA1845.severity = suggestion
+dotnet_diagnostic.CA1859.severity = suggestion
+dotnet_diagnostic.CA2263.severity = suggestion
+
+# ---- Deliberate conventions ----
+
+[tests/**]
+# Test methods intentionally use Method_does_something naming.
+dotnet_diagnostic.CA1707.severity = none
+
+[src/App/UserActivityHelper.cs]
+# Win32 message constant names (WM_*, HSHELL_*, ...) intentionally mirror the native API.
+dotnet_diagnostic.CA1707.severity = none
+
+# Several Win32 message constants intentionally alias the same numeric value.
+dotnet_diagnostic.CA1069.severity = none

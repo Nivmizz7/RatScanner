@@ -94,7 +94,9 @@ public class TarkovDevJsonApiTests
             }
             """;
 
-        Exception ex = Assert.Throws<Exception>(() => TarkovDevAPI.ProjectMapsFromGraphql(json));
+        InvalidOperationException ex = Assert.Throws<InvalidOperationException>(() =>
+            TarkovDevAPI.ProjectMapsFromGraphql(json)
+        );
         Assert.Contains("boom", ex.Message, StringComparison.Ordinal);
     }
 

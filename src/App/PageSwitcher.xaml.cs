@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shell;
 using System.Windows.Threading;
@@ -21,7 +20,7 @@ namespace RatScanner;
 /// <summary>
 /// Interaction logic for PageSwitcher.xaml
 /// </summary>
-public partial class PageSwitcher : Window
+public partial class PageSwitcher : Window, IDisposable
 {
     public const int DefaultWidth = 1080;
     public const int DefaultHeight = 720;
@@ -56,6 +55,7 @@ public partial class PageSwitcher : Window
     private UserControl? activeControl;
     private bool _isMinimalUi;
     private bool _isExiting;
+    private bool _disposed;
     private bool _hasPersistedWindowBounds;
     private WindowState _restoreWindowState = WindowState.Normal;
     private Rect _restoreBounds;
@@ -322,25 +322,38 @@ public partial class PageSwitcher : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        Dispose();
+        base.OnClosed(e);
+        ExitApplication();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-        if (_appStateService != null)
+        if (_appStateService is not null)
         {
             _appStateService.SidebarOpenChanged -= OnSidebarOpenChanged;
             _appStateService.FocusNavigationToggleRequested -= OnFocusNavigationToggleRequested;
             _appStateService.ContentFitChanged -= OnContentFitChanged;
             _appStateService.ContentFitCleared -= OnContentFitCleared;
-            SizeChanged -= OnWindowSizeChangedForFit;
-            _fitAnimationTimer.Stop();
+            _appStateService = null;
         }
-        if (_notifyIcon != null)
+        SizeChanged -= OnWindowSizeChangedForFit;
+        _fitAnimationTimer.Stop();
+        _fitAnimationTimer.Tick -= OnFitAnimationTick;
+
+        if (_notifyIcon is not null)
         {
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
+            _notifyIcon = null!;
         }
         _contextMenuStrip.Dispose();
-
-        base.OnClosed(e);
-        ExitApplication();
+        GC.SuppressFinalize(this);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

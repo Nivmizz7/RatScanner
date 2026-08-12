@@ -126,8 +126,10 @@ public static class TarkovDevAPI
         if (response.StatusCode != HttpStatusCode.OK)
         {
             string trimmed = TrimBody(responseBody);
-            throw new Exception(
-                $"tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}"
+            throw new HttpRequestException(
+                $"tarkov.dev request failed ({(int)response.StatusCode} {response.ReasonPhrase}) for {url}. Body: {trimmed}",
+                null,
+                response.StatusCode
             );
         }
 
@@ -667,7 +669,7 @@ public static class TarkovDevAPI
 
         Dictionary<string, JsonApiModels.RawItem>? rawItems = itemsEnvelope?.Data?.Items;
         if (rawItems == null || rawItems.Count == 0)
-            throw new Exception("Items JSON contained no data");
+            throw new InvalidOperationException("Items JSON contained no data");
 
         List<Item> projected = new(rawItems.Count);
         foreach (JsonApiModels.RawItem raw in rawItems.Values)
@@ -765,7 +767,7 @@ public static class TarkovDevAPI
 
         Dictionary<string, JsonApiModels.RawTask>? rawTasks = envelope?.Data?.Tasks;
         if (rawTasks == null || rawTasks.Count == 0)
-            throw new Exception("Tasks JSON contained no data");
+            throw new InvalidOperationException("Tasks JSON contained no data");
 
         List<TTask> projected = new(rawTasks.Count);
         foreach (JsonApiModels.RawTask raw in rawTasks.Values)
@@ -904,7 +906,7 @@ public static class TarkovDevAPI
         Dictionary<string, string>? localeMap = ParseLocaleMap(hideoutLocaleJson);
         Dictionary<string, JsonApiModels.RawHideoutStation>? rawStations = envelope?.Data;
         if (rawStations == null || rawStations.Count == 0)
-            throw new Exception("Hideout JSON contained no data");
+            throw new InvalidOperationException("Hideout JSON contained no data");
 
         List<HideoutStation> projected = new(rawStations.Count);
         foreach (JsonApiModels.RawHideoutStation raw in rawStations.Values)
@@ -991,7 +993,7 @@ public static class TarkovDevAPI
         Dictionary<string, string>? localeMap = ParseLocaleMap(mapsLocaleJson);
         Dictionary<string, JsonApiModels.RawMap>? rawMaps = ExtractMapsDictionary(mapsJson);
         if (rawMaps == null || rawMaps.Count == 0)
-            throw new Exception("Maps JSON contained no data");
+            throw new InvalidOperationException("Maps JSON contained no data");
 
         List<Map> projected = new(rawMaps.Count);
         foreach (JsonApiModels.RawMap raw in rawMaps.Values)
@@ -1018,7 +1020,7 @@ public static class TarkovDevAPI
     {
         JObject root = JObject.Parse(json);
         if (root["errors"] is JArray { Count: > 0 } errors)
-            throw new Exception($"maps GraphQL errors: {errors.First}");
+            throw new InvalidOperationException($"maps GraphQL errors: {errors.First}");
 
         JArray? maps = root["data"]?["maps"] as JArray;
         if (maps == null || maps.Count == 0)

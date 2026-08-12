@@ -14,7 +14,7 @@ public class ItemNameScan : ItemScan
         RatStash.Item inspectionItem = inspection.Item ?? throw new InvalidOperationException("No item was detected.");
         Item =
             TarkovDevAPI.GetItems().FirstOrDefault(item => item.Id == inspectionItem.Id)
-            ?? throw new Exception($"Unknown item: {inspection.Item.Id}");
+            ?? throw new InvalidOperationException($"Unknown item: {inspection.Item.Id}");
         Confidence = inspection.ItemConfidence;
         IconPath = inspection.IconPath ?? string.Empty;
         _toolTipPosition = toolTipPosition;

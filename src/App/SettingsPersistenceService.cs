@@ -26,7 +26,7 @@ internal sealed class SettingsPersistenceService : IDisposable
 
     public SettingsPersistenceService()
         : this(
-            _ => Task.Run(RatConfig.SaveConfig),
+            token => Task.Run(RatConfig.SaveConfig, token),
             static (description, exception) =>
                 Logger.LogWarning($"Unable to persist the {description} setting.", exception)
         ) { }
@@ -110,8 +110,8 @@ internal sealed class SettingsPersistenceService : IDisposable
                                 description,
                                 apply,
                                 applyRuntime,
-                                lifetimeToken,
-                                completion
+                                completion,
+                                lifetimeToken
                             ),
                         CancellationToken.None,
                         TaskContinuationOptions.None,
@@ -164,8 +164,8 @@ internal sealed class SettingsPersistenceService : IDisposable
         string description,
         Action<T> apply,
         Action<T>? applyRuntime,
-        CancellationToken cancellationToken,
-        TaskCompletionSource<SettingSaveResult> completion
+        TaskCompletionSource<SettingSaveResult> completion,
+        CancellationToken cancellationToken
     )
     {
         if (cancellationToken.IsCancellationRequested)

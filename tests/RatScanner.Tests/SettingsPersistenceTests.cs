@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -95,13 +94,13 @@ public sealed class SettingsPersistenceTests
         int call = 0;
         using ManualResetEventSlim firstStarted = new(false);
         using ManualResetEventSlim releaseFirst = new(false);
-        using SettingsPersistenceService service = new(_ =>
+        using SettingsPersistenceService service = new(token =>
         {
             int current = Interlocked.Increment(ref call);
             if (current == 1)
             {
                 firstStarted.Set();
-                releaseFirst.Wait(TimeSpan.FromSeconds(5));
+                releaseFirst.Wait(TimeSpan.FromSeconds(5), token);
                 throw new InvalidOperationException("first failed");
             }
             return Task.CompletedTask;
@@ -136,12 +135,12 @@ public sealed class SettingsPersistenceTests
         int call = 0;
         using ManualResetEventSlim firstStarted = new(false);
         using ManualResetEventSlim releaseFirst = new(false);
-        using SettingsPersistenceService service = new(_ =>
+        using SettingsPersistenceService service = new(token =>
         {
             if (Interlocked.Increment(ref call) == 1)
             {
                 firstStarted.Set();
-                releaseFirst.Wait(TimeSpan.FromSeconds(5));
+                releaseFirst.Wait(TimeSpan.FromSeconds(5), token);
                 return Task.CompletedTask;
             }
 

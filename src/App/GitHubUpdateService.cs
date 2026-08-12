@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -433,10 +434,10 @@ internal static class GitHubUpdateService
 
         StringBuilder sb = new();
         sb.AppendLine("$ErrorActionPreference = 'Stop'");
-        sb.AppendLine($"$installDir = {PsQuote(installDir)}");
-        sb.AppendLine($"$payloadDir = {PsQuote(payloadDir)}");
-        sb.AppendLine($"$stagingRoot = {PsQuote(Path.GetDirectoryName(scriptPath)!)}");
-        sb.AppendLine($"$appPid = {appPid}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"$installDir = {PsQuote(installDir)}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"$payloadDir = {PsQuote(payloadDir)}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"$stagingRoot = {PsQuote(Path.GetDirectoryName(scriptPath)!)}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"$appPid = {appPid}");
         sb.AppendLine("$preserve = @(" + string.Join(", ", preserveNames.Select(PsQuote)) + ")");
         sb.AppendLine(
             """

@@ -128,7 +128,10 @@ internal static class Logger
             uniquePath = Path.Combine(basePath, fileName + index + extension);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(uniquePath) ?? throw new NullReferenceException());
+        Directory.CreateDirectory(
+            Path.GetDirectoryName(uniquePath)
+                ?? throw new InvalidOperationException("Unable to resolve the log directory.")
+        );
         return uniquePath;
     }
 

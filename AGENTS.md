@@ -33,6 +33,7 @@ dotnet test RatScanner.sln
 dotnet tool restore
 dotnet csharpier check .
 dotnet csharpier format .
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-analyzer-gate.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-agent-docs.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
@@ -75,7 +76,7 @@ Before calling material work done:
 
 | Change class | Minimum checks |
 | --- | --- |
-| Any code | `dotnet build RatScanner.sln` |
+| Any code | `dotnet build RatScanner.sln` (Debug + Release; curated analyzer set is a build-error gate via `Directory.Build.props` + `.editorconfig`) |
 | Behavior covered by tests | `dotnet test RatScanner.sln` |
 | C# style-sensitive edits | `dotnet tool restore` + `dotnet csharpier check .` (or format) |
 | Any `*.md` edit | `scripts\lint-markdown.ps1 -Fix` then check (tables, fence languages, trailing whitespace) |
