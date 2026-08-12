@@ -2,11 +2,13 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Playwright;
@@ -60,6 +62,7 @@ public sealed class WebViewSmokeTests
         IPage? page = null;
         bool traceStarted = false;
         bool failed = false;
+        Exception? testFailure = null;
         ConcurrentQueue<string> runtimeFailures = new();
 
         try
@@ -107,8 +110,7 @@ public sealed class WebViewSmokeTests
             page = await WaitForAppPageAsync(context, app, StartupTimeout);
             AttachRuntimeDiagnostics(page, runtimeFailures);
 
-            await ResizeAppWindowAsync(app, width: 1100, height: 850);
-            await page.WaitForFunctionAsync("() => !matchMedia('(max-width: 680px)').matches");
+            await ResizeAppWindowAsync(app, page, width: 1100, height: 850);
 
             await page.Locator(".scan-page")
                 .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 120_000 });
@@ -139,8 +141,7 @@ public sealed class WebViewSmokeTests
 
             await page.Locator("a[href='/app/settings/general']").ClickAsync();
             await page.WaitForURLAsync("**/app/settings/general");
-            await ResizeAppWindowAsync(app, width: 600, height: 850);
-            await page.WaitForFunctionAsync("() => matchMedia('(max-width: 680px)').matches");
+            await ResizeAppWindowAsync(app, page, width: 600, height: 850);
             await page.Locator(".sidebar.overlay")
                 .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
             await page.WaitForFunctionAsync(
@@ -188,74 +189,124 @@ public sealed class WebViewSmokeTests
 
             Assert.Empty(runtimeFailures);
         }
-        catch
+        catch (Exception exception)
         {
             failed = true;
+            testFailure = exception;
             if (page is not null)
             {
-                await File.WriteAllTextAsync(Path.Combine(runDirectory, "failure-url.txt"), page.Url, testCancellation);
-                await CaptureFailureEvidenceAsync(page, runDirectory);
+                try
+                {
+                    File.WriteAllText(Path.Combine(runDirectory, "failure-url.txt"), page.Url);
+                    await CaptureFailureEvidenceAsync(page, runDirectory);
+                }
+                catch (Exception captureException)
+                {
+                    TryWriteDiagnostic(
+                        Path.Combine(runDirectory, "failure-capture-error.txt"),
+                        captureException.ToString()
+                    );
+                }
             }
-            throw;
         }
-        finally
-        {
-            if (!runtimeFailures.IsEmpty)
-                await File.WriteAllLinesAsync(
-                    Path.Combine(runDirectory, "browser-runtime.log"),
-                    runtimeFailures,
-                    testCancellation
-                );
 
-            if (traceStarted && context is not null)
+        List<Exception> cleanupFailures = [];
+        await RecordCleanupFailureAsync(
+            cleanupFailures,
+            async () =>
             {
-                await context.Tracing.StopAsync(
-                    failed ? new TracingStopOptions { Path = Path.Combine(runDirectory, "trace.zip") } : null
-                );
-                foreach (string transientTrace in Directory.EnumerateFiles(runDirectory, "*.trace"))
-                    File.Delete(transientTrace);
-                foreach (string transientNetwork in Directory.EnumerateFiles(runDirectory, "*.network"))
-                    File.Delete(transientNetwork);
+                if (!runtimeFailures.IsEmpty)
+                    await File.WriteAllLinesAsync(Path.Combine(runDirectory, "browser-runtime.log"), runtimeFailures);
             }
+        );
 
-            if (browser is not null)
-                await browser.DisposeAsync();
-            playwright?.Dispose();
+        if (traceStarted && context is not null)
+        {
+            await RecordCleanupFailureAsync(
+                cleanupFailures,
+                async () =>
+                {
+                    await context.Tracing.StopAsync(
+                        failed ? new TracingStopOptions { Path = Path.Combine(runDirectory, "trace.zip") } : null
+                    );
+                }
+            );
+            RecordCleanupFailure(
+                cleanupFailures,
+                () =>
+                {
+                    foreach (string transientTrace in Directory.EnumerateFiles(runDirectory, "*.trace"))
+                        File.Delete(transientTrace);
+                    foreach (string transientNetwork in Directory.EnumerateFiles(runDirectory, "*.network"))
+                        File.Delete(transientNetwork);
+                }
+            );
+        }
 
-            if (app is not null)
+        if (browser is not null)
+            await RecordCleanupFailureAsync(cleanupFailures, async () => await browser.DisposeAsync());
+        if (playwright is not null)
+            RecordCleanupFailure(cleanupFailures, playwright.Dispose);
+
+        if (app is not null)
+        {
+            await RecordCleanupFailureAsync(cleanupFailures, async () => await StopOwnedProcessAsync(app));
+            bool appExited = false;
+            RecordCleanupFailure(
+                cleanupFailures,
+                () =>
+                {
+                    app.Refresh();
+                    appExited = app.HasExited;
+                }
+            );
+            if (appExited)
             {
-                await StopOwnedProcessAsync(app);
                 if (stdoutTask is not null)
-                    await File.WriteAllTextAsync(
-                        Path.Combine(runDirectory, "app-stdout.log"),
-                        await stdoutTask,
-                        testCancellation
+                    await RecordCleanupFailureAsync(
+                        cleanupFailures,
+                        async () =>
+                            await File.WriteAllTextAsync(Path.Combine(runDirectory, "app-stdout.log"), await stdoutTask)
                     );
                 if (stderrTask is not null)
-                    await File.WriteAllTextAsync(
-                        Path.Combine(runDirectory, "app-stderr.log"),
-                        await stderrTask,
-                        testCancellation
+                    await RecordCleanupFailureAsync(
+                        cleanupFailures,
+                        async () =>
+                            await File.WriteAllTextAsync(Path.Combine(runDirectory, "app-stderr.log"), await stderrTask)
                     );
             }
-
-            string appLog = Path.Combine(appDirectory, "Log.txt");
-            if (File.Exists(appLog))
-                File.Copy(appLog, Path.Combine(runDirectory, "RatScanner.log"), overwrite: true);
-
-            try
-            {
-                Directory.Delete(profileDirectory, recursive: true);
-            }
-            catch (IOException)
-            {
-                // WebView2 can retain profile handles briefly after its process exits.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Preserve test outcome; the uniquely named temp profile is safe to remove later.
-            }
         }
+
+        string appLog = Path.Combine(appDirectory, "Log.txt");
+        if (File.Exists(appLog))
+            RecordCleanupFailure(
+                cleanupFailures,
+                () => File.Copy(appLog, Path.Combine(runDirectory, "RatScanner.log"), overwrite: true)
+            );
+
+        try
+        {
+            Directory.Delete(profileDirectory, recursive: true);
+        }
+        catch (IOException exception)
+        {
+            TryWriteDiagnostic(Path.Combine(runDirectory, "profile-cleanup-error.txt"), exception.ToString());
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            TryWriteDiagnostic(Path.Combine(runDirectory, "profile-cleanup-error.txt"), exception.ToString());
+        }
+
+        if (cleanupFailures.Count > 0)
+            TryWriteDiagnostic(
+                Path.Combine(runDirectory, "cleanup-errors.log"),
+                string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
+            );
+
+        if (testFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(testFailure).Throw();
+        if (cleanupFailures.Count > 0)
+            throw new AggregateException("UI smoke cleanup failed.", cleanupFailures);
     }
 
     private static async Task<int> WaitForDebugPortAsync(string profileDirectory, Process app, TimeSpan timeout)
@@ -267,14 +318,25 @@ public sealed class WebViewSmokeTests
             if (app.HasExited)
                 throw new InvalidOperationException($"RatScanner exited during startup with code {app.ExitCode}.");
 
-            string? portFile = Directory
-                .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
-                .FirstOrDefault();
-            if (portFile is not null)
+            try
             {
-                string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
-                if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
-                    return port;
+                string? portFile = Directory
+                    .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (portFile is not null)
+                {
+                    string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
+                    if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
+                        return port;
+                }
+            }
+            catch (IOException)
+            {
+                // Chromium can still be creating or replacing the readiness file; retry until the deadline.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // The profile tree can be transiently locked while WebView2 initializes; retry.
             }
 
             await Task.Delay(250);
@@ -352,7 +414,7 @@ public sealed class WebViewSmokeTests
         Assert.True(bounds.X + bounds.Width <= width, $"{surface} extends beyond the {width}px viewport.");
     }
 
-    private static async Task ResizeAppWindowAsync(Process app, int width, int height)
+    private static async Task ResizeAppWindowAsync(Process app, IPage page, int width, int height)
     {
         DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
         nint window = 0;
@@ -370,10 +432,67 @@ public sealed class WebViewSmokeTests
         if (window == 0)
             throw new InvalidOperationException("RatScanner did not expose a main window handle.");
         NativeMethods.ShowWindow(window, NativeMethods.RestoreWindow);
-        if (!NativeMethods.SetWindowPos(window, 0, 0, 0, width, height, NativeMethods.ResizeOnlyFlags))
+        uint dpi = NativeMethods.GetDpiForWindow(window);
+        if (dpi == 0)
             throw new InvalidOperationException(
-                $"Unable to resize RatScanner for UI validation (Win32 error {Marshal.GetLastWin32Error()})."
+                $"Unable to determine RatScanner window DPI (Win32 error {Marshal.GetLastWin32Error()})."
             );
+        int deviceWidth = checked((int)Math.Round(width * dpi / 96d, MidpointRounding.AwayFromZero));
+        int deviceHeight = checked((int)Math.Round(height * dpi / 96d, MidpointRounding.AwayFromZero));
+        int viewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!NativeMethods.SetWindowPos(window, 0, 0, 0, deviceWidth, deviceHeight, NativeMethods.ResizeOnlyFlags))
+                throw new InvalidOperationException(
+                    $"Unable to resize RatScanner for UI validation (Win32 error {Marshal.GetLastWin32Error()})."
+                );
+
+            viewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
+            bool expectedBreakpoint = width <= 680 ? viewportWidth <= 680 : viewportWidth > 680;
+            if (expectedBreakpoint)
+                return;
+            await Task.Delay(100);
+        }
+
+        throw new InvalidOperationException(
+            $"RatScanner did not reach the requested {width}px responsive viewport; actual width was {viewportWidth}px."
+        );
+    }
+
+    private static async Task RecordCleanupFailureAsync(List<Exception> failures, Func<Task> cleanup)
+    {
+        try
+        {
+            await cleanup();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+    }
+
+    private static void RecordCleanupFailure(List<Exception> failures, Action cleanup)
+    {
+        try
+        {
+            cleanup();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+    }
+
+    private static void TryWriteDiagnostic(string path, string contents)
+    {
+        try
+        {
+            File.WriteAllText(path, contents);
+        }
+        catch (Exception)
+        {
+            // Diagnostics are best effort and must not replace the original test or cleanup failure.
+        }
     }
 
     private static nint FindLargestOwnedWindow(int expectedProcessId)
@@ -389,6 +508,8 @@ public sealed class WebViewSmokeTests
             uint threadId = NativeMethods.GetWindowThreadProcessId(candidate, out uint processId);
             if (threadId == 0 || processId != expectedProcessId || !NativeMethods.IsWindowVisible(candidate))
                 continue;
+            if (GetWindowTitle(candidate).Contains("Overlay", StringComparison.OrdinalIgnoreCase))
+                continue;
             if (!NativeMethods.GetWindowRect(candidate, out NativeMethods.WindowRect bounds))
                 continue;
 
@@ -400,6 +521,15 @@ public sealed class WebViewSmokeTests
             }
         }
         return selected;
+    }
+
+    private static string GetWindowTitle(nint window)
+    {
+        int length = NativeMethods.GetWindowTextLength(window);
+        if (length == 0)
+            return string.Empty;
+        StringBuilder title = new(length + 1);
+        return NativeMethods.GetWindowText(window, title, title.Capacity) == 0 ? string.Empty : title.ToString();
     }
 
     private static async Task CaptureFailureEvidenceAsync(IPage page, string runDirectory)
@@ -503,6 +633,15 @@ public sealed class WebViewSmokeTests
 
         [DllImport("user32.dll", SetLastError = true)]
         internal static extern uint GetWindowThreadProcessId(nint window, out uint processId);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        internal static extern int GetWindowText(nint window, StringBuilder text, int maximumCount);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        internal static extern int GetWindowTextLength(nint window);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        internal static extern uint GetDpiForWindow(nint window);
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
