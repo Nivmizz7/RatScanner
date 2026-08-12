@@ -44,11 +44,11 @@
 	</UserControl.Resources>
 
 	<Border Background="#E6131822"
-	        CornerRadius="10"
-	        BorderBrush="#2A3442"
-	        BorderThickness="1"
-	        Padding="12,9"
-	        MaxWidth="300">
+		CornerRadius="10"
+		BorderBrush="#2A3442"
+		BorderThickness="1"
+		Padding="12,9"
+		MaxWidth="300">
 		<Border.Effect>
 			<DropShadowEffect BlurRadius="10"
 												ShadowDepth="2"
