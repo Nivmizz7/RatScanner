@@ -42,6 +42,11 @@ public partial class App : Application, ISingleInstance
         // Set current working directory to executable location
         Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
 
+        // Clear the previous-session log before any deferred service can start.
+        // RatScannerMain is intentionally lazy now, so log ownership cannot depend
+        // on whether the main or overlay WebView resolves it first.
+        Logger.Clear();
+
 #if !DEBUG
         SetupExceptionHandling();
 #endif

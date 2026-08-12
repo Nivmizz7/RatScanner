@@ -96,7 +96,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     public TarkovTrackerDB TarkovTrackerDB;
 
-    internal RatEyeEngine RatEyeEngine;
+    internal RatEyeEngine RatEyeEngine = null!;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -104,18 +104,16 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private RatScannerMain()
     {
-        // This constructor currently runs on the WPF dispatcher (PageSwitcher ->
-        // BlazorUI -> BlazorOverlay -> MenuVM), so every span below is time the UI
-        // is frozen. Keep it measured until that ordering changes.
+        // This constructor is resolved after the main window's first paint, when the
+        // deferred passive overlay asks for MenuVM. Cache parsing remains synchronous
+        // but is no longer part of time-to-first-frame; RatEye setup then runs on a
+        // worker thread so the dispatcher stays responsive.
         PerfTrace startup = PerfTraceStore.Startup;
         using PerfTrace.PerfScope constructorScope = startup.Measure("startup.ratscanner_main_ctor");
 
         _instance = this;
         _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
         ItemScans.Changed += OnItemScansChanged;
-
-        // Remove old log
-        Logger.Clear();
 
         Logger.LogInfo("----- " + RatConfig.FullVersionLabel + " -----");
         _ = CheckForUpdatesAsync();
@@ -175,14 +173,40 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
         Logger.LogInfo("UI Ready!");
 
-        Logger.LogInfo("Initializing RatEye...");
-        using (startup.Measure("startup.rateye_setup"))
-            SetupRatEye();
         TarkovDevAPI.ItemsCacheUpdated += OnItemsCacheUpdated;
+        _ = InitializeRatEyeAsync(cacheRefreshNeeded, _lifetimeCancellation.Token);
+    }
 
-        if (cacheRefreshNeeded)
-            _ = RefreshApiCacheAsync();
-        _ = InitializeRuntimeAsync(_lifetimeCancellation.Token);
+    private async Task InitializeRatEyeAsync(bool cacheRefreshNeeded, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Give WPF/WebView2 one frame to present the shell before loading OCR
+            // native libraries and building the item database. The engine remains
+            // unavailable until the replacement is published atomically by SetupRatEye.
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                static () => { },
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                cancellationToken
+            );
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Logger.LogInfo("Initializing RatEye...");
+            await Task.Run(SetupRatEye, cancellationToken).ConfigureAwait(false);
+
+            if (cacheRefreshNeeded)
+                _ = RefreshApiCacheAsync();
+            _ = InitializeRuntimeAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            // Do not enable hotkeys after an engine failure: every scan would be a
+            // guaranteed no-op. A later cache refresh may still repair the engine.
+            Logger.LogWarning("RatEye initialization failed; scanning will remain unavailable.", exception);
+            if (cacheRefreshNeeded)
+                _ = RefreshApiCacheAsync();
+        }
     }
 
     private static async Task RefreshApiCacheAsync()

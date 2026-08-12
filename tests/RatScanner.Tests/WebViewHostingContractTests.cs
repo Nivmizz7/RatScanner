@@ -22,6 +22,18 @@ public sealed class WebViewHostingContractTests
     }
 
     [Fact]
+    public void Passive_overlay_initialization_is_deferred_until_application_idle()
+    {
+        string root = FindRepositoryRoot();
+        string blazorUi = File.ReadAllText(Path.Combine(root, "src", "App", "View", "BlazorUI.xaml.cs"));
+
+        Assert.Contains("DispatcherPriority.ApplicationIdle", blazorUi, StringComparison.Ordinal);
+        Assert.Contains("BlazorUI_Loaded", blazorUi, StringComparison.Ordinal);
+        Assert.Contains("QueueOverlayInitialization();", blazorUi, StringComparison.Ordinal);
+        Assert.DoesNotContain("startup.create_overlay", blazorUi, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Passive_overlay_styles_remain_click_through_and_nonactivating()
     {
         Assert.Equal((nint)0x080800A0, OverlayNativeMethods.PassiveClickThroughStyles);

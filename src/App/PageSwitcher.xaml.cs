@@ -846,7 +846,11 @@ public partial class PageSwitcher : Window, IDisposable
     // animation and transfers height ownership to the user until the next
     // content-driven growth re-anchors.
     private const int FitAnimationDurationMs = 240;
-    private readonly DispatcherTimer _fitAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+
+    // Do not resize the WebView2 composition surface every 16 ms. A 30 Hz host
+    // resize is visually smooth for a short ease-out animation while roughly
+    // halving Chromium re-layout/re-raster churn during each content-fit change.
+    private readonly DispatcherTimer _fitAnimationTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
     private bool _fitAnimationRunning;
     private bool _fitApplying;
     private bool _fitWritePendingLayout;

@@ -14,7 +14,7 @@
 	background: var(--rs-sidebar);
 	border-right: 1px solid var(--rs-border-subtle);
 	transform: translateX(-100%);
-	transition: transform .16s ease, width .16s ease;
+	transition: transform .16s ease;
 }
 
 .sidebar.open,
@@ -99,7 +99,6 @@ nav ::deep a.active {
 	   page insets of non-scrolling pages. Pages that actually scroll (long
 	   settings) reveal a transient scrollbar instead. */
 	overflow-y: auto;
-	transition: margin-left .16s ease;
 }
 
 .main-content.sidebar-docked {
