@@ -81,6 +81,7 @@ data/bench/
 # .NET Core
 project.lock.json
 project.fragment.lock.json
+# Local build, test, and retained WebView UI artifacts
 artifacts/
 
 # StyleCop

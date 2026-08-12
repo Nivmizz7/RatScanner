@@ -102,12 +102,14 @@ try {
         '.markdownlint.json',
         'package.json',
         'package-lock.json',
+        '.agents\skills\dotnet-project\SKILL.md',
         'src\App\AGENTS.md',
         'src\App\RatScanner.csproj',
         'src\ScanEngine\AGENTS.md',
         'src\ScanEngine\RatEye\RatEye.csproj',
         'tests\AGENTS.md',
-        'tests\RatScanner.Tests\RatScanner.Tests.csproj'
+        'tests\RatScanner.Tests\RatScanner.Tests.csproj',
+        'tests\RatScanner.UiTests\RatScanner.UiTests.csproj'
     )) {
         Copy-FixturePath -RelativePath $relative
     }

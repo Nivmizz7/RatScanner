@@ -142,6 +142,9 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
             QueueDpiRefresh();
     }
 
+    private void BlazorWebView_Initializing(object? sender, BlazorWebViewInitializingEventArgs e) =>
+        WebView2TestEnvironment.Apply(e);
+
     private void WebView_Loaded(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         // If we are running in a development/debugger mode, open dev tools to help out

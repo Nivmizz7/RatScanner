@@ -123,10 +123,22 @@ dotnet build RatScanner.sln
 ### Tests and formatting
 
 ```bat
-dotnet test RatScanner.sln
+dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
 dotnet tool restore
 dotnet csharpier check .
 ```
+
+Canonical repository checks:
+
+Fast and Full require Node.js on `PATH` for the Markdown checks.
+
+| Verification | Command |
+| --- | --- |
+| Fast build/static/unit loop | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Fast` |
+| Full build/unit/WebView loop | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Full` |
+| Real WebView2 UI smoke | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Ui` |
+
+UI smoke launches the WPF app, attaches Playwright .NET to its embedded WebView2, and stores screenshots or failure diagnostics under `artifacts\ui-tests\`. Close any existing RatScanner instance before running it.
 
 ### Publishing (slow; not for day-to-day)
 

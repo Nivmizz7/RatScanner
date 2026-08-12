@@ -1,0 +1,4 @@
+interface:
+  display_name: "RatScanner .NET"
+  short_description: "Build, test, and validate RatScanner changes"
+  default_prompt: "Use the RatScanner repository workflow to implement and verify this .NET change."

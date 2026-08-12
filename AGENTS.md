@@ -29,7 +29,7 @@ dev.bat -ForceSetup              :: re-download icons/OCR into src\App\Data\
 dotnet restore RatScanner.sln
 dotnet build RatScanner.sln
 dotnet build -c Release RatScanner.sln
-dotnet test RatScanner.sln
+dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
 dotnet tool restore
 dotnet csharpier check .
 dotnet csharpier format .
@@ -39,6 +39,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\lint-markdown.ps1 -Fix
 publish.bat                      :: release package only (not day-to-day)
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Fast
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Full
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Ui
 ```
 
 Initialize source dependencies after cloning:
@@ -47,7 +50,7 @@ Initialize source dependencies after cloning:
 git submodule update --init --recursive
 ```
 
-Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. CI: `.github/workflows/build.yml` (Windows, .NET 10, documentation and formatting checks, Release build/test, dependency audit, validated single-file package) plus `.github/workflows/release.yml` (manual promotion of the exact successful `master` build artifact to either the opt-in `testing` pre-release channel or broad `latest` channel). Build CI runs on PRs and `master` pushes; releases are manual only.
+Day-to-day coding uses `dev.bat` / `scripts\dev.ps1` (debounced **restart-on-save** by default — 15s quiet period prevents endless rebuilds during rapid agent edits; `-NoDebounce` restores instant `dotnet watch`). Not full WPF hot reload. Canonical verification is `scripts\verify.ps1` (`Fast`, `Full`, or `Ui`); the UI mode attaches Playwright .NET to the real embedded WebView2 and retains screenshots/failure diagnostics under `artifacts/ui-tests/`. CI: `.github/workflows/build.yml` (Windows, documentation and formatting checks, Release build/test, WebView smoke, dependency audit, validated single-file package) plus `.github/workflows/release.yml` (manual promotion of the exact successful `master` build artifact to either the opt-in `testing` pre-release channel or broad `latest` channel). Build CI runs on PRs and `master` pushes; releases are manual only.
 
 ## Fork / remotes / branches / PRs
 
@@ -77,11 +80,12 @@ Before calling material work done:
 | Change class | Minimum checks |
 | --- | --- |
 | Any code | `dotnet build RatScanner.sln` (Debug + Release; curated analyzer set is a build-error gate via `Directory.Build.props` + `.editorconfig`) |
-| Behavior covered by tests | `dotnet test RatScanner.sln` |
+| Behavior covered by unit tests | `dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj` |
+| Hosted WebView behavior | `scripts\verify.ps1 -Mode Ui` |
 | C# style-sensitive edits | `dotnet tool restore` + `dotnet csharpier check .` (or format) |
 | Any `*.md` edit | `scripts\lint-markdown.ps1 -Fix` then check (tables, fence languages, trailing whitespace) |
 | Agent docs / structure | `scripts\check-agent-docs.ps1` |
-| UI / Razor / CSS | manual WebView smoke via `dev.bat` when practical |
+| UI / Razor / CSS | `scripts\verify.ps1 -Mode Ui`; inspect screenshots; add manual DPI/multi-monitor smoke when relevant |
 | Scan / OCR | unit tests if present + manual scan smoke when practical |
 | i18n keys / UI strings | update every `src/App/i18n/*.json` (en is baseline) |
 | Publish / release | `publish.bat` or CI-equivalent; verify LICENSE + Data layout |

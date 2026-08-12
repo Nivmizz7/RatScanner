@@ -7,6 +7,7 @@
 - `src/App/RatScanner.csproj`
 - `src/ScanEngine/RatEye/RatEye.csproj` (RatEye submodule)
 - `tests/RatScanner.Tests/RatScanner.Tests.csproj`
+- `tests/RatScanner.UiTests/RatScanner.UiTests.csproj`
 - `NuGet.Config` / nuget.org
 - `Directory.Build.targets` (disables RatEye package generation in RatScanner builds)
 - `dotnet-tools.json` (CSharpier)
@@ -21,6 +22,7 @@ Do not document “current version is X” in prose. Read the csproj.
 | OpenCvSharp, engine Tesseract.Drawing, System.Drawing.Common | ScanEngine |
 | RatStash, Tesseract, Newtonsoft.Json | Shared across App/ScanEngine as needed |
 | xUnit, test SDK | Tests only |
+| Playwright .NET CDP client | UI tests only; connects to installed WebView2, no bundled browser install |
 
 RatEye remains independently packable from its own repository. RatScanner does not publish or consume that package during development.
 
@@ -73,6 +75,8 @@ When upgrades **are** requested:
 ```bat
 dotnet list RatScanner.sln package --vulnerable
 dotnet list RatScanner.sln package --outdated
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --vulnerable --include-transitive
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --outdated
 ```
 
 Triage with product risk (native, WebView, JSON, auth). Prefer minimal fixing upgrades.

@@ -42,7 +42,8 @@ Build CI runs for PRs targeting `master` and pushes to `master`. Releases use a 
 At minimum for merge-ready PRs:
 
 - `dotnet build RatScanner.sln`
-- `dotnet test RatScanner.sln` (or CI equivalent)
+- `dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj` (or CI equivalent) for unit behavior
+- `scripts\verify.ps1 -Mode Ui` when the hosted WebView behavior or contract is affected
 - `dotnet csharpier check .` when C# style is affected
 - `scripts\check-analyzer-gate.ps1` when analyzer configuration changes
 - `scripts\lint-markdown.ps1 -Fix` (then check) when any `*.md` changed
