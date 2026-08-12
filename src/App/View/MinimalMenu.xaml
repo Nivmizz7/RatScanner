@@ -36,6 +36,8 @@
 		<Style TargetType="Separator">
 			<Setter Property="Margin"
 							Value="0,5" />
+			<Setter Property="Background"
+							Value="#AAAAAA" />
 			<Setter Property="Opacity"
 							Value="0.35" />
 		</Style>
@@ -76,7 +78,7 @@
 				<Grid x:Name="AvgDayPriceDisplay"
 							Margin="0,2,0,0">
 					<Label Grid.Column="0"
-								 Content="Flea" />
+								 Content="{Binding FleaMarketLabel}" />
 					<Label Grid.Column="1"
 								 Style="{StaticResource ValueLabel}"
 								 Content="{Binding LastItem.Avg24HPrice, Converter={StaticResource IntToLongPriceConverter}}"
@@ -90,7 +92,7 @@
 
 				<Grid x:Name="PricePerSlotDisplay">
 					<Label Grid.Column="0"
-								 Content="Price per Slot" />
+								 Content="{Binding PricePerSlotLabel}" />
 					<Label Grid.Column="1"
 								 Style="{StaticResource ValueLabel}"
 								 Content="{Binding PricePerSlot, Converter={StaticResource IntToLongPriceConverter}}"
@@ -123,8 +125,8 @@
 				<StackPanel.Style>
 					<Style TargetType="StackPanel">
 						<Style.Triggers>
-							<DataTrigger Binding="{Binding BestTraderOfferVendor.Name}"
-													 Value="">
+							<DataTrigger Binding="{Binding HasTraderOffer}"
+												 Value="False">
 								<Setter Property="Visibility"
 												Value="Collapsed" />
 							</DataTrigger>
@@ -139,7 +141,7 @@
 					<Grid>
 						<Label Grid.Column="0"
 									 HorizontalAlignment="Left"
-									 Content="Needed for Kappa" />
+									 Content="{Binding KappaNeededLabel}" />
 						<StackPanel Grid.Column="1"
 												Orientation="Horizontal"
 												HorizontalAlignment="Right">
@@ -177,7 +179,7 @@
 					<Grid>
 						<Label Grid.Column="0"
 									 HorizontalAlignment="Left"
-									 Content="Needed Items" />
+									 Content="{Binding NeededItemsLabel}" />
 						<StackPanel Grid.Column="1"
 												Orientation="Horizontal"
 												HorizontalAlignment="Right">
@@ -294,7 +296,7 @@
 				<Separator />
 				<Grid Margin="0,2,0,0">
 					<Label Grid.Column="0"
-								 Content="Updated"
+								 Content="{Binding UpdatedTimestampLabel}"
 								 FontSize="9" />
 					<Label Grid.Column="1"
 								 Content="{Binding Updated}"

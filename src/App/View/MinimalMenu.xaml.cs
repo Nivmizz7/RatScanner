@@ -54,7 +54,11 @@ public partial class MinimalMenu : UserControl, ISwitchable
         throw new System.NotImplementedException();
     }
 
-    public void OnOpen() { }
+    public void OnOpen()
+    {
+        if (DataContext is MenuVM menu)
+            menu.RefreshLocalizedLabels();
+    }
 
     public void OnClose() { }
 
