@@ -345,6 +345,29 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
+    public void Negative_scan_cooldown_is_clamped_on_load()
+    {
+        string root = CreateTemporaryDirectory();
+        try
+        {
+            string configPath = Path.Combine(root, "config.cfg");
+            SimpleConfig config = new(configPath, "NameScan");
+            config.WriteInt("CooldownMs", -1);
+            config.Section = "Other";
+            config.WriteInt("ConfigVersion", 3);
+
+            RatConfig.LoadConfig(configPath);
+
+            Assert.Equal(0, RatConfig.NameScan.CooldownMs);
+        }
+        finally
+        {
+            RatConfig.NameScan.CooldownMs = 300;
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Save_persists_pvp_source_and_reload_preserves_it()
     {
         string root = CreateTemporaryDirectory();

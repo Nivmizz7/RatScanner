@@ -45,6 +45,7 @@ At minimum for merge-ready PRs:
 - `dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj` (or CI equivalent) for unit behavior
 - `scripts\verify.ps1 -Mode Ui` when the hosted WebView behavior or contract is affected
 - `dotnet csharpier check .` when C# style is affected
+- `scripts\check-analyzer-gate.ps1` when analyzer configuration changes
 - `scripts\lint-markdown.ps1 -Fix` (then check) when any `*.md` changed
 - `scripts\check-agent-docs.ps1` when docs/structure/packaging references change
 - Manual smoke when UI or scan behavior is touched

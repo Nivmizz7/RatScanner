@@ -121,6 +121,7 @@ examples/                # Sample resolution screenshots
 | `scripts/test-data-validation.ps1` | Hermetic regression tests for the RatScannerData validators (also CI) |
 | `scripts/verify-package.ps1` | Verify a packaged `RatScanner.zip` against the pinned data contract (also CI, after zipping) |
 | `scripts/Expand-Zip.ps1` | Robust zip extract fallbacks |
+| `scripts/check-analyzer-gate.ps1` | Enforce parity between curated analyzer severities and build errors (also CI) |
 | `scripts/check-agent-docs.ps1` | Structural documentation integrity (also CI) |
 | `scripts/test-agent-docs.ps1` | Disposable adversarial regression fixture for the integrity check (also CI) |
 | `scripts/lint-markdown.ps1` | markdownlint-cli2 check / `-Fix` auto-fix (also CI check) |

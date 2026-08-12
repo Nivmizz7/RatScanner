@@ -139,6 +139,17 @@ public class TarkovTrackerDatabaseReliabilityTests
         """;
 
     [Fact]
+    public void Dispose_is_idempotent()
+    {
+        TarkovTrackerDB database = new((_, _, _) => Task.FromResult(string.Empty));
+
+        database.Dispose();
+        Exception? secondDispose = Record.Exception(database.Dispose);
+
+        Assert.Null(secondDispose);
+    }
+
+    [Fact]
     public async Task Clearing_configured_token_clears_runtime_state_immediately()
     {
         TarkovTrackerDB database = new(

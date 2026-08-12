@@ -40,9 +40,9 @@ tab_width=4
 
 # ---- Code-quality gate (keep in sync with Directory.Build.props) ----
 # Only rules at warning+ severity participate in builds (EnforceCodeStyleInBuild).
-# The WarningsAsErrors list in Directory.Build.props turns the warning set into
-# CI failures; everything else from 10.0-recommended is dialed down to
-# suggestion so the gate stays focused on correctness and dead code.
+# The WarningsAsErrors list in Directory.Build.props turns this explicit warning
+# set into CI failures. scripts/check-analyzer-gate.ps1 verifies that the two
+# definitions cannot drift; other reviewed signals remain suggestion-level.
 
 [*.cs]
 # Dead / unnecessary code

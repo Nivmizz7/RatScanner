@@ -65,7 +65,8 @@ if (-not $Force -and (Test-RatScannerDataInstallation `
     $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
     Write-Host "Data already installed ($($manifest.iconCount) icons, content $($manifest.contentSha256)) at $destination"
     Write-Host 'Pass -Force to re-download.'
-    exit 0
+    $global:LASTEXITCODE = 0
+    return
 }
 
 try {
@@ -139,3 +140,9 @@ finally {
         }
     }
 }
+
+# Native download/extraction fallbacks can leave a stale non-zero LASTEXITCODE
+# after a successful install. dev.ps1 invokes this script in-process and uses the
+# script exit code, so make successful completion explicit without terminating
+# the in-process caller (scripts/dev.ps1).
+$global:LASTEXITCODE = 0

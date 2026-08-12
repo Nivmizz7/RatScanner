@@ -155,10 +155,16 @@ Installation validation only proves the staged `publish\Data` tree was correct; 
 
 ### Analyzers / warnings
 
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check-analyzer-gate.ps1
+```
+
+The consistency check compares the explicit CA/IDE warning rules in `.editorconfig` with `WarningsAsErrors` in `Directory.Build.props`; CI fails if either side drifts.
+
 - Nullable enabled on App; treat nullability seriously. RatEye (`netstandard2.0`) and the test project are not nullable-enabled yet — that is a deliberate separate migration, not an oversight.
 - Implicit usings disabled on App — do not rely on global usings.
-- Root `Directory.Build.props` pins `AnalysisLevel=10.0-recommended` and enables `EnforceCodeStyleInBuild`. A curated correctness/dead-code rule set is elevated to build errors via `WarningsAsErrors` — the gate list must match the warning-severity block in `.editorconfig`, and both files are kept in sync. The build (Debug **and** Release, both in CI) is the analyzer gate.
-- Rules outside the curated set are suggestion-level (IDE-only). IDE0051/IDE0052 findings are reviewed per case — WPF/XAML and `#if`-gated members (e.g. `SetupExceptionHandling` under Debug) can look dead under one configuration. Never blanket auto-fix them.
+- Root `Directory.Build.props` pins `AnalysisLevel=10.0-recommended` and enables `EnforceCodeStyleInBuild`. A curated correctness/dead-code rule set is elevated to build errors via `WarningsAsErrors`; the consistency script keeps that list synchronized with the warning-severity block in `.editorconfig`. The build (Debug **and** Release, both in CI) is the analyzer gate.
+- Reviewed design/cleanup signals explicitly configured outside the curated set are suggestion-level (IDE-only). Other analyzer warnings remain visible but become hard build errors only when added to the synchronized gate. IDE0051/IDE0052 findings are reviewed per case — WPF/XAML and `#if`-gated members (e.g. `SetupExceptionHandling` under Debug) can look dead under one configuration. Never blanket auto-fix them.
 - `global.json` pins the SDK; the pinned analysis level makes analyzer behavior deliberate across SDK upgrades.
 
 ### Package vulnerability / outdated checks
