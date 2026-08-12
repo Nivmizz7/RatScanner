@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using RatScanner.Presentation;
 using RatScanner.Scan;
 using RatScanner.TarkovDev;
 
@@ -87,6 +88,16 @@ internal class MenuVM : INotifyPropertyChanged
 
     public bool RecommendFlea => HasFleaOffer && (!HasTraderOffer || FleaPrice > TraderPrice);
 
+    public string FleaMarketLabel => PresentationText.T("FleaMarket", "Flea Market");
+
+    public string PricePerSlotLabel => PresentationText.T("PricePerSlot", "Price per Slot");
+
+    public string KappaNeededLabel => PresentationText.T("KappaNeeded", "Kappa Needed");
+
+    public string NeededItemsLabel => PresentationText.T("NeededQuestHideout", "Needed Quest & Hideout");
+
+    public string UpdatedTimestampLabel => PresentationText.T("UpdatedTimestamp", "Updated Timestamp");
+
     public string WikiLink => LastItem.GetWikiLink();
 
     public int PricePerSlot => LastItem.GetAvg24hMarketPricePerSlot();
@@ -170,6 +181,15 @@ internal class MenuVM : INotifyPropertyChanged
     protected virtual void OnPropertyChanged(string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    internal void RefreshLocalizedLabels()
+    {
+        OnPropertyChanged(nameof(FleaMarketLabel));
+        OnPropertyChanged(nameof(PricePerSlotLabel));
+        OnPropertyChanged(nameof(KappaNeededLabel));
+        OnPropertyChanged(nameof(NeededItemsLabel));
+        OnPropertyChanged(nameof(UpdatedTimestampLabel));
     }
 
     public void ModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

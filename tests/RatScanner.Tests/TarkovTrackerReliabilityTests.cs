@@ -220,6 +220,61 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 
     [Fact]
+    public async Task Legacy_tt_token_without_game_mode_is_pvp_only()
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) => Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"]}""")
+        );
+
+        TrackerValidationResult pveResult = await database.ValidateCandidateAsync(
+            "tt_legacy",
+            "https://api.example",
+            GameMode.Pve,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult pvpResult = await database.ValidateCandidateAsync(
+            "tt_legacy",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+        Assert.False(pveResult.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, pveResult.Failure);
+        Assert.True(pvpResult.Succeeded);
+    }
+
+    [Theory]
+    [InlineData("PVP_abc", GameMode.Regular, GameMode.Pve)]
+    [InlineData("PVE_abc", GameMode.Pve, GameMode.Regular)]
+    public async Task Prefix_scoped_key_without_game_mode_matches_only_its_mode(
+        string token,
+        GameMode matchingMode,
+        GameMode otherMode
+    )
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) => Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"]}""")
+        );
+
+        TrackerValidationResult matchingResult = await database.ValidateCandidateAsync(
+            token,
+            "https://api.example",
+            matchingMode,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult otherModeResult = await database.ValidateCandidateAsync(
+            token,
+            "https://api.example",
+            otherMode,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.True(matchingResult.Succeeded);
+        Assert.False(otherModeResult.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, otherModeResult.Failure);
+    }
+
+    [Fact]
     public async Task Failed_reconfiguration_does_not_allow_old_mode_progress_to_overwrite_the_new_mode()
     {
         using ManualResetEventSlim pvpStarted = new(false);
