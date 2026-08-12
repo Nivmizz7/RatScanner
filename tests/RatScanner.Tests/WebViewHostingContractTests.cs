@@ -49,8 +49,15 @@ public sealed class WebViewHostingContractTests
         Assert.Contains("UnregisterHotkeysLocked();", hotkeyManager, StringComparison.Ordinal);
         Assert.Contains("if (!_engineReady)", hotkeyManager, StringComparison.Ordinal);
         string runtimeInitialization = ExtractMethodDefinition(ratScannerMain, "InitializeRuntimeAsync");
-        Assert.Contains("finally", runtimeInitialization, StringComparison.Ordinal);
-        Assert.Contains("UpdateHotkeyReadiness();", runtimeInitialization, StringComparison.Ordinal);
+        int timerSetup = runtimeInitialization.IndexOf("new Timer(", StringComparison.Ordinal);
+        int trackerActivation = runtimeInitialization.IndexOf("ActivateTrackerModeAsync(", StringComparison.Ordinal);
+        int finallyStart = runtimeInitialization.IndexOf("finally", StringComparison.Ordinal);
+        int readinessPublication = runtimeInitialization.IndexOf("UpdateHotkeyReadiness();", StringComparison.Ordinal);
+        Assert.True(timerSetup >= 0 && timerSetup < trackerActivation, "Tracker timer setup must precede activation.");
+        Assert.True(
+            finallyStart >= 0 && readinessPublication > finallyStart,
+            "Runtime readiness must be published from the finally block."
+        );
     }
 
     [Fact]

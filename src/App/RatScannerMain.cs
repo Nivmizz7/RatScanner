@@ -232,9 +232,10 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         try
         {
             await Task.Delay(1000, cancellationToken);
-            Logger.LogInfo("Loading TarkovTracker data...");
-            await ActivateTrackerModeAsync(RatConfig.GameMode, cancellationToken);
 
+            // Install periodic refresh independently of the initial activation.
+            // A settings change can supersede/cancel that request, but must not leave
+            // the session without future tracker refreshes.
             cancellationToken.ThrowIfCancellationRequested();
             Logger.LogInfo("Setting up timer routines...");
             lock (_tarkovTrackerTimerLock)
@@ -250,6 +251,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 }
             }
 
+            Logger.LogInfo("Loading TarkovTracker data...");
+            await ActivateTrackerModeAsync(RatConfig.GameMode, cancellationToken);
             Logger.LogInfo("Runtime services initialized.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
