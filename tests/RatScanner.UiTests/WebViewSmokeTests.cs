@@ -303,6 +303,8 @@ public sealed class WebViewSmokeTests
                 string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
             );
 
+        if (testFailure is not null && cleanupFailures.Count > 0)
+            throw new AggregateException("UI smoke failed and cleanup also failed.", [testFailure, .. cleanupFailures]);
         if (testFailure is not null)
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(testFailure).Throw();
         if (cleanupFailures.Count > 0)
@@ -440,7 +442,8 @@ public sealed class WebViewSmokeTests
         int deviceWidth = checked((int)Math.Round(width * dpi / 96d, MidpointRounding.AwayFromZero));
         int deviceHeight = checked((int)Math.Round(height * dpi / 96d, MidpointRounding.AwayFromZero));
         int viewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
-        while (DateTime.UtcNow < deadline)
+        DateTime resizeDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTime.UtcNow < resizeDeadline)
         {
             if (!NativeMethods.SetWindowPos(window, 0, 0, 0, deviceWidth, deviceHeight, NativeMethods.ResizeOnlyFlags))
                 throw new InvalidOperationException(
