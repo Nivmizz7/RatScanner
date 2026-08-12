@@ -238,32 +238,40 @@ public class TarkovTrackerDatabaseReliabilityTests
             GameMode.Regular,
             TestContext.Current.CancellationToken
         );
-        TrackerValidationResult prefixedPveResult = await database.ValidateCandidateAsync(
-            "PVE_abc",
-            "https://api.example",
-            GameMode.Pve,
-            TestContext.Current.CancellationToken
-        );
-        TrackerValidationResult prefixedPvpResult = await database.ValidateCandidateAsync(
-            "PVP_abc",
-            "https://api.example",
-            GameMode.Regular,
-            TestContext.Current.CancellationToken
-        );
-        TrackerValidationResult pvpPrefixInPveResult = await database.ValidateCandidateAsync(
-            "PVP_abc",
-            "https://api.example",
-            GameMode.Pve,
-            TestContext.Current.CancellationToken
-        );
-
         Assert.False(pveResult.Succeeded);
         Assert.Equal(TrackerValidationFailure.WrongGameMode, pveResult.Failure);
         Assert.True(pvpResult.Succeeded);
-        Assert.True(prefixedPveResult.Succeeded);
-        Assert.True(prefixedPvpResult.Succeeded);
-        Assert.False(pvpPrefixInPveResult.Succeeded);
-        Assert.Equal(TrackerValidationFailure.WrongGameMode, pvpPrefixInPveResult.Failure);
+    }
+
+    [Theory]
+    [InlineData("PVP_abc", GameMode.Regular, GameMode.Pve)]
+    [InlineData("PVE_abc", GameMode.Pve, GameMode.Regular)]
+    public async Task Prefix_scoped_key_without_game_mode_matches_only_its_mode(
+        string token,
+        GameMode matchingMode,
+        GameMode otherMode
+    )
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) => Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"]}""")
+        );
+
+        TrackerValidationResult matchingResult = await database.ValidateCandidateAsync(
+            token,
+            "https://api.example",
+            matchingMode,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult otherModeResult = await database.ValidateCandidateAsync(
+            token,
+            "https://api.example",
+            otherMode,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.True(matchingResult.Succeeded);
+        Assert.False(otherModeResult.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, otherModeResult.Failure);
     }
 
     [Fact]
