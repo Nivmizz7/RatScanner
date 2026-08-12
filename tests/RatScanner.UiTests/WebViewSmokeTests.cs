@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -67,6 +69,7 @@ public sealed class WebViewSmokeTests
 
         try
         {
+            int port = AllocateLoopbackPort();
             ProcessStartInfo startInfo = new(appPath)
             {
                 WorkingDirectory = appDirectory,
@@ -74,7 +77,7 @@ public sealed class WebViewSmokeTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            startInfo.Environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = "--remote-debugging-port=0";
+            startInfo.Environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = $"--remote-debugging-port={port}";
             startInfo.Environment["WEBVIEW2_USER_DATA_FOLDER"] = profileDirectory;
 
             app = Process.Start(startInfo);
@@ -82,7 +85,7 @@ public sealed class WebViewSmokeTests
             stdoutTask = app.StandardOutput.ReadToEndAsync(testCancellation);
             stderrTask = app.StandardError.ReadToEndAsync(testCancellation);
 
-            int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
+            await WaitForDebugEndpointAsync(port, app, StartupTimeout);
             File.WriteAllText(Path.Combine(runDirectory, "endpoint.txt"), $"http://127.0.0.1:{port}");
 
             playwright = await Playwright.CreateAsync();
@@ -311,7 +314,16 @@ public sealed class WebViewSmokeTests
             throw new AggregateException("UI smoke cleanup failed.", cleanupFailures);
     }
 
-    private static async Task<int> WaitForDebugPortAsync(string profileDirectory, Process app, TimeSpan timeout)
+    private static int AllocateLoopbackPort()
+    {
+        TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    private static async Task WaitForDebugEndpointAsync(int port, Process app, TimeSpan timeout)
     {
         DateTime deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
@@ -322,29 +334,23 @@ public sealed class WebViewSmokeTests
 
             try
             {
-                string? portFile = Directory
-                    .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
-                    .FirstOrDefault();
-                if (portFile is not null)
-                {
-                    string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
-                    if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
-                        return port;
-                }
+                using TcpClient client = new();
+                await client.ConnectAsync(IPAddress.Loopback, port).WaitAsync(TimeSpan.FromSeconds(1));
+                return;
             }
-            catch (IOException)
+            catch (SocketException)
             {
-                // Chromium can still be creating or replacing the readiness file; retry until the deadline.
+                // WebView2 has not opened its CDP listener yet; retry until the deadline.
             }
-            catch (UnauthorizedAccessException)
+            catch (TimeoutException)
             {
-                // The profile tree can be transiently locked while WebView2 initializes; retry.
+                // A cold hosted runner can take time to initialize the listener; keep polling.
             }
 
             await Task.Delay(250);
         }
 
-        throw new TimeoutException($"WebView2 did not publish DevToolsActivePort within {timeout}.");
+        throw new TimeoutException($"WebView2 did not open its CDP endpoint on 127.0.0.1:{port} within {timeout}.");
     }
 
     private static async Task<IPage> WaitForAppPageAsync(IBrowserContext context, Process app, TimeSpan timeout)
