@@ -1,5 +1,16 @@
 # Build and validation
 
+## Canonical pipelines
+
+Use the repository runner rather than reconstructing CI commands ad hoc:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Fast
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Full
+```
+
+`Fast` restores tools/packages, checks C# and Markdown formatting plus agent-document integrity, builds Debug (including the analyzer gate), and runs App unit tests. `Full` also validates/installs the pinned runtime data, runs the adversarial script/data validators, builds/tests Release, and exercises the real WebView2 smoke suite. Both fail immediately with the underlying non-zero exit code.
+
 ## Commands
 
 ### Restore
@@ -24,13 +35,63 @@ App and tests target x64 in every configuration because the OpenCvSharp Windows 
 ### Unit tests
 
 ```bat
-dotnet test RatScanner.sln
-dotnet test RatScanner.sln -c Release --no-restore
+dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
+dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj -c Release --no-build --no-restore
 ```
 
 CI builds and tests Release on `windows-latest` with .NET 10.x.
 
-Current App test project: `tests/RatScanner.Tests` (xUnit v3). It covers App logic and reliability contracts, configuration migration, localization fallback/key parity, and the optional App-owned capture/crop harness. RatEye's submodule owns engine/OpenCV/cache tests and fixture replay. **Neither** is a substitute for full UI or live-scan verification. Scoped rules: `tests/AGENTS.md`.
+The App unit project is `tests/RatScanner.Tests` (xUnit v3). It covers App logic and reliability contracts, configuration migration, localization fallback/key parity, and the optional App-owned capture/crop harness. RatEye's submodule owns engine/OpenCV/cache tests and fixture replay. **Neither** is a substitute for hosted UI or live-scan verification. Scoped rules: `tests/AGENTS.md`.
+
+Do not use `dotnet test RatScanner.sln` as the unit-test command: the solution now also contains the real UI smoke project and would launch RatScanner.
+
+### WebView2 UI smoke
+
+RatScanner has no HTTP server. The durable browser surface is the Blazor content inside the WPF-hosted WebView2. `tests/RatScanner.UiTests` launches the built application, requests an OS-assigned CDP port, polls `DevToolsActivePort`, and attaches Playwright .NET to the `/app` target. It uses the installed WebView2 runtime, so no Playwright browser download is required.
+
+```bat
+:: Build/setup and run the committed smoke suite
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Ui
+
+:: Repeat the lifecycle/flow three times
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Ui -Repeat 3
+
+:: Run every committed UI/E2E test after a Release build
+dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj -c Release --no-build --no-restore
+
+:: Headed is the default because the product is a real WPF window
+dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj -c Release --no-build --no-restore
+
+:: Slow interactions for local debugging
+set RATSCANNER_UI_SLOWMO_MS=500
+dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj -c Release --no-build --no-restore
+set RATSCANNER_UI_SLOWMO_MS=
+```
+
+Close any unrelated RatScanner instance first. The harness deliberately refuses to attach to or stop it. Each run uses a unique WebView2 profile and cleans up only its own process tree/profile.
+
+The current high-signal smoke covers:
+
+- WPF process startup and WebView2 readiness without a fixed startup sleep;
+- main scan shell, semantic navigation, and the search control;
+- keyboard activation/focus through Settings and a click-driven About route;
+- desktop and 600px narrow settings rendering, responsive control swap, bounds, and horizontal overflow;
+- an ARIA snapshot of the important narrow settings structure;
+- uncaught page exceptions, browser console errors, failed app-resource requests, and app-resource HTTP 5xx responses.
+
+It does not automate live EFT capture/OCR, overlay placement over the game, tray/minimal native chrome, real multi-monitor DPI transitions, authenticated TarkovTracker flows, or destructive settings changes.
+
+### UI artifacts and trace inspection
+
+Every run writes a unique directory under `artifacts\ui-tests\` with desktop/narrow screenshots, effective URL, accessibility snapshot, app stdout/stderr, and `RatScanner.log`. Failures additionally retain `failure.png`, DOM and accessibility snapshots, browser runtime failures, and `trace.zip` where tracing started.
+
+Inspect a failure trace with the Playwright script emitted by the built test project:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\RatScanner.UiTests\bin\Release\net10.0-windows10.0.22621.0\playwright.ps1 show-trace artifacts\ui-tests\<run>\trace.zip
+```
+
+For visual validation, inspect `desktop-scan.png` and `narrow-settings.png`; do not infer visual correctness from the test exit code alone. Pixel baselines are intentionally not enabled: OS/WebView/font rendering, local display/config text, and cache-derived status make broad pixel diffs noisy. The suite instead keeps deterministic screenshots and high-signal layout/semantic assertions. Add a small visual baseline only after stabilizing a specific high-value surface; never auto-approve a changed baseline.
 
 ### Formatting
 
@@ -118,9 +179,9 @@ Interpret carefully (transitive noise). Do not upgrade casually — see `depende
 
 Fast, headless. Prefer expanding these for pure logic (parsers, projections, pure presentation helpers).
 
-### WebView / UI smoke (manual)
+### WebView / UI smoke (automated plus judgment)
 
-With `dev.bat` or `-Once`:
+Run the UI suite first, then use `dev.bat -Once` for native or product states outside its committed coverage:
 
 - Main window loads Blazor shell (not stuck on “Loading…”).
 - Navigation: Scan, Settings, About.
@@ -168,7 +229,7 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | --- | --- | --- |
 | Pure logic / helpers | build + tests for covered code | csharpier |
 | API client / cache | build + unit tests | manual warm/cold start smoke |
-| UI Razor/CSS | build | WebView smoke |
+| UI Razor/CSS | build + WebView UI smoke + screenshot inspection | manual native/DPI smoke when relevant |
 | RatEye processing | standalone RatEye build/tests + integrated App build | fixture replay + scan smoke if accuracy-sensitive |
 | Config paths / display | build + tests | manual multi-monitor if possible |
 | i18n | build | all locale files updated; UI language switch |
@@ -184,7 +245,7 @@ CI uploads the validated `RatScanner.zip` as an immutable build artifact. The se
 | --- | --- | --- |
 | Unit tests | Pure functions, contracts, regressions that were encoded | Real OCR accuracy, WebView rendering, end-user scan UX |
 | Build | Compiles against current TFMs/packages | Runtime asset presence beyond compile |
-| Manual UI | WebView wiring, CSS, navigation | Automated coverage |
+| WebView UI smoke | Real hosted Blazor rendering, navigation, responsive assertions, runtime health | Native chrome/tray, live game capture, all visual judgment |
 | RatEye fixture replay | Recorded accuracy/latency for versioned captures | Every display/game configuration |
 | Manual scan | End-to-end recognition path | Continuous regression by itself |
 | Doc integrity script | Structural doc + packaging constraints | Narrative accuracy of every sentence |

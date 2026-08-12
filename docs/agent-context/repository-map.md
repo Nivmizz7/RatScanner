@@ -9,7 +9,9 @@ RatScanner.sln
 src/App/                 # WPF + Blazor app (assembly RatScanner)
 src/ScanEngine/          # Standalone RatEye Git submodule
 tests/RatScanner.Tests/  # xUnit tests
+tests/RatScanner.UiTests/ # Playwright .NET tests against the hosted WebView2
 scripts/                 # dev, data setup, zip helper, agent-docs check, markdown lint, optional bench
+.agents/skills/          # Repository-scoped Codex workflows
 .github/workflows/       # CI build + release
 docs/agent-context/      # This documentation set
 media/                   # README demos
@@ -105,6 +107,7 @@ examples/                # Sample resolution screenshots
 | Concern | Where |
 | --- | --- |
 | Project | `tests/RatScanner.Tests/` |
+| Hosted UI project | `tests/RatScanner.UiTests/` |
 | Scoped instructions | `tests/AGENTS.md` |
 | Coverage examples | display/config migration, localization, API/cache/presentation, tracker/update reliability, synthetic OpenCV pipeline |
 
@@ -122,6 +125,7 @@ examples/                # Sample resolution screenshots
 | `scripts/test-agent-docs.ps1` | Disposable adversarial regression fixture for the integrity check (also CI) |
 | `scripts/lint-markdown.ps1` | markdownlint-cli2 check / `-Fix` auto-fix (also CI check) |
 | `scripts/install-git-hooks.ps1` | Optional local pre-commit Markdown check (no mutation/re-staging) |
+| `scripts/verify.ps1` | Canonical Fast, Full, and WebView UI verification pipelines |
 | `package.json` / `.markdownlint-cli2.jsonc` | Dev-only Node markdownlint tooling (not app runtime) |
 | `publish.bat` | Local release package |
 | `scripts/bench/*` | Optional perf measurements (not product path) |
