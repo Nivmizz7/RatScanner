@@ -701,6 +701,13 @@ internal class KeyUpEventArgs : EventArgs
 
     internal readonly Device Device;
 
+    /// <summary>
+    /// Monotonic timestamp taken inside the low-level input hook. Handlers run on
+    /// the thread pool, so this is the only way to measure how long a click waited
+    /// before scan work actually started.
+    /// </summary>
+    internal readonly double HookObservedAtMs = Diagnostics.PerfTrace.MonotonicMs();
+
     internal KeyUpEventArgs(int vkCode, Device device)
     {
         VKCode = vkCode;

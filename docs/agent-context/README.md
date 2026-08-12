@@ -27,6 +27,7 @@ Context docs are not a second source of product truth. Explicit maintainer decis
 | [scan-engine.md](scan-engine.md) | OCR/icon pipeline and standalone RatEye boundary |
 | [data-integrations.md](data-integrations.md) | json.tarkov.dev, slim maps GraphQL, TarkovTracker, caches |
 | [configuration-and-cache.md](configuration-and-cache.md) | `config.cfg`, paths, TTL, offline cache |
+| [performance-diagnostics.md](performance-diagnostics.md) | Startup and scan tracing, slow-scan logs, diagnostic reports |
 | [localization.md](localization.md) | UI `i18n` files and `LocalizationService` |
 | [dependency-management.md](dependency-management.md) | Packages, ProjectReference, upgrade discipline |
 | [release-and-versioning.md](release-and-versioning.md) | 4.x semver, publish, CI tags, fork branding |

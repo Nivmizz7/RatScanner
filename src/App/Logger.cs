@@ -244,6 +244,12 @@ internal static class Logger
         if (e != null)
             body += "```\n" + LimitLength(e.ToString(), 1000) + "\n```\n";
 
+        // Performance context is cheap to include and turns "it is slow for me" into
+        // an actionable report without a local reproduction.
+        body += "<details>\n<summary>Performance</summary>\n\n```\n";
+        body += LimitLength(TryBuildPerformanceSummary(), 2000);
+        body += "\n```\n</details>\n\n";
+
         body += "<details>\n<summary>Log</summary>\n\n```\n";
         body += LimitLength(ReadAll(), 3000);
         body += "\n```\n</details>";
@@ -289,6 +295,22 @@ internal static class Logger
     private static string LimitLength(string input, int length)
     {
         return input[..Math.Min(length, input.Length)];
+    }
+
+    /// <summary>
+    /// Renders the compact performance report for inclusion in an issue body. Runs
+    /// while the process is already crashing, so it must not throw.
+    /// </summary>
+    private static string TryBuildPerformanceSummary()
+    {
+        try
+        {
+            return Diagnostics.PerfReportBuilder.ToCompactText(Diagnostics.PerfReportBuilder.Build());
+        }
+        catch (Exception exception)
+        {
+            return "The performance report could not be built: " + exception.Message;
+        }
     }
 
     private static void OpenURL(string url) => ExternalLinkLauncher.Open(url);

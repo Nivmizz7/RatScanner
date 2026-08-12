@@ -96,8 +96,14 @@ internal static class WebView2PowerSaver
     private static void TryResumeCore(CoreWebView2 core)
     {
         if (!core.IsSuspended)
+        {
+            RatScanner.Diagnostics.PerfTraceStore.Increment("webview.resume_noop");
             return;
+        }
 
+        // This is on the tooltip critical path: a suspended renderer has to be
+        // un-frozen (and its memory target restored) before it can present a frame.
+        double startedAtMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs();
         try
         {
             core.Resume();
@@ -105,23 +111,40 @@ internal static class WebView2PowerSaver
         catch (Exception e)
         {
             Logger.LogWarning("Unable to resume the WebView2 renderer.", e);
+            return;
         }
+
+        double elapsedMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs() - startedAtMs;
+        RatScanner.Diagnostics.PerfTraceStore.Increment("webview.resume_from_suspended");
+        RatScanner.Diagnostics.PerfTraceStore.SetGauge("webview.last_resume_ms", (long)elapsedMs);
+        RatScanner.Diagnostics.PerfTraceStore.RecordScanStage(
+            RatScanner.Diagnostics.PerfTraceStore.CurrentScanSequence,
+            "overlay.renderer_resume",
+            elapsedMs
+        );
     }
 
     private static async Task SuspendCoreAsync(CoreWebView2 core, PowerState state)
     {
+        double startedAtMs = RatScanner.Diagnostics.PerfTrace.MonotonicMs();
         try
         {
             await core.TrySuspendAsync();
+            RatScanner.Diagnostics.PerfTraceStore.Increment("webview.suspend_succeeded");
         }
         catch (Exception)
         {
             // Suspension is best-effort: it fails while DevTools is open or if
             // the browser considers the page visible. The visibility change
             // above already stopped compositing, which is the main win.
+            RatScanner.Diagnostics.PerfTraceStore.Increment("webview.suspend_failed");
         }
         finally
         {
+            RatScanner.Diagnostics.PerfTraceStore.SetGauge(
+                "webview.last_suspend_ms",
+                (long)(RatScanner.Diagnostics.PerfTrace.MonotonicMs() - startedAtMs)
+            );
             state.PendingSuspend = null;
             if (state.ResumeRequested && core.IsSuspended)
             {

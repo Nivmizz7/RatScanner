@@ -71,11 +71,15 @@ public partial class PageSwitcher : Window, IDisposable
     {
         // Do not publish the singleton until construction succeeds; a half-built
         // window must not be reachable via PageSwitcher.Instance after a startup throw.
+        Diagnostics.PerfTrace startup = Diagnostics.PerfTraceStore.Startup;
+        using Diagnostics.PerfTrace.PerfScope constructorScope = startup.Measure("startup.page_switcher_ctor");
         try
         {
-            RatConfig.LoadConfig();
+            using (startup.Measure("startup.load_config"))
+                RatConfig.LoadConfig();
 
-            InitializeComponent();
+            using (startup.Measure("startup.initialize_component"))
+                InitializeComponent();
             _normalChrome = WindowChrome.GetWindowChrome(this) ?? new WindowChrome();
             Title = Constants.Branding.Name;
             BrandNameRun.Text = Constants.Branding.Name;
@@ -83,7 +87,10 @@ public partial class PageSwitcher : Window, IDisposable
             ApplyWindowsTheme();
             SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             ResetWindowSize();
-            Navigate(BlazorUI.Instance);
+            // Navigate builds BlazorUI, which builds the overlay and constructs
+            // RatScannerMain — the bulk of startup, all on this thread.
+            using (startup.Measure("startup.navigate_blazor_ui"))
+                Navigate(BlazorUI.Instance);
 
             _appStateService = BlazorUI.Instance.Services.GetRequiredService<AppStateService>();
             _appStateService.SidebarOpenChanged += OnSidebarOpenChanged;
@@ -96,8 +103,10 @@ public partial class PageSwitcher : Window, IDisposable
             UpdateCaptionButtonAccessibility();
             UpdateMinimalUIButton();
 
-            AddJumpList();
-            AddTrayIcon();
+            using (startup.Measure("startup.jump_list"))
+                AddJumpList();
+            using (startup.Measure("startup.tray_icon"))
+                AddTrayIcon();
 
             RestoreWindowBounds();
             Topmost = RatConfig.AlwaysOnTop;
@@ -111,6 +120,14 @@ public partial class PageSwitcher : Window, IDisposable
             // LogError terminates the process; do not leave a half-built singleton published.
             Logger.LogError(e.Message, e);
         }
+    }
+
+    protected override void OnContentRendered(EventArgs e)
+    {
+        base.OnContentRendered(e);
+        // First frame of the main window is on screen: this is the number a user
+        // means by "how long until the app was usable".
+        Diagnostics.PerfTraceStore.CompleteStartup();
     }
 
     internal void ResetWindowSize()
@@ -928,6 +945,10 @@ public partial class PageSwitcher : Window, IDisposable
         _fitApplying = true;
         try
         {
+            // Every write here re-layouts the window and therefore resizes the hosted
+            // WebView2 surface, which forces Chromium to re-layout and re-raster.
+            // The counter makes that churn visible in a performance report.
+            Diagnostics.PerfTraceStore.Increment("window.fit_resize");
             Height = height;
         }
         finally
@@ -952,6 +973,7 @@ public partial class PageSwitcher : Window, IDisposable
         _fitAnimationStart = DateTime.UtcNow;
         if (!_fitAnimationRunning)
         {
+            Diagnostics.PerfTraceStore.Increment("window.fit_animation_started");
             _fitAnimationRunning = true;
             _fitAnimationTimer.Start();
         }

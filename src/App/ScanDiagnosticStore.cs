@@ -7,6 +7,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using RatEye.Diagnostics;
+using RatScanner.Diagnostics;
 using RatScanner.Display;
 
 namespace RatScanner;
@@ -131,6 +132,24 @@ internal sealed class ScanDiagnosticStore : IDisposable
                 Path.Combine(directory, "scan.ratdiag.json"),
                 JsonConvert.SerializeObject(manifest, serializerSettings)
             );
+
+            // Ship the performance report alongside the capture. A user attaching one
+            // export should give a maintainer both "what did it see" and "why was it
+            // slow" without needing a local reproduction.
+            try
+            {
+                PerfReportBuilder.WriteTo(directory, PerfReportBuilder.Build());
+            }
+            catch (Exception exception)
+            {
+                // The capture is the primary artifact; never fail an export because
+                // the performance report could not be produced.
+                Logger.LogWarning(
+                    "Unable to write the performance report into the scan diagnostics export.",
+                    exception
+                );
+            }
+
             return new(true, directory, null);
         }
         catch (Exception exception)

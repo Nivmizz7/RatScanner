@@ -92,7 +92,7 @@ dotnet run --project src\App\RatScanner.csproj
 
 - `dev.bat` Debug config by default; attach Visual Studio/Rider to the launched process if needed.
 - With debugger attached, main/overlay WebViews open DevTools.
-- Logs: `Log.txt` next to the running exe; RatEye may write `RatEyeLog.txt`.
+- Logs: `Log.txt` next to the running exe; RatEye may write `RatEyeLog.txt`. `Log.txt` includes the startup timeline and a `perf` line per scan — see [performance-diagnostics.md](performance-diagnostics.md).
 - Config: `config.cfg` next to the running exe (bin output during debug).
 
 ## Generated / downloaded locations

@@ -110,7 +110,7 @@ internal sealed class HotkeyManager : IDisposable
         Wrap(() =>
         {
             Logger.LogDebug("OnNameScanHotkey: ENTER");
-            _owner.NameScan(UserActivityHelper.GetMousePosition());
+            _owner.NameScan(UserActivityHelper.GetMousePosition(), e.HookObservedAtMs);
             // Claim the auto-scan window atomically so concurrent Task.Run handlers from a
             // real double-click cannot both pass the debounce and both call NameScanScreen.
             long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
@@ -131,7 +131,7 @@ internal sealed class HotkeyManager : IDisposable
         Wrap(() =>
         {
             Logger.LogDebug("OnIconScanHotkey: ENTER");
-            _owner.IconScan(UserActivityHelper.GetMousePosition());
+            _owner.IconScan(UserActivityHelper.GetMousePosition(), e.HookObservedAtMs);
             Logger.LogDebug("OnIconScanHotkey: EXIT");
         });
     }
