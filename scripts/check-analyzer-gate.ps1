@@ -15,7 +15,7 @@ if ([string]::IsNullOrWhiteSpace($BuildPropsPath)) {
     $BuildPropsPath = Join-Path $repositoryRoot 'Directory.Build.props'
 }
 
-function Get-UniqueRules {
+function Get-UniqueRule {
     param(
         [string[]]$Rules,
         [string]$SourceName
@@ -35,7 +35,7 @@ foreach ($line in Get-Content -LiteralPath $EditorConfigPath) {
         $editorRules += $Matches.rule
     }
 }
-$editorRules = Get-UniqueRules -Rules $editorRules -SourceName '.editorconfig warning block'
+$editorRules = Get-UniqueRule -Rules $editorRules -SourceName '.editorconfig warning block'
 
 [xml]$buildProps = Get-Content -LiteralPath $BuildPropsPath -Raw
 $buildRules = @()
@@ -47,7 +47,7 @@ foreach ($node in $buildProps.SelectNodes('/Project/PropertyGroup/WarningsAsErro
         }
     }
 }
-$buildRules = Get-UniqueRules -Rules $buildRules -SourceName 'Directory.Build.props WarningsAsErrors'
+$buildRules = Get-UniqueRule -Rules $buildRules -SourceName 'Directory.Build.props WarningsAsErrors'
 
 if ($editorRules.Count -eq 0) {
     throw 'No curated CA/IDE warning rules were found in .editorconfig.'

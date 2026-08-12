@@ -142,5 +142,6 @@ finally {
 
 # Native download/extraction fallbacks can leave a stale non-zero LASTEXITCODE
 # after a successful install. dev.ps1 invokes this script in-process and uses the
-# script exit code, so make successful completion explicit.
-exit 0
+# script exit code, so make successful completion explicit without terminating
+# the in-process caller (scripts/dev.ps1).
+$global:LASTEXITCODE = 0
