@@ -59,7 +59,7 @@
                         class="thumb @(_result?.Item.Id == scan.Item.Id ? "selected" : null)"
                         title="@scan.Item.Name"
                         @onclick="() => SelectRecent(scan)">
-                    <img src="@scan.Item.ImageUrl" alt="" />
+                    <img @key="scan.Item.Id" src="@scan.Item.ImageUrl" alt="" />
                     <span>@ShortLabel(scan.Item.ShortName, scan.Item.Name)</span>
                 </button>
             }
@@ -103,7 +103,10 @@
             <div class="result-main">
                 <header class="identity">
                     <div class="item-art">
-                        <img src="@_result.Item.ImageUrl" alt="@_result.Item.Name" />
+                        @* Keyed by item so Blazor replaces the element instead of patching src
+                           on a reused one. Patching leaves the previous item's decoded image
+                           on screen until the new one loads, which reads as "wrong icon". *@
+                        <img @key="_result.Item.Id" src="@_result.Item.ImageUrl" alt="@_result.Item.Name" />
                         @if (_result.Item.Quantity > 1)
                         {
                             <small>x@_result.Item.Quantity</small>

@@ -55,6 +55,7 @@ public partial class PageSwitcher : Window, IDisposable
     private UserControl? activeControl;
     private bool _isMinimalUi;
     private bool _isExiting;
+    private bool _disposed;
     private bool _hasPersistedWindowBounds;
     private WindowState _restoreWindowState = WindowState.Normal;
     private Rect _restoreBounds;
@@ -321,32 +322,38 @@ public partial class PageSwitcher : Window, IDisposable
 
     protected override void OnClosed(EventArgs e)
     {
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
-        if (_appStateService != null)
-        {
-            _appStateService.SidebarOpenChanged -= OnSidebarOpenChanged;
-            _appStateService.FocusNavigationToggleRequested -= OnFocusNavigationToggleRequested;
-            _appStateService.ContentFitChanged -= OnContentFitChanged;
-            _appStateService.ContentFitCleared -= OnContentFitCleared;
-            SizeChanged -= OnWindowSizeChangedForFit;
-            _fitAnimationTimer.Stop();
-        }
         Dispose();
-
         base.OnClosed(e);
         ExitApplication();
     }
 
     public void Dispose()
     {
-        GC.SuppressFinalize(this);
-        if (_notifyIcon != null)
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        if (_appStateService is not null)
+        {
+            _appStateService.SidebarOpenChanged -= OnSidebarOpenChanged;
+            _appStateService.FocusNavigationToggleRequested -= OnFocusNavigationToggleRequested;
+            _appStateService.ContentFitChanged -= OnContentFitChanged;
+            _appStateService.ContentFitCleared -= OnContentFitCleared;
+            _appStateService = null;
+        }
+        SizeChanged -= OnWindowSizeChangedForFit;
+        _fitAnimationTimer.Stop();
+        _fitAnimationTimer.Tick -= OnFitAnimationTick;
+
+        if (_notifyIcon is not null)
         {
             _notifyIcon.Visible = false;
             _notifyIcon.Dispose();
+            _notifyIcon = null!;
         }
-
         _contextMenuStrip.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

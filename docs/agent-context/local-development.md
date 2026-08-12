@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - **64-bit Windows** desktop (required; OpenCvSharp native runtime is x64-only).
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) matching CI (`10.0.x`).
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) selected by the root `global.json`; CI installs from the same file.
 - Network for first-time NuGet restore and RatScannerData download.
 - WebView2: installed automatically at runtime if missing; manual install still fine.
 - Initialized RatEye submodule (`git submodule update --init --recursive`).
@@ -16,6 +16,7 @@ Do not run or document the app under x86 Windows, WSL, or Linux. Targeting and n
 
 ## SDK / runtime expectations
 
+- Root `global.json` requires the exact SDK used by CI so compiler and bundled-analyzer behavior is reproducible.
 - App TFM: see `src/App/RatScanner.csproj` (`net10.0-windows10.0.22621.0`).
 - RatEye library: `netstandard2.0` (consumed from the submodule by App).
 - Tests: same Windows TFM family as App.
