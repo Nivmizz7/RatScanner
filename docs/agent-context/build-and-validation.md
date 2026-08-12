@@ -43,7 +43,7 @@ CI builds and tests Release on `windows-latest` with .NET 10.x.
 
 The App unit project is `tests/RatScanner.Tests` (xUnit v3). It covers App logic and reliability contracts, configuration migration, localization fallback/key parity, and the optional App-owned capture/crop harness. RatEye's submodule owns engine/OpenCV/cache tests and fixture replay. **Neither** is a substitute for hosted UI or live-scan verification. Scoped rules: `tests/AGENTS.md`.
 
-Do not use `dotnet test RatScanner.sln` as the unit-test command: the solution now also contains the real UI smoke project and would launch RatScanner.
+The real UI smoke project intentionally stays outside `RatScanner.sln`, so solution-wide build/test commands remain non-interactive. Invoke the UI project only through the explicit commands below.
 
 ### WebView2 UI smoke
 
@@ -59,8 +59,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Ui 
 :: Run every committed UI/E2E test after a Release build
 dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj -c Release --no-build --no-restore
 
-:: Headed is the default because the product is a real WPF window
-dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj -c Release --no-build --no-restore
+:: The command above is headed by default because the product is a real WPF window.
 
 :: Slow interactions for local debugging
 set RATSCANNER_UI_SLOWMO_MS=500
@@ -169,6 +168,8 @@ CI gates on the transitive .NET vulnerability audit and high/critical npm audit 
 ```bat
 dotnet list RatScanner.sln package --vulnerable --include-transitive
 dotnet list RatScanner.sln package --outdated
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --vulnerable --include-transitive
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --outdated
 ```
 
 Interpret carefully (transitive noise). Do not upgrade casually — see `dependency-management.md`.

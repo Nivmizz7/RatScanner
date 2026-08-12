@@ -107,7 +107,7 @@ examples/                # Sample resolution screenshots
 | Concern | Where |
 | --- | --- |
 | Project | `tests/RatScanner.Tests/` |
-| Hosted UI project | `tests/RatScanner.UiTests/` |
+| Hosted UI project | `tests/RatScanner.UiTests/` (explicit project outside the default solution) |
 | Scoped instructions | `tests/AGENTS.md` |
 | Coverage examples | display/config migration, localization, API/cache/presentation, tracker/update reliability, synthetic OpenCV pipeline |
 

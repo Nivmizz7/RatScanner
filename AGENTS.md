@@ -30,7 +30,6 @@ dotnet restore RatScanner.sln
 dotnet build RatScanner.sln
 dotnet build -c Release RatScanner.sln
 dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
-dotnet test tests\RatScanner.UiTests\RatScanner.UiTests.csproj
 dotnet tool restore
 dotnet csharpier check .
 dotnet csharpier format .
@@ -80,7 +79,8 @@ Before calling material work done:
 | Change class | Minimum checks |
 | --- | --- |
 | Any code | `dotnet build RatScanner.sln` (Debug + Release; curated analyzer set is a build-error gate via `Directory.Build.props` + `.editorconfig`) |
-| Behavior covered by tests | `dotnet test RatScanner.sln` |
+| Behavior covered by unit tests | `dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj` |
+| Hosted WebView behavior | `scripts\verify.ps1 -Mode Ui` |
 | C# style-sensitive edits | `dotnet tool restore` + `dotnet csharpier check .` (or format) |
 | Any `*.md` edit | `scripts\lint-markdown.ps1 -Fix` then check (tables, fence languages, trailing whitespace) |
 | Agent docs / structure | `scripts\check-agent-docs.ps1` |

@@ -75,6 +75,8 @@ When upgrades **are** requested:
 ```bat
 dotnet list RatScanner.sln package --vulnerable
 dotnet list RatScanner.sln package --outdated
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --vulnerable --include-transitive
+dotnet list tests\RatScanner.UiTests\RatScanner.UiTests.csproj package --outdated
 ```
 
 Triage with product risk (native, WebView, JSON, auth). Prefer minimal fixing upgrades.

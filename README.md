@@ -123,7 +123,7 @@ dotnet build RatScanner.sln
 ### Tests and formatting
 
 ```bat
-dotnet test RatScanner.sln
+dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
 dotnet tool restore
 dotnet csharpier check .
 ```

@@ -53,6 +53,9 @@ if ($Mode -in @('Fast', 'Full')) {
     Invoke-Checked 'Restore local .NET tools' { dotnet tool restore }
     if (-not $SkipRestore) {
         Invoke-Checked 'Restore solution' { dotnet restore $solution }
+        if ($Mode -eq 'Full') {
+            Invoke-Checked 'Restore UI test project' { dotnet restore $uiProject }
+        }
     }
     Invoke-Checked 'C# formatting' { dotnet csharpier check . }
     Invoke-Checked 'Markdown lint' {
@@ -77,6 +80,7 @@ if ($Mode -eq 'Full') {
     }
     Invoke-Checked 'Release build and analyzer gate' { dotnet build $solution -c Release --no-restore }
     Invoke-Checked 'Release unit tests' { dotnet test $unitProject -c Release --no-build --no-restore }
+    Invoke-Checked 'Build UI test project' { dotnet build $uiProject -c Release --no-restore }
 }
 
 if ($Mode -in @('Full', 'Ui')) {
