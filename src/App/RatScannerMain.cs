@@ -513,13 +513,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // own closing the trace. Without a tooltip nothing downstream will report, so
         // the trace must be closed here or its total would just be the finalize delay.
         bool awaitingUiReport = false;
-        using (trace.Measure("scan.display_refresh"))
-            RefreshGameDisplayForScan();
-        Logger.LogDebug("NameScan: acquiring NameScanLock...");
-        using (trace.Measure("scan.lock_wait"))
-            Monitor.Enter(NameScanLock);
+        bool lockTaken = false;
         try
         {
+            using (trace.Measure("scan.display_refresh"))
+                RefreshGameDisplayForScan();
+            Logger.LogDebug("NameScan: acquiring NameScanLock...");
+            using (trace.Measure("scan.lock_wait"))
+                Monitor.Enter(NameScanLock, ref lockTaken);
+
             Logger.LogDebug("NameScan: NameScanLock acquired");
             if (_disposed || !_ratEyeReady)
             {
@@ -601,8 +603,11 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            Monitor.Exit(NameScanLock);
-            trace.Mark("scan.lock_released");
+            if (lockTaken)
+            {
+                Monitor.Exit(NameScanLock);
+                trace.Mark("scan.lock_released");
+            }
             if (!awaitingUiReport)
                 PerfTraceStore.CompleteScan(trace.Sequence);
         }
@@ -719,13 +724,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // own closing the trace. Without a tooltip nothing downstream will report, so
         // the trace must be closed here or its total would just be the finalize delay.
         bool awaitingUiReport = false;
-        using (trace.Measure("scan.display_refresh"))
-            RefreshGameDisplayForScan();
-        Logger.LogDebug("IconScan: acquiring IconScanLock...");
-        using (trace.Measure("scan.lock_wait"))
-            Monitor.Enter(IconScanLock);
+        bool lockTaken = false;
         try
         {
+            using (trace.Measure("scan.display_refresh"))
+                RefreshGameDisplayForScan();
+            Logger.LogDebug("IconScan: acquiring IconScanLock...");
+            using (trace.Measure("scan.lock_wait"))
+                Monitor.Enter(IconScanLock, ref lockTaken);
+
             Logger.LogDebug("IconScan: IconScanLock acquired");
             if (_disposed || !_ratEyeReady)
             {
@@ -815,8 +822,11 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         }
         finally
         {
-            Monitor.Exit(IconScanLock);
-            trace.Mark("scan.lock_released");
+            if (lockTaken)
+            {
+                Monitor.Exit(IconScanLock);
+                trace.Mark("scan.lock_released");
+            }
             if (!awaitingUiReport)
                 PerfTraceStore.CompleteScan(trace.Sequence);
         }

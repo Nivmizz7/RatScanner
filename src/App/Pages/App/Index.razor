@@ -696,9 +696,9 @@
     }
 
     /// <summary>
-    /// Closes out the scan timeline for the render that just happened. This is the
-    /// last stage of a scan, so it also finalizes the trace and gets the summary
-    /// line into the log promptly instead of waiting for the store's timeout.
+    /// Records the main-window paint stages for the render that just happened.
+    /// The store's finalize timer closes the trace after both this window and the
+    /// independently rendered overlay have had time to report.
     /// </summary>
     private async System.Threading.Tasks.Task ReportScanPaintAsync()
     {
@@ -725,8 +725,6 @@
         catch (Exception exception) when (IsExpectedInteropShutdown(exception))
         {
         }
-
-        RatScanner.Diagnostics.PerfTraceStore.CompleteScan(sequence);
     }
 
     /// <summary>
