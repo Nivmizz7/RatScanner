@@ -65,7 +65,8 @@ if (-not $Force -and (Test-RatScannerDataInstallation `
     $manifest = Get-Content -LiteralPath (Join-Path $destination 'manifest.json') -Raw | ConvertFrom-Json
     Write-Host "Data already installed ($($manifest.iconCount) icons, content $($manifest.contentSha256)) at $destination"
     Write-Host 'Pass -Force to re-download.'
-    exit 0
+    $global:LASTEXITCODE = 0
+    return
 }
 
 try {
