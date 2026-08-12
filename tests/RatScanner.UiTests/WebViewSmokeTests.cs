@@ -7,8 +7,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -69,7 +67,6 @@ public sealed class WebViewSmokeTests
 
         try
         {
-            int port = AllocateLoopbackPort();
             ProcessStartInfo startInfo = new(appPath)
             {
                 WorkingDirectory = appDirectory,
@@ -77,7 +74,7 @@ public sealed class WebViewSmokeTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            startInfo.Environment["RATSCANNER_UI_TEST_CDP_PORT"] = port.ToString(CultureInfo.InvariantCulture);
+            startInfo.Environment["RATSCANNER_UI_TEST_CDP_PORT"] = "0";
             startInfo.Environment["RATSCANNER_UI_TEST_PROFILE"] = profileDirectory;
 
             app = Process.Start(startInfo);
@@ -85,7 +82,7 @@ public sealed class WebViewSmokeTests
             stdoutTask = app.StandardOutput.ReadToEndAsync(testCancellation);
             stderrTask = app.StandardError.ReadToEndAsync(testCancellation);
 
-            await WaitForDebugEndpointAsync(port, app, StartupTimeout);
+            int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
             File.WriteAllText(Path.Combine(runDirectory, "endpoint.txt"), $"http://127.0.0.1:{port}");
 
             playwright = await Playwright.CreateAsync();
@@ -314,16 +311,7 @@ public sealed class WebViewSmokeTests
             throw new AggregateException("UI smoke cleanup failed.", cleanupFailures);
     }
 
-    private static int AllocateLoopbackPort()
-    {
-        TcpListener listener = new(IPAddress.Loopback, 0);
-        listener.Start();
-        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    private static async Task WaitForDebugEndpointAsync(int port, Process app, TimeSpan timeout)
+    private static async Task<int> WaitForDebugPortAsync(string profileDirectory, Process app, TimeSpan timeout)
     {
         DateTime deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
@@ -334,23 +322,29 @@ public sealed class WebViewSmokeTests
 
             try
             {
-                using TcpClient client = new();
-                await client.ConnectAsync(IPAddress.Loopback, port).WaitAsync(TimeSpan.FromSeconds(1));
-                return;
+                string? portFile = Directory
+                    .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (portFile is not null)
+                {
+                    string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
+                    if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
+                        return port;
+                }
             }
-            catch (SocketException)
+            catch (IOException)
             {
-                // WebView2 has not opened its CDP listener yet; retry until the deadline.
+                // Chromium can still be creating or replacing the readiness file; retry until the deadline.
             }
-            catch (TimeoutException)
+            catch (UnauthorizedAccessException)
             {
-                // A cold hosted runner can take time to initialize the listener; keep polling.
+                // The profile tree can be transiently locked while WebView2 initializes; retry.
             }
 
             await Task.Delay(250);
         }
 
-        throw new TimeoutException($"WebView2 did not open its CDP endpoint on 127.0.0.1:{port} within {timeout}.");
+        throw new TimeoutException($"WebView2 did not publish DevToolsActivePort within {timeout}.");
     }
 
     private static async Task<IPage> WaitForAppPageAsync(IBrowserContext context, Process app, TimeSpan timeout)

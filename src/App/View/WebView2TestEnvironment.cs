@@ -20,9 +20,9 @@ internal static class WebView2TestEnvironment
 
         if (
             !int.TryParse(portText, NumberStyles.None, CultureInfo.InvariantCulture, out int port)
-            || port is < 1 or > 65535
+            || port is < 0 or > 65535
         )
-            throw new InvalidOperationException($"{PortVariable} must contain a valid TCP port.");
+            throw new InvalidOperationException($"{PortVariable} must contain zero or a valid TCP port.");
         if (string.IsNullOrWhiteSpace(profileDirectory) || !Path.IsPathFullyQualified(profileDirectory))
             throw new InvalidOperationException($"{ProfileVariable} must contain a fully qualified directory path.");
 
