@@ -10,6 +10,7 @@ internal sealed class HotkeyManager : IDisposable
 {
     private readonly RatScannerMain _owner;
     private long _last_mouse_click = 0;
+    private bool _engineReady;
     private bool _disposed;
 
     internal ActiveHotkey NameScanHotkey;
@@ -38,8 +39,15 @@ internal sealed class HotkeyManager : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // Unregister hotkeys to prevent multiple listeners for the same hotkey
+        // Unregister hotkeys to prevent multiple listeners for the same hotkey.
+        // Settings can request a rebuild while RatEye is still initializing; keep
+        // the live hooks disabled until the owner explicitly publishes readiness.
         UnregisterHotkeys();
+        if (!_engineReady)
+        {
+            CreateDisabledHotkeys();
+            return;
+        }
 
         // IMPORTANT: pass enabled/suppressHotkey explicitly by name. Without
         // the named argument, C# resolves to the 3-param constructor
@@ -60,6 +68,27 @@ internal sealed class HotkeyManager : IDisposable
             OnNameScanHotkey,
             NameScan.Enable,
             canHandle: e => !IconScanHotkey.Enabled || !IconScanHotkey.IsPressed(e)
+        );
+    }
+
+    internal void SetEngineReady(bool ready)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_engineReady == ready)
+            return;
+
+        _engineReady = ready;
+        RegisterHotkeys();
+    }
+
+    [MemberNotNull(nameof(NameScanHotkey), nameof(IconScanHotkey))]
+    private void CreateDisabledHotkeys()
+    {
+        IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, enabled: false, suppressHotkey: false);
+        NameScanHotkey = new ActiveHotkey(
+            new Hotkey(null, new[] { MouseButton.Left }),
+            OnNameScanHotkey,
+            enabled: false
         );
     }
 

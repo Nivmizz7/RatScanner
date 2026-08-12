@@ -163,8 +163,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     {
         AttachDpiHostWindow();
         QueueDpiRefresh();
-        if (_blazorOverlay is null && _pendingOverlayInitialization is null)
-            QueueOverlayInitialization();
+        QueueOverlayInitialization();
     }
 
     private void BlazorUI_Unloaded(object sender, RoutedEventArgs e)
@@ -175,6 +174,9 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     private void QueueOverlayInitialization()
     {
+        if (_disposed || _blazorOverlay is not null || _pendingOverlayInitialization is not null)
+            return;
+
         _pendingOverlayInitialization = Dispatcher.BeginInvoke(
             DispatcherPriority.ApplicationIdle,
             EnsureOverlayInitialized
@@ -264,6 +266,10 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     public void OnOpen()
     {
+        // OnOpen also runs before a startup restore into minimal mode swaps this
+        // control out. Queueing here guarantees the passive tooltip overlay still
+        // boots even when BlazorUI never reaches Loaded in that startup path.
+        QueueOverlayInitialization();
         UpdateElements();
         WebView2PowerSaver.Resume(_initializedWebView);
     }

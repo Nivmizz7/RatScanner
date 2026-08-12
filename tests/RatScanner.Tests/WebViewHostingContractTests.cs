@@ -29,7 +29,11 @@ public sealed class WebViewHostingContractTests
 
         Assert.Contains("DispatcherPriority.ApplicationIdle", blazorUi, StringComparison.Ordinal);
         Assert.Contains("BlazorUI_Loaded", blazorUi, StringComparison.Ordinal);
-        Assert.Contains("QueueOverlayInitialization();", blazorUi, StringComparison.Ordinal);
+        Assert.Contains("public void OnOpen()", blazorUi, StringComparison.Ordinal);
+        Assert.True(
+            CountOccurrences(blazorUi, "QueueOverlayInitialization();") >= 2,
+            "Overlay initialization must be queued from Loaded and OnOpen so startup minimal mode is covered."
+        );
         Assert.DoesNotContain("startup.create_overlay", blazorUi, StringComparison.Ordinal);
     }
 
@@ -73,6 +77,18 @@ public sealed class WebViewHostingContractTests
             "BlazorInteractableOverlay",
             File.ReadAllText(Path.Combine(appRoot, "View", "BlazorUI.xaml.cs"))
         );
+    }
+
+    private static int CountOccurrences(string source, string value)
+    {
+        int count = 0;
+        int offset = 0;
+        while ((offset = source.IndexOf(value, offset, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            offset += value.Length;
+        }
+        return count;
     }
 
     private static string FindRepositoryRoot()

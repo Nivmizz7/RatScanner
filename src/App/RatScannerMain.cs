@@ -68,6 +68,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     private readonly ScanDiagnosticStore _scanDiagnostics = new();
     private int _trackerRefreshInProgress;
     private bool _ratEyeReady;
+    private bool _runtimeInitialized;
     private bool _disposed;
 
     /// <summary>
@@ -196,16 +197,19 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
             if (cacheRefreshNeeded)
                 _ = RefreshApiCacheAsync();
-            _ = InitializeRuntimeAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception exception)
         {
-            // Do not enable hotkeys after an engine failure: every scan would be a
-            // guaranteed no-op. A later cache refresh may still repair the engine.
             Logger.LogWarning("RatEye initialization failed; scanning will remain unavailable.", exception);
             if (cacheRefreshNeeded)
                 _ = RefreshApiCacheAsync();
+        }
+        finally
+        {
+            // Tracker progress and timers are independent of OCR. HotkeyManager gates
+            // its live registrations until SetupRatEye publishes engine readiness.
+            _ = InitializeRuntimeAsync(cancellationToken);
         }
     }
 
@@ -235,7 +239,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             Logger.LogInfo("Setting up timer routines...");
             lock (_tarkovTrackerTimerLock)
             {
-                if (!_disposed)
+                if (!_disposed && !_runtimeInitialized)
                 {
                     _tarkovTrackerDBRefreshTimer = new Timer(
                         RefreshTarkovTrackerDB,
@@ -247,9 +251,9 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            Logger.LogInfo("Enabling hotkeys...");
-            HotkeyManager.RegisterHotkeys();
-            Logger.LogInfo("Ready!");
+            _runtimeInitialized = true;
+            UpdateHotkeyReadiness();
+            Logger.LogInfo(_ratEyeReady ? "Ready!" : "Runtime ready; scanner engine unavailable.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception e)
@@ -384,7 +388,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // Attributed to whichever trace is open: the startup timeline during boot, or
         // the in-flight scan when a viewport change forces a mid-scan rebuild.
         PerfTraceStore.RecordScanStage(PerfTraceStore.CurrentScanSequence, "engine.rebuild", elapsedMs);
+        UpdateHotkeyReadiness();
         Logger.LogDebug($"SetupRatEye: completed in {elapsedMs:F1} ms");
+    }
+
+    private void UpdateHotkeyReadiness()
+    {
+        if (_disposed)
+            return;
+        HotkeyManager.SetEngineReady(_runtimeInitialized && _ratEyeReady);
     }
 
     private static RatEye.Config GetRatEyeConfig(bool highlighted = true)
