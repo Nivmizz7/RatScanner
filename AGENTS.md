@@ -117,6 +117,7 @@ Do not expand into subjective rewrites or unrelated features. Defer only for a c
 | Versioning, publishing, releases | [release-and-versioning.md](docs/agent-context/release-and-versioning.md) |
 | Branches, commits, PRs, upstream | [contribution-workflow.md](docs/agent-context/contribution-workflow.md) |
 | Unfamiliar repo areas | [repository-map.md](docs/agent-context/repository-map.md), [architecture.md](docs/agent-context/architecture.md) |
+| Architecture register: findings, cleared leads, ranked priorities | [architecture-analysis.md](docs/agent-context/architecture-analysis.md) |
 | Local setup / day-to-day loop | [local-development.md](docs/agent-context/local-development.md) |
 | Product purpose / non-goals | [project-overview.md](docs/agent-context/project-overview.md) |
 
