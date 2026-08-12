@@ -662,10 +662,10 @@ public class TarkovTrackerDB : IDisposable
         if (!string.IsNullOrWhiteSpace(apiMode))
             return string.Equals(apiMode, expectedApiMode, StringComparison.OrdinalIgnoreCase);
 
+        // The tracker gateway guarantees mode-scoped prefixes. Legacy tt_ keys
+        // predate them, so an omitted gameMode must never bind one to the PvE slot.
         if (token.StartsWith("PVE_", StringComparison.OrdinalIgnoreCase))
             return expected == GameMode.Pve;
-        if (token.StartsWith("PVP_", StringComparison.OrdinalIgnoreCase))
-            return expected == GameMode.Regular;
         return expected == GameMode.Regular;
     }
 

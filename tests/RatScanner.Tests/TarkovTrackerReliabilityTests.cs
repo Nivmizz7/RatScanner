@@ -220,6 +220,38 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 
     [Fact]
+    public async Task Legacy_tt_token_without_game_mode_is_pvp_only()
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) => Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"]}""")
+        );
+
+        TrackerValidationResult pveResult = await database.ValidateCandidateAsync(
+            "tt_legacy",
+            "https://api.example",
+            GameMode.Pve,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult pvpResult = await database.ValidateCandidateAsync(
+            "tt_legacy",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult prefixedPveResult = await database.ValidateCandidateAsync(
+            "PVE_abc",
+            "https://api.example",
+            GameMode.Pve,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.False(pveResult.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, pveResult.Failure);
+        Assert.True(pvpResult.Succeeded);
+        Assert.True(prefixedPveResult.Succeeded);
+    }
+
+    [Fact]
     public async Task Failed_reconfiguration_does_not_allow_old_mode_progress_to_overwrite_the_new_mode()
     {
         using ManualResetEventSlim pvpStarted = new(false);
