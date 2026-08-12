@@ -244,11 +244,26 @@ public class TarkovTrackerDatabaseReliabilityTests
             GameMode.Pve,
             TestContext.Current.CancellationToken
         );
+        TrackerValidationResult prefixedPvpResult = await database.ValidateCandidateAsync(
+            "PVP_abc",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+        TrackerValidationResult pvpPrefixInPveResult = await database.ValidateCandidateAsync(
+            "PVP_abc",
+            "https://api.example",
+            GameMode.Pve,
+            TestContext.Current.CancellationToken
+        );
 
         Assert.False(pveResult.Succeeded);
         Assert.Equal(TrackerValidationFailure.WrongGameMode, pveResult.Failure);
         Assert.True(pvpResult.Succeeded);
         Assert.True(prefixedPveResult.Succeeded);
+        Assert.True(prefixedPvpResult.Succeeded);
+        Assert.False(pvpPrefixInPveResult.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, pvpPrefixInPveResult.Failure);
     }
 
     [Fact]

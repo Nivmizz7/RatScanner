@@ -106,33 +106,35 @@
 			</StackPanel>
 
 			<StackPanel x:Name="TraderPriceDisplay">
-				<Separator />
-				<Grid>
-					<Label Grid.Column="0"
+				<StackPanel>
+					<Separator />
+					<Grid>
+						<Label Grid.Column="0"
 								 Content="{Binding BestTraderOfferVendor.Name}"
 								 d:Content="Mechanic" />
-					<Label Grid.Column="1"
+						<Label Grid.Column="1"
 								 Style="{StaticResource ValueLabel}"
 								 Content="{Binding BestTraderOffer.PriceRub, Converter={StaticResource IntToLongPriceConverter}}"
 								 d:Content="53.516 ₽" />
 
-					<Grid.ColumnDefinitions>
-						<ColumnDefinition Width="*" />
-						<ColumnDefinition Width="Auto" />
-					</Grid.ColumnDefinitions>
-				</Grid>
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+					</Grid>
 
-				<StackPanel.Style>
-					<Style TargetType="StackPanel">
-						<Style.Triggers>
-							<DataTrigger Binding="{Binding HasTraderOffer}"
+					<StackPanel.Style>
+						<Style TargetType="StackPanel">
+							<Style.Triggers>
+								<DataTrigger Binding="{Binding HasTraderOffer}"
 												 Value="False">
-								<Setter Property="Visibility"
-												Value="Collapsed" />
-							</DataTrigger>
-						</Style.Triggers>
-					</Style>
-				</StackPanel.Style>
+									<Setter Property="Visibility"
+													Value="Collapsed" />
+								</DataTrigger>
+							</Style.Triggers>
+						</Style>
+					</StackPanel.Style>
+				</StackPanel>
 			</StackPanel>
 
 			<StackPanel x:Name="KappaDisplay">
