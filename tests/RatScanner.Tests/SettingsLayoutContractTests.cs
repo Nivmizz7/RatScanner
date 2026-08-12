@@ -42,10 +42,6 @@ public sealed class SettingsLayoutContractTests
             ContainsApplyRuntimeRegisterHotkeys(settingsVm, "SetEnableIconScanAsync"),
             "SetEnableIconScanAsync must call HotkeyManager.RegisterHotkeys via applyRuntime."
         );
-
-        string hotkeyManager = File.ReadAllText(Path.Combine(root, "src", "App", "HotkeyManager.cs"));
-        Assert.Contains("if (!_engineReady)", hotkeyManager, StringComparison.Ordinal);
-        Assert.Contains("CreateDisabledHotkeys();", hotkeyManager, StringComparison.Ordinal);
     }
 
     private static bool ContainsApplyRuntimeRegisterHotkeys(string source, string methodName)

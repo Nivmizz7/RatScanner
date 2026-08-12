@@ -250,15 +250,22 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 }
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
-            _runtimeInitialized = true;
-            UpdateHotkeyReadiness();
-            Logger.LogInfo(_ratEyeReady ? "Ready!" : "Runtime ready; scanner engine unavailable.");
+            Logger.LogInfo("Runtime services initialized.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception e)
         {
             Logger.LogWarning("Runtime initialization failed; RatScanner will continue in degraded mode.", e);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested && !_disposed)
+            {
+                // Tracker/network failures must not gate local scanning.
+                _runtimeInitialized = true;
+                UpdateHotkeyReadiness();
+                Logger.LogInfo(_ratEyeReady ? "Ready!" : "Runtime ready; scanner engine unavailable.");
+            }
         }
     }
 

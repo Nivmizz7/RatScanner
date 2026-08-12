@@ -38,6 +38,22 @@ public sealed class WebViewHostingContractTests
     }
 
     [Fact]
+    public void Hotkey_rebuilds_are_serialized_and_tracker_failures_do_not_gate_scanning()
+    {
+        string root = FindRepositoryRoot();
+        string hotkeyManager = StripComments(File.ReadAllText(Path.Combine(root, "src", "App", "HotkeyManager.cs")));
+        string ratScannerMain = StripComments(File.ReadAllText(Path.Combine(root, "src", "App", "RatScannerMain.cs")));
+
+        Assert.Contains("lock (_registrationLock)", hotkeyManager, StringComparison.Ordinal);
+        Assert.Contains("RegisterHotkeysLocked();", hotkeyManager, StringComparison.Ordinal);
+        Assert.Contains("UnregisterHotkeysLocked();", hotkeyManager, StringComparison.Ordinal);
+        Assert.Contains("if (!_engineReady)", hotkeyManager, StringComparison.Ordinal);
+        string runtimeInitialization = ExtractMethodDefinition(ratScannerMain, "InitializeRuntimeAsync");
+        Assert.Contains("finally", runtimeInitialization, StringComparison.Ordinal);
+        Assert.Contains("UpdateHotkeyReadiness();", runtimeInitialization, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Passive_overlay_styles_remain_click_through_and_nonactivating()
     {
         Assert.Equal((nint)0x080800A0, OverlayNativeMethods.PassiveClickThroughStyles);
@@ -77,6 +93,33 @@ public sealed class WebViewHostingContractTests
             "BlazorInteractableOverlay",
             File.ReadAllText(Path.Combine(appRoot, "View", "BlazorUI.xaml.cs"))
         );
+    }
+
+    private static string StripComments(string source) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            source,
+            @"//[^\r\n]*|/\*.*?\*/",
+            "",
+            System.Text.RegularExpressions.RegexOptions.Singleline
+        );
+
+    private static string ExtractMethodDefinition(string source, string methodName)
+    {
+        int methodStart = source.IndexOf($"private async Task {methodName}(", StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, $"Could not find the definition of {methodName}.");
+
+        int bodyStart = source.IndexOf('{', methodStart);
+        Assert.True(bodyStart >= 0, $"Could not find the body for {methodName}.");
+        int depth = 0;
+        for (int index = bodyStart; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+                depth++;
+            else if (source[index] == '}' && --depth == 0)
+                return source[bodyStart..(index + 1)];
+        }
+
+        throw new InvalidOperationException($"Could not find the end of {methodName}.");
     }
 
     private static int CountOccurrences(string source, string value)
