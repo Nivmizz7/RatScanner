@@ -130,6 +130,8 @@ dotnet csharpier check .
 
 Canonical repository checks:
 
+Fast and Full require Node.js on `PATH` for the Markdown checks.
+
 | Verification | Command |
 | --- | --- |
 | Fast build/static/unit loop | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1 -Mode Fast` |

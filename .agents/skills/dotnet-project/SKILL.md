@@ -14,7 +14,7 @@ description: Implement and verify RatScanner work involving C#, .NET, solution o
 
 ## Respect the architecture
 
-- Treat `src/App` as the `net10.0-windows10.0.22621.0` WPF host and Blazor WebView product UI. WPF owns native chrome/lifecycle; Blazor and MudBlazor own most screens.
+- Treat `src/App` as the WPF host and Blazor WebView product UI. WPF owns native chrome/lifecycle; Blazor and MudBlazor own most screens. Read the project file for the current target framework.
 - Treat `src/ScanEngine` as the independently owned RatEye submodule. RatEye must not reference RatScanner; make engine changes in its source repository when required.
 - Keep App-owned unit tests in `tests/RatScanner.Tests`. Keep real hosted-UI smoke tests in `tests/RatScanner.UiTests`.
 - Use `TarkovDevAPI` for bulk catalog access and preserve its cache/rate-limit behavior. Keep secrets in local `config.cfg`, never source control.

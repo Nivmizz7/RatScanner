@@ -39,7 +39,7 @@ dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj
 dotnet test tests\RatScanner.Tests\RatScanner.Tests.csproj -c Release --no-build --no-restore
 ```
 
-CI builds and tests Release on `windows-latest` with .NET 10.x.
+CI builds and tests Release on `windows-latest` with the SDK pinned by `global.json`.
 
 The App unit project is `tests/RatScanner.Tests` (xUnit v3). It covers App logic and reliability contracts, configuration migration, localization fallback/key parity, and the optional App-owned capture/crop harness. RatEye's submodule owns engine/OpenCV/cache tests and fixture replay. **Neither** is a substitute for hosted UI or live-scan verification. Scoped rules: `tests/AGENTS.md`.
 
@@ -47,7 +47,7 @@ The real UI smoke project intentionally stays outside `RatScanner.sln`, so solut
 
 ### WebView2 UI smoke
 
-RatScanner has no HTTP server. The durable browser surface is the Blazor content inside the WPF-hosted WebView2. `tests/RatScanner.UiTests` launches the built application, requests an OS-assigned CDP port, polls `DevToolsActivePort`, and attaches Playwright .NET to the `/app` target. It uses the installed WebView2 runtime, so no Playwright browser download is required.
+RatScanner has no HTTP server. The durable browser surface is the Blazor content inside the WPF-hosted WebView2. `tests/RatScanner.UiTests` launches the built application, allocates an explicit loopback CDP port, polls that endpoint, and attaches Playwright .NET to the `/app` target. It uses the installed WebView2 runtime, so no Playwright browser download is required.
 
 ```bat
 :: Build/setup and run the committed smoke suite
@@ -84,10 +84,11 @@ It does not automate live EFT capture/OCR, overlay placement over the game, tray
 
 Every run writes a unique directory under `artifacts\ui-tests\` with desktop/narrow screenshots, effective URL, accessibility snapshot, app stdout/stderr, and `RatScanner.log`. Failures additionally retain `failure.png`, DOM and accessibility snapshots, browser runtime failures, and `trace.zip` where tracing started.
 
-Inspect a failure trace with the Playwright script emitted by the built test project:
+Inspect a failure trace with the Playwright script emitted by the built test project. Discover the generated path so target-framework updates do not stale this command:
 
-```bat
-powershell -NoProfile -ExecutionPolicy Bypass -File tests\RatScanner.UiTests\bin\Release\net10.0-windows10.0.22621.0\playwright.ps1 show-trace artifacts\ui-tests\<run>\trace.zip
+```powershell
+$traceScript = Get-ChildItem tests\RatScanner.UiTests\bin\Release -Recurse -Filter playwright.ps1 | Select-Object -First 1
+& $traceScript.FullName show-trace artifacts\ui-tests\<run>\trace.zip
 ```
 
 For visual validation, inspect `desktop-scan.png` and `narrow-settings.png`; do not infer visual correctness from the test exit code alone. Pixel baselines are intentionally not enabled: OS/WebView/font rendering, local display/config text, and cache-derived status make broad pixel diffs noisy. The suite instead keeps deterministic screenshots and high-signal layout/semantic assertions. Add a small visual baseline only after stabilizing a specific high-value surface; never auto-approve a changed baseline.

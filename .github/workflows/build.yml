@@ -75,6 +75,7 @@ jobs:
         run: dotnet test tests/RatScanner.Tests/RatScanner.Tests.csproj -c Release --no-build --no-restore
       - name: WebView UI smoke
         id: webview_smoke
+        timeout-minutes: 10
         run: dotnet test tests/RatScanner.UiTests/RatScanner.UiTests.csproj -c Release --no-build --no-restore
       - name: Dependency vulnerability audit
         run: |
