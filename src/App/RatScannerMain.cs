@@ -84,6 +84,14 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// </remarks>
     internal static object IconScanLock = new();
 
+    /// <summary>
+    /// Caps the scan rate across all per-position scan entry points (name scan
+    /// and icon scan). Hotkey spam must not be able to drive the OCR pipeline
+    /// and the overlay compositor at unbounded rate. NameScanScreen is exempt:
+    /// it is opt-in and already debounced by the 500 ms auto-scan click window.
+    /// </summary>
+    private readonly ScanThrottle _scanThrottle = new(RatConfig.NameScan.CooldownMs);
+
     public TarkovTrackerDB TarkovTrackerDB;
 
     internal RatEyeEngine RatEyeEngine;
@@ -457,6 +465,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <param name="position">Position on the screen at which to perform the scan</param>
     internal void NameScan(Vector2 position)
     {
+        if (!_scanThrottle.TryAcquire(Environment.TickCount64))
+        {
+            Logger.LogDebug("NameScan: skipped (scan cooldown active)");
+            return;
+        }
+
         Logger.LogDebug($"NameScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
         RefreshGameDisplayForScan();
         Logger.LogDebug("NameScan: acquiring NameScanLock...");
@@ -613,6 +627,12 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     /// <returns><see langword="true"/> if a item was scanned successfully</returns>
     internal void IconScan(Vector2 position)
     {
+        if (!_scanThrottle.TryAcquire(Environment.TickCount64))
+        {
+            Logger.LogDebug("IconScan: skipped (scan cooldown active)");
+            return;
+        }
+
         Logger.LogDebug($"IconScan: ENTER pos={position} _ratEyeReady={_ratEyeReady} _disposed={_disposed}");
         RefreshGameDisplayForScan();
         Logger.LogDebug("IconScan: acquiring IconScanLock...");
