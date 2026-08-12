@@ -21,7 +21,8 @@
         Height="100" Width="100">
 	<Grid>
 		<blazor:BlazorWebView HostPage="wwwroot/overlay.html" StartPath="/overlay" Services="{StaticResource services}" Panel.ZIndex="99"
-		                      x:Name="blazorOverlayWebView" BlazorWebViewInitialized="BlazorWebView_Initialized">
+		                      x:Name="blazorOverlayWebView" BlazorWebViewInitializing="BlazorWebView_Initializing"
+		                      BlazorWebViewInitialized="BlazorWebView_Initialized">
 			<blazor:BlazorWebView.RootComponents>
 				<blazor:RootComponent Selector="#app" ComponentType="{x:Type local:Overlay}" />
 			</blazor:BlazorWebView.RootComponents>

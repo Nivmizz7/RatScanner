@@ -47,7 +47,7 @@ The real UI smoke project intentionally stays outside `RatScanner.sln`, so solut
 
 ### WebView2 UI smoke
 
-RatScanner has no HTTP server. The durable browser surface is the Blazor content inside the WPF-hosted WebView2. `tests/RatScanner.UiTests` launches the built application, allocates an explicit loopback CDP port, polls that endpoint, and attaches Playwright .NET to the `/app` target. It uses the installed WebView2 runtime, so no Playwright browser download is required.
+RatScanner has no HTTP server. The durable browser surface is the Blazor content inside the WPF-hosted WebView2. `tests/RatScanner.UiTests` launches the built application, allocates an explicit loopback CDP port, and passes that port plus an isolated profile through test-only environment variables that the WebView initialization event applies directly. The harness polls that endpoint and attaches Playwright .NET to the `/app` target. It uses the installed WebView2 runtime, so no Playwright browser download is required.
 
 ```bat
 :: Build/setup and run the committed smoke suite

@@ -9,7 +9,8 @@
              d:DesignHeight="600" d:DesignWidth="800">
 	<Grid x:Name="blazorUIGrid">
 		<blazor:BlazorWebView HostPage="wwwroot/index.html" StartPath="/app" Services="{StaticResource services}" Panel.ZIndex="99"
-		                      x:Name="blazorWebView" BlazorWebViewInitialized="BlazorWebView_Initialized">
+		                      x:Name="blazorWebView" BlazorWebViewInitializing="BlazorWebView_Initializing"
+		                      BlazorWebViewInitialized="BlazorWebView_Initialized">
 			<blazor:BlazorWebView.RootComponents>
 				<blazor:RootComponent Selector="#app" ComponentType="{x:Type local:RazorApp}" />
 			</blazor:BlazorWebView.RootComponents>

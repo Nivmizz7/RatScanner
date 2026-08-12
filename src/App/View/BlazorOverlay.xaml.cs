@@ -64,6 +64,9 @@ public partial class BlazorOverlay : Window
         coreWebView.Settings.AreBrowserAcceleratorKeysEnabled = false;
     }
 
+    private void BlazorWebView_Initializing(object? sender, BlazorWebViewInitializingEventArgs e) =>
+        WebView2TestEnvironment.Apply(e);
+
     private void SetSize()
     {
         System.Collections.Generic.IEnumerable<System.Drawing.Rectangle> bounds = Screen.AllScreens.Select(screen =>

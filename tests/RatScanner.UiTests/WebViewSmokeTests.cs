@@ -77,8 +77,8 @@ public sealed class WebViewSmokeTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
-            startInfo.Environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = $"--remote-debugging-port={port}";
-            startInfo.Environment["WEBVIEW2_USER_DATA_FOLDER"] = profileDirectory;
+            startInfo.Environment["RATSCANNER_UI_TEST_CDP_PORT"] = port.ToString(CultureInfo.InvariantCulture);
+            startInfo.Environment["RATSCANNER_UI_TEST_PROFILE"] = profileDirectory;
 
             app = Process.Start(startInfo);
             Assert.NotNull(app);
