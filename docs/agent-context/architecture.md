@@ -52,14 +52,14 @@ WPF does **not** implement most product UI; Blazor does.
 - Ctrl/Cmd+K focuses the main search input (script in `index.html`).
 - Runtime detection/install remains in `App.OnStartup` via `CoreWebView2Environment` + evergreen bootstrapper.
 
-## Dependency injection
+## Application composition and dependency injection
 
-DI is **not** the full app composition root for domain services. Critical domain objects remain statics/singletons (`RatConfig`, `TarkovDevAPI`, `RatScannerMain.Instance`).
+`ApplicationCompositionRoot` is the application-level seam shared by the native WPF and Blazor UI stacks. It exposes narrow `IScanOrchestrator`, `ITrackerService`, and `IHotkeyRegistrar` contracts backed by the lazily created `RatScannerMain`. WPF resolves those contracts directly from the root; Blazor registers the same instances in its service provider. UI and view-model code must consume the contracts rather than locate `RatScannerMain` directly.
 
-`BlazorUI` builds a `ServiceProvider` with:
+This is the first migration boundary, not complete domain-service ownership: `RatConfig`, `TarkovDevAPI`, and the underlying `RatScannerMain` remain statics/singletons. `BlazorUI` builds a `ServiceProvider` with:
 
 - `AddWpfBlazorWebView()`, `AddMudServices()`
-- Singletons: `MenuVM`, `RecentScansService`, `LocalizationService`, `SettingsVM`, `VirtualScreenOffset`, `TarkovTrackerDB` (from `RatScannerMain`)
+- Singletons: `ApplicationCompositionRoot`, its three runtime contracts, `MenuVM`, `RecentScansService`, `LocalizationService`, `SettingsVM`, and `VirtualScreenOffset`
 
 The passive overlay receives the **same** `ServiceProvider` instance.
 
@@ -75,7 +75,8 @@ flowchart TD
   D -->|ok| F[PageSwitcher]
   F --> G[LoadConfig]
   G --> H[BlazorUI + passive overlay]
-  H --> I[RatScannerMain init]
+  H --> R[ApplicationCompositionRoot]
+  R --> I[RatScannerMain init]
   I --> J[Offline API cache]
   I --> K[SetupRatEye]
   I --> L[Background cache refresh]
@@ -108,6 +109,7 @@ flowchart TD
 
 | Owner | Owns |
 | --- | --- |
+| `ApplicationCompositionRoot` | Shared WPF/Blazor runtime contracts and shutdown handoff |
 | `RatScannerMain` | RatEye instance lifecycle, hotkeys, scan entrypoints, tracker timers |
 | `TarkovDevAPI` | HTTP, rate limit, in-memory + offline disk cache, item/task/hideout/map/craft/barter projections |
 | `TarkovTrackerDB` + `APIClient` | Tracker progress, team, token validation |

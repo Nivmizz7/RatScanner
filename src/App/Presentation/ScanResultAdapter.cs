@@ -12,8 +12,8 @@ internal static class ScanResultAdapter
 
     internal static ScanResultViewModel Map(ItemScan scan, MenuVM menu, bool isHistoricalResult)
     {
-        QuestNeedReport quests = scan.Item.GetQuestNeedReport();
-        RequirementBreakdown hideout = scan.Item.GetHideoutRequirementBreakdown();
+        QuestNeedReport quests = scan.Item.GetQuestNeedReport(menu.CurrentUserProgress);
+        RequirementBreakdown hideout = scan.Item.GetHideoutRequirementBreakdown(menu.CurrentUserProgress);
         AcquisitionInfo acquisition = scan.Item.GetAcquisitionInfo();
         return Map(scan, quests, hideout, acquisition, isHistoricalResult);
     }

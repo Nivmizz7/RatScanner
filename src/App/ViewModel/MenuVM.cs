@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using RatScanner.Presentation;
+using RatScanner.Runtime;
 using RatScanner.Scan;
 using RatScanner.TarkovDev;
 
@@ -11,19 +12,12 @@ namespace RatScanner.ViewModel;
 
 internal class MenuVM : INotifyPropertyChanged
 {
-    private RatScannerMain _dataSource = null!;
+    private readonly IScanOrchestrator _scanOrchestrator;
+    private readonly ITrackerService _trackerService;
 
-    public RatScannerMain DataSource
-    {
-        get => _dataSource;
-        set
-        {
-            _dataSource = value;
-            OnPropertyChanged();
-        }
-    }
+    public ItemQueue ItemScans => _scanOrchestrator.ItemScans;
 
-    public ItemQueue ItemScans => DataSource.ItemScans;
+    internal FetchModels.TarkovTracker.UserProgress CurrentUserProgress => _trackerService.State.CurrentUser;
 
     public ItemScan LastItemScan =>
         ItemScans.LastOrDefault()
@@ -105,7 +99,7 @@ internal class MenuVM : INotifyPropertyChanged
     public ItemSellPrice? BestTraderOffer => LastItem.GetBestTraderOffer();
     public TraderOffer? BestTraderOfferVendor => LastItem.GetBestTraderOfferVendor();
 
-    public (int count, int kappaCount) TaskRemainingResult => LastItem.GetTaskRemaining();
+    public (int count, int kappaCount) TaskRemainingResult => LastItem.GetTaskRemaining(CurrentUserProgress);
 
     public int TaskRemaining => TaskRemainingResult.count;
 
@@ -113,7 +107,7 @@ internal class MenuVM : INotifyPropertyChanged
 
     public bool KappaNeeded => TaskRemainingKappa > 0;
 
-    public int HideoutRemaining => LastItem.GetHideoutRemaining();
+    public int HideoutRemaining => LastItem.GetHideoutRemaining(CurrentUserProgress);
 
     public bool ItemNeeded => TaskRemaining + HideoutRemaining > 0;
 
@@ -123,11 +117,12 @@ internal class MenuVM : INotifyPropertyChanged
     {
         get
         {
-            List<FetchModels.TarkovTracker.UserProgress> progress = RatScannerMain.Instance.TarkovTrackerDB.Progress;
+            TrackerStateSnapshot trackerState = _trackerService.State;
+            IReadOnlyList<FetchModels.TarkovTracker.UserProgress> progress = trackerState.Progress;
             if (progress.Count == 0)
                 return null;
             IEnumerable<FetchModels.TarkovTracker.UserProgress> teamProgress = progress.Where(x =>
-                x.UserId != RatScannerMain.Instance.TarkovTrackerDB.Self
+                x.UserId != trackerState.Self
             );
 
             List<KeyValuePair<string, KeyValuePair<int, int>>> needs = [];
@@ -172,10 +167,11 @@ internal class MenuVM : INotifyPropertyChanged
     }
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public MenuVM(RatScannerMain ratScanner)
+    internal MenuVM(IScanOrchestrator scanOrchestrator, ITrackerService trackerService)
     {
-        DataSource = ratScanner;
-        DataSource.PropertyChanged += ModelPropertyChanged;
+        _scanOrchestrator = scanOrchestrator ?? throw new ArgumentNullException(nameof(scanOrchestrator));
+        _trackerService = trackerService ?? throw new ArgumentNullException(nameof(trackerService));
+        _scanOrchestrator.PropertyChanged += ModelPropertyChanged;
     }
 
     protected virtual void OnPropertyChanged(string? propertyName = null)

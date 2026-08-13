@@ -12,6 +12,7 @@ using System.Windows.Forms;
 using RatEye;
 using RatScanner.Diagnostics;
 using RatScanner.Display;
+using RatScanner.Runtime;
 using RatScanner.Scan;
 using RatStash;
 using GameMode = RatScanner.TarkovDev.GameMode;
@@ -26,7 +27,12 @@ namespace RatScanner;
 
 internal readonly record struct TrackerConfigurationHandle(long Generation);
 
-public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
+public sealed class RatScannerMain
+    : INotifyPropertyChanged,
+        IDisposable,
+        IScanOrchestrator,
+        ITrackerService,
+        IHotkeyRegistrar
 {
     private static readonly object InstanceLock = new();
     private static RatScannerMain _instance = null!;
@@ -102,6 +108,10 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
 
     internal ItemQueue ItemScans = new();
+
+    ItemQueue IScanOrchestrator.ItemScans => ItemScans;
+
+    TrackerStateSnapshot ITrackerService.State => TarkovTrackerDB.GetSnapshot();
 
     private RatScannerMain()
     {
@@ -349,6 +359,20 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
             cancellationToken
         );
 
+    Task ITrackerService.ActivateModeAsync(GameMode mode, CancellationToken cancellationToken) =>
+        ActivateTrackerModeAsync(mode, cancellationToken);
+
+    Task<TrackerValidationResult> ITrackerService.ValidateOrgKeyAsync(
+        GameMode mode,
+        string token,
+        CancellationToken cancellationToken
+    ) => ValidateTarkovTrackerOrgKeyAsync(mode, token, cancellationToken);
+
+    Task<TrackerValidationResult> ITrackerService.ValidateIoKeyAsync(
+        string token,
+        CancellationToken cancellationToken
+    ) => ValidateTarkovTrackerIoKeyAsync(token, cancellationToken);
+
     private static (string Token, string Endpoint) GetActiveTrackerConfiguration(GameMode mode)
     {
         if (mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io)
@@ -401,6 +425,8 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         UpdateHotkeyReadiness();
         Logger.LogDebug($"SetupRatEye: completed in {elapsedMs:F1} ms");
     }
+
+    void IScanOrchestrator.RebuildEngine() => SetupRatEye();
 
     private void UpdateHotkeyReadiness()
     {
@@ -880,6 +906,10 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     }
 
     internal ScanDiagnosticExportResult ExportLastScanDiagnostics() => _scanDiagnostics.Export();
+
+    ScanDiagnosticExportResult IScanOrchestrator.ExportLastScanDiagnostics() => ExportLastScanDiagnostics();
+
+    void IHotkeyRegistrar.RegisterHotkeys() => HotkeyManager.RegisterHotkeys();
 
     private static void AddTimings(
         IDictionary<string, double> destination,

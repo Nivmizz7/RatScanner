@@ -1,4 +1,5 @@
 @using System.Threading
+@using RatScanner.Runtime
 @using GameMode = RatScanner.TarkovDev.GameMode
 @using PvpSource = RatScanner.TarkovDev.PvpSource
 @implements IDisposable
@@ -111,6 +112,9 @@
     [Inject]
     ISnackbar Snackbar { get; set; } = null!;
 
+    [Inject]
+    ITrackerService TrackerService { get; set; } = null!;
+
     private PvpSource _draftSource;
     private string _tokenDraft = "";
     private string? _error;
@@ -174,8 +178,8 @@
         try
         {
             TrackerValidationResult result = submitToIo
-                ? await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, cancellation.Token)
-                : await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(Mode, candidate, cancellation.Token);
+                ? await TrackerService.ValidateIoKeyAsync(candidate, cancellation.Token)
+                : await TrackerService.ValidateOrgKeyAsync(Mode, candidate, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
@@ -238,7 +242,7 @@
             // because they already matched, so only the game-mode check matters.
             bool drivesActiveMode = RatConfig.GameMode == Mode;
             if (drivesActiveMode)
-                await RatScannerMain.Instance.ActivateTrackerModeAsync(Mode, cancellation.Token);
+                await TrackerService.ActivateModeAsync(Mode, cancellation.Token);
 
             DialogInstance.Close(DialogResult.Ok(true));
         }

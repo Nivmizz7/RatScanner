@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using RatScanner.Display;
+using RatScanner.Runtime;
 using RatScanner.TarkovDev;
 using RatStash;
 
@@ -18,6 +19,9 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
 
     private readonly LocalizationService _localizationService;
     private readonly SettingsPersistenceService _persistence;
+    private readonly IScanOrchestrator _scanOrchestrator;
+    private readonly ITrackerService _trackerService;
+    private readonly IHotkeyRegistrar _hotkeyRegistrar;
     private readonly SemaphoreSlim _displaySaveLock = new(1, 1);
     private readonly SynchronizationContext? _synchronizationContext;
     private bool _disposed;
@@ -36,10 +40,19 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     private string _customDisplayScaleText = "100";
     private string? _displayPersistenceError;
 
-    internal SettingsVM(LocalizationService localizationService, SettingsPersistenceService persistence)
+    internal SettingsVM(
+        LocalizationService localizationService,
+        SettingsPersistenceService persistence,
+        IScanOrchestrator scanOrchestrator,
+        ITrackerService trackerService,
+        IHotkeyRegistrar hotkeyRegistrar
+    )
     {
-        _localizationService = localizationService;
-        _persistence = persistence;
+        _localizationService = localizationService ?? throw new ArgumentNullException(nameof(localizationService));
+        _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
+        _scanOrchestrator = scanOrchestrator ?? throw new ArgumentNullException(nameof(scanOrchestrator));
+        _trackerService = trackerService ?? throw new ArgumentNullException(nameof(trackerService));
+        _hotkeyRegistrar = hotkeyRegistrar ?? throw new ArgumentNullException(nameof(hotkeyRegistrar));
         _synchronizationContext = SynchronizationContext.Current;
         RatConfig.GameDisplayConfigurationChanged += OnGameDisplayConfigurationChanged;
         LoadDisplaySettings();
@@ -205,7 +218,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             () => RatConfig.NameScan.Enable,
             v => RatConfig.NameScan.Enable = v,
             // ActiveHotkey copies Enable by value at construction; rebuild so the live flag is honored.
-            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+            _ => _hotkeyRegistrar.RegisterHotkeys()
         );
 
     internal Task<SettingSaveResult> SetEnableAutoNameScanAsync(bool value) =>
@@ -224,7 +237,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             (Language)value,
             () => RatConfig.NameScan.Language,
             v => RatConfig.NameScan.Language = v,
-            _ => RatScannerMain.Instance.SetupRatEye()
+            _ => _scanOrchestrator.RebuildEngine()
         );
 
     internal Task<SettingSaveResult> SetEnableIconScanAsync(bool value) =>
@@ -235,7 +248,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             () => RatConfig.IconScan.Enable,
             v => RatConfig.IconScan.Enable = v,
             // ActiveHotkey copies Enable by value at construction; rebuild so the live flag is honored.
-            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+            _ => _hotkeyRegistrar.RegisterHotkeys()
         );
 
     internal Task<SettingSaveResult> SetScanRotatedIconsAsync(bool value) =>
@@ -245,7 +258,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.IconScan.ScanRotatedIcons,
             v => RatConfig.IconScan.ScanRotatedIcons = v,
-            _ => RatScannerMain.Instance.SetupRatEye()
+            _ => _scanOrchestrator.RebuildEngine()
         );
 
     internal Task<SettingSaveResult> SetUseCachedIconsAsync(bool value) =>
@@ -255,7 +268,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.IconScan.UseCachedIcons,
             v => RatConfig.IconScan.UseCachedIcons = v,
-            _ => RatScannerMain.Instance.SetupRatEye()
+            _ => _scanOrchestrator.RebuildEngine()
         );
 
     internal Task<SettingSaveResult> SetIconScanHotkeyAsync(Hotkey value) =>
@@ -265,7 +278,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             new Hotkey(value),
             () => new Hotkey(RatConfig.IconScan.Hotkey),
             v => RatConfig.IconScan.Hotkey = new Hotkey(v),
-            _ => RatScannerMain.Instance.HotkeyManager.RegisterHotkeys()
+            _ => _hotkeyRegistrar.RegisterHotkeys()
         );
 
     internal Task<SettingSaveResult> SetUiLanguageAsync(UiLanguage value) =>
@@ -374,10 +387,10 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
     // SettingsPersistenceService rolls back via applyRuntime(previous), the rollback
     // activation gets a newer generation and wins — so the runtime always converges on
     // the persisted value even when the optimistic change and rollback race.
-    private static void RefreshTrackerInBackground(string failureMessage)
+    private void RefreshTrackerInBackground(string failureMessage)
     {
-        _ = RatScannerMain
-            .Instance.ActivateTrackerModeAsync(RatConfig.GameMode)
+        _ = _trackerService
+            .ActivateModeAsync(RatConfig.GameMode)
             .ContinueWith(t => Logger.LogWarning(failureMessage, t.Exception), TaskContinuationOptions.OnlyOnFaulted);
     }
 
@@ -476,7 +489,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                         bool changed = RatConfig.RefreshGameDisplayConfiguration(force: true);
                         ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: false);
                         if (changed)
-                            RatScannerMain.Instance.SetupRatEye();
+                            _scanOrchestrator.RebuildEngine();
                     }
                 )
                 .ConfigureAwait(false);
@@ -507,7 +520,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         bool updateResolution = RatConfig.RefreshGameDisplayConfiguration(force: true);
         LoadDisplaySettings();
         if (updateResolution)
-            RatScannerMain.Instance.SetupRatEye();
+            _scanOrchestrator.RebuildEngine();
     }
 
     public async System.Threading.Tasks.Task RefreshGameDisplaysAsync()
@@ -519,7 +532,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         );
         LoadDisplaySettings();
         if (updateResolution)
-            RatScannerMain.Instance.SetupRatEye();
+            _scanOrchestrator.RebuildEngine();
     }
 
     internal static bool TryParseDisplayScalePercentage(string? text, out float scale)

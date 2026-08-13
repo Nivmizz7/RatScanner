@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
+using RatScanner.Runtime;
 using RatScanner.View;
 using SingleInstanceCore;
 
@@ -232,7 +233,7 @@ public partial class App : Application, ISingleInstance
             // Isolate each disposal so one failure cannot skip WebView/service cleanup.
             try
             {
-                RatScannerMain.DisposeInstance();
+                ApplicationCompositionRoot.DisposeCurrent();
             }
             catch (Exception ex)
             {

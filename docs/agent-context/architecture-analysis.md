@@ -2,8 +2,8 @@
 
 ## Header
 
-- **Analyzed:** 2026-08-11
-- **Analyzed source state:** integration commit `07b6818` (PR #37 head after integrating PRs #35 and #36)
+- **Analyzed:** 2026-08-12
+- **Analyzed source state:** `agent/application-boundaries` working tree based on integration commit `f3b4da4`
 - **RatEye submodule:** `24f8806` (v4.0.0-27-g24f8806 — merged upstream PR #2 + RatEyeTest cleanup)
 - **Source scope:** committed files at `07b6818`; architecture-document edits are excluded from code measurements.
 - **Method:** refreshed static evidence pass using physical line counts (`(Get-Content -LiteralPath <file>).Count`) and repository searches. No application source changes were made by this analysis. Every finding carries `Status` and `Last verified` so this document can serve as a living register instead of a one-time report.
@@ -16,21 +16,24 @@ GDI+ screen capture (RatScannerMain)       ├─► RatScannerMain (god-singlet
 TarkovDevAPI (static, catalog) ────────────┤      │  owns: RatEyeEngine, TarkovTrackerDB,
 RatConfig (static, global config) ─────────┘      │       HotkeyManager, timers, ItemQueue
                                                   ▼
+                         ApplicationCompositionRoot
+                            │ IScanOrchestrator / ITrackerService / IHotkeyRegistrar
+                            ▼
                          MenuVM ◄── shared by ──► WPF MinimalMenu + Blazor/MudBlazor pages
                          SettingsVM ◄── consumed by ──► MudBlazor Settings pages
                          AppStateService ◄─ WPF⇄Blazor bridge ─► PageSwitcher, BlazorOverlay
 ```
 
 - Projects: `App → RatEye` (source `ProjectReference`), `Tests → App`. `RatEyeTest`/`RatEye.Benchmarks` live in the RatEye repository (not in `RatScanner.sln`).
-- **38 direct `RatScannerMain.Instance` occurrences** across 9 App source files (including Razor); Razor pages also call `TarkovDevAPI.GetItems()` statically.
+- **8 direct `RatScannerMain.Instance` occurrences** remain in 2 infrastructure files (`RatConfig` and `ApplicationCompositionRoot`); UI, view-model, presentation, and item-extension code no longer locates it directly. Razor pages still call static configuration/catalog APIs.
 
 ## Findings
 
 ### 1. `RatScannerMain` god-singleton — UI service locator
 
-- **Severity:** High | **Confidence:** High | **Status:** Open | **Last verified:** `07b6818`
-- **Evidence:** `src/App/RatScannerMain.cs` (854 LOC, 17 `lock` sites, owns `RatEyeEngine`, `TarkovTrackerDB`, `HotkeyManager`, 2 `Timer`s, CTS, `ItemQueue`, scan pipeline, tracker refresh, engine rebuild, UI notification); `MenuVM.cs:15` (`DataSource`), `ItemExtensions.cs:13`, `Pages/App/Settings/SettingsTracking.razor:250`, and `Components/ChangeConnectionDialog.razor:177` reach the singleton directly. Ctor runs on the WPF dispatcher and performs catalog load, hotkey setup, and engine setup (`RatScannerMain.cs:103-162`, documented "the bulk of startup, all on this thread").
-- **Why it matters:** every subsystem depends on one class; UI→singleton means global state and implicit ordering; ctor cost blocks the UI thread at startup; the orchestration is impossible to unit-test (the existing `ScanPipelineImageHarnessTests` *mirrors* the pipeline precisely because it cannot be invoked).
+- **Severity:** High | **Confidence:** High | **Status:** Partially addressed | **Last verified:** `agent/application-boundaries`
+- **Evidence:** `src/App/RatScannerMain.cs` remains a 1026-line owner of `RatEyeEngine`, `TarkovTrackerDB`, `HotkeyManager`, timers, cancellation, `ItemQueue`, scan pipeline, tracker refresh, engine rebuild, and UI notification. `ApplicationCompositionRoot` now exposes its UI-facing scan, tracker, and hotkey behavior through narrow contracts shared by WPF and Blazor, and behavior tests substitute those contracts. The constructor still runs on the WPF dispatcher and performs catalog load, hotkey setup, and engine setup.
+- **Why it matters:** the UI service-locator dependency and first testability barrier are removed, but the underlying runtime still combines unrelated responsibilities and blocks the UI thread during construction.
 - **Current flow:** hooks/UI → `Instance` → methods mutate shared fields under heterogeneous locks.
 - **Target boundary:** establish an **application-level composition root shared by the WPF host and the Blazor UI**. Blazor's service collection can participate, but the architecture must not make WPF depend on the Blazor container. Extract services behind interfaces (scan orchestrator, tracker, catalog, engine lifecycle) and inject them into both UI stacks.
 - **Estimated scope:** Large
@@ -83,9 +86,9 @@ RatConfig (static, global config) ─────────┘      │       
 
 ### 7. UI→static/service-locator calls in Razor and extensions
 
-- **Severity:** Medium | **Confidence:** High | **Status:** Open | **Last verified:** `07b6818`
-- **Evidence:** 38 `RatScannerMain.Instance` occurrences across 9 source files; examples include `ItemExtensions.cs:13`, `SettingsTracking.razor:250,368,403`, `ChangeConnectionDialog.razor:177,241`, and `SettingsAdvanced.razor:200`.
-- **Why it matters:** pages cannot be rendered or tested in isolation; hidden ordering dependencies (the singleton must exist before first render).
+- **Severity:** Medium | **Confidence:** High | **Status:** Partially addressed | **Last verified:** `agent/application-boundaries`
+- **Evidence:** direct `RatScannerMain.Instance` access has been removed from Razor pages, components, view models, presentation adapters, and `ItemExtensions`; these consumers now receive `IScanOrchestrator`, `ITrackerService`, or `IHotkeyRegistrar`. Static `RatConfig` and catalog access remain in UI code.
+- **Why it matters:** runtime orchestration can now be substituted and tested without constructing the application singleton, but static configuration/catalog dependencies still limit isolated component tests.
 - **Target boundary:** inject the extracted services (the DI container already exists).
 - **Estimated scope:** Small–Medium
 - **Sequencing:** alongside #1 (mechanical).
@@ -161,6 +164,8 @@ Registered but below the ranked cut: finding #10 (hook-layer WPF types, Low seve
 **Rank sequencing:** 1→2→3 (spine: composition root, snapshot config, instance catalog) → 5 (boundary types) → 4 (threading on top of the clean boundary) → 7 (mechanical DI) → 6 → 8 → 9 → 10. Findings #1–#3 are the enabling set.
 
 ## Recommended first tranche (implementation guidance)
+
+**Status:** completed by `agent/application-boundaries`; findings #1 and #7 remain partially open for the deeper ownership migrations described above.
 
 Do **not** start by splitting the 854-line class — a god class split without interfaces tends to become five tightly coupled classes with the same service-locator architecture. Define ownership boundaries first, then move one responsibility at a time while keeping behavior unchanged:
 

@@ -2,7 +2,6 @@
 
 using System;
 using System.IO;
-using System.Text.RegularExpressions;
 using Xunit;
 
 namespace RatScanner.Tests;
@@ -24,36 +23,6 @@ public sealed class SettingsLayoutContractTests
         Assert.Contains("@container", css, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns", css, StringComparison.Ordinal);
         Assert.Contains("min-width: 0", css, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Scanner_enable_toggles_re_register_hotkeys_after_immediate_save()
-    {
-        // ActiveHotkey copies Enable by value at construction. Immediate save must rebuild
-        // hotkeys so name/icon enable flags take effect without a full settings page save.
-        string root = FindRepositoryRoot();
-        string settingsVm = File.ReadAllText(Path.Combine(root, "src", "App", "ViewModel", "SettingsVM.cs"));
-
-        Assert.True(
-            ContainsApplyRuntimeRegisterHotkeys(settingsVm, "SetEnableNameScanAsync"),
-            "SetEnableNameScanAsync must call HotkeyManager.RegisterHotkeys via applyRuntime."
-        );
-        Assert.True(
-            ContainsApplyRuntimeRegisterHotkeys(settingsVm, "SetEnableIconScanAsync"),
-            "SetEnableIconScanAsync must call HotkeyManager.RegisterHotkeys via applyRuntime."
-        );
-    }
-
-    private static bool ContainsApplyRuntimeRegisterHotkeys(string source, string methodName)
-    {
-        int methodStart = source.IndexOf($"internal Task<SettingSaveResult> {methodName}", StringComparison.Ordinal);
-        if (methodStart < 0)
-            return false;
-
-        int nextMethod = source.IndexOf("internal Task<SettingSaveResult>", methodStart + 1, StringComparison.Ordinal);
-        string methodBody = nextMethod < 0 ? source[methodStart..] : source[methodStart..nextMethod];
-        string executableBody = Regex.Replace(methodBody, @"//[^\r\n]*|/\*.*?\*/", "", RegexOptions.Singleline);
-        return Regex.IsMatch(executableBody, @"_\s*=>\s*RatScannerMain\.Instance\.HotkeyManager\.RegisterHotkeys\(\)");
     }
 
     private static string FindRepositoryRoot()

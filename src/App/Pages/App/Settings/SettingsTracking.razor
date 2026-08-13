@@ -1,6 +1,7 @@
 @page "/app/settings/tracking"
 @using System.Threading
 @using RatScanner.Components
+@using RatScanner.Runtime
 @using GameMode = RatScanner.TarkovDev.GameMode
 @using PvpSource = RatScanner.TarkovDev.PvpSource
 @inject SettingsVM SettingsVM
@@ -8,6 +9,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JSRuntime
+@inject ITrackerService TrackerService
 @implements IDisposable
 
 <div class="settings-page tracking-settings">
@@ -247,22 +249,22 @@
     protected override void OnInitialized()
     {
         GameMode mode = RatConfig.GameMode;
-        TarkovTrackerDB database = RatScannerMain.Instance.TarkovTrackerDB;
+        TrackerStateSnapshot trackerState = TrackerService.State;
         if (mode == GameMode.Regular && IsIoCredential(mode))
         {
-            if (HasIoKey && string.Equals(database.Token, RatConfig.Tracking.TarkovTracker.IoToken, StringComparison.Ordinal))
-                _ioState = database.ConnectionState;
+            if (HasIoKey && string.Equals(trackerState.Token, RatConfig.Tracking.TarkovTracker.IoToken, StringComparison.Ordinal))
+                _ioState = trackerState.ConnectionState;
         }
         else if (
             HasOrgKey(mode)
             && string.Equals(
-                database.Token,
+                trackerState.Token,
                 RatConfig.Tracking.TarkovTracker.TokenForMode(mode),
                 StringComparison.Ordinal
             )
         )
         {
-            _orgState[mode] = database.ConnectionState;
+            _orgState[mode] = trackerState.ConnectionState;
         }
     }
 
@@ -365,7 +367,11 @@
         _orgError[mode] = null;
         try
         {
-            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerOrgKeyAsync(mode, candidate, cancellation.Token);
+            TrackerValidationResult result = await TrackerService.ValidateOrgKeyAsync(
+                mode,
+                candidate,
+                cancellation.Token
+            );
             cancellation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
@@ -400,8 +406,8 @@
             }
             if (RatConfig.GameMode == mode && !IsIoCredential(mode))
             {
-                await RatScannerMain.Instance.ActivateTrackerModeAsync(mode, cancellation.Token);
-                _orgState[mode] = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+                await TrackerService.ActivateModeAsync(mode, cancellation.Token);
+                _orgState[mode] = TrackerService.State.ConnectionState;
             }
             else
             {
@@ -455,7 +461,7 @@
 
         _orgState[mode] = TrackerConnectionState.NotConfigured;
         if (RatConfig.GameMode == mode && !IsIoCredential(mode))
-            await RatScannerMain.Instance.ActivateTrackerModeAsync(mode);
+            await TrackerService.ActivateModeAsync(mode);
     }
 
     private async Task HandleIoKeyDownAsync(KeyboardEventArgs args)
@@ -480,7 +486,7 @@
         _ioError = null;
         try
         {
-            TrackerValidationResult result = await RatScannerMain.Instance.ValidateTarkovTrackerIoKeyAsync(candidate, validation.Token);
+            TrackerValidationResult result = await TrackerService.ValidateIoKeyAsync(candidate, validation.Token);
             validation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
@@ -515,8 +521,8 @@
             }
             if (RatConfig.GameMode == GameMode.Regular && IsIoCredential(GameMode.Regular))
             {
-                await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular, validation.Token);
-                _ioState = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+                await TrackerService.ActivateModeAsync(GameMode.Regular, validation.Token);
+                _ioState = TrackerService.State.ConnectionState;
             }
             else
             {
@@ -579,12 +585,12 @@
         _ioState = TrackerConnectionState.NotConfigured;
         if (RatConfig.GameMode == GameMode.Regular)
         {
-            await RatScannerMain.Instance.ActivateTrackerModeAsync(GameMode.Regular);
+            await TrackerService.ActivateModeAsync(GameMode.Regular);
             // After activation, sync the state for whatever source is now active.
             if (IsIoCredential(GameMode.Regular))
-                _ioState = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+                _ioState = TrackerService.State.ConnectionState;
             else
-                _orgState[GameMode.Regular] = RatScannerMain.Instance.TarkovTrackerDB.ConnectionState;
+                _orgState[GameMode.Regular] = TrackerService.State.ConnectionState;
         }
     }
 
@@ -683,7 +689,7 @@
             // game mode. For active modes, read post-activation DB state; for
             // inactive modes, successful validation is sufficient for Connected.
             TrackerConnectionState postState = RatConfig.GameMode == mode
-                ? RatScannerMain.Instance.TarkovTrackerDB.ConnectionState
+                ? TrackerService.State.ConnectionState
                 : TrackerConnectionState.Connected;
             if (mode == GameMode.Regular && IsIoCredential(mode))
                 _ioState = postState;

@@ -12,6 +12,7 @@ using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using MudBlazor.Services;
 using RatScanner.Presentation;
+using RatScanner.Runtime;
 using RatScanner.ViewModel;
 
 namespace RatScanner.View;
@@ -69,7 +70,20 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         serviceCollection.AddWpfBlazorWebView();
         serviceCollection.AddMudServices();
 
-        serviceCollection.AddSingleton<MenuVM>(s => new MenuVM(RatScannerMain.Instance));
+        serviceCollection.AddSingleton(_ => ApplicationCompositionRoot.Current);
+        serviceCollection.AddSingleton<IScanOrchestrator>(services =>
+            services.GetRequiredService<ApplicationCompositionRoot>().ScanOrchestrator
+        );
+        serviceCollection.AddSingleton<ITrackerService>(services =>
+            services.GetRequiredService<ApplicationCompositionRoot>().TrackerService
+        );
+        serviceCollection.AddSingleton<IHotkeyRegistrar>(services =>
+            services.GetRequiredService<ApplicationCompositionRoot>().HotkeyRegistrar
+        );
+        serviceCollection.AddSingleton<MenuVM>(services => new MenuVM(
+            services.GetRequiredService<IScanOrchestrator>(),
+            services.GetRequiredService<ITrackerService>()
+        ));
         serviceCollection.AddSingleton<RecentScansService>(services =>
         {
             MenuVM menu = services.GetRequiredService<MenuVM>();
@@ -84,7 +98,10 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         serviceCollection.AddSingleton<SettingsPersistenceService>();
         serviceCollection.AddSingleton<SettingsVM>(services => new SettingsVM(
             services.GetRequiredService<LocalizationService>(),
-            services.GetRequiredService<SettingsPersistenceService>()
+            services.GetRequiredService<SettingsPersistenceService>(),
+            services.GetRequiredService<IScanOrchestrator>(),
+            services.GetRequiredService<ITrackerService>(),
+            services.GetRequiredService<IHotkeyRegistrar>()
         ));
 
         System.Collections.Generic.IEnumerable<System.Drawing.Rectangle> bounds =
@@ -100,7 +117,6 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         }
         serviceCollection.AddSingleton<VirtualScreenOffset>(s => new VirtualScreenOffset(left, top));
 
-        serviceCollection.AddSingleton<TarkovTrackerDB>(s => RatScannerMain.Instance.TarkovTrackerDB);
         serviceCollection.AddSingleton<AppStateService>();
 
         _serviceProvider = serviceCollection.BuildServiceProvider();

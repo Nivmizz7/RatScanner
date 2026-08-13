@@ -1,7 +1,9 @@
 ﻿@page "/overlay"
 @using RatScanner.Scan
+@using RatScanner.Runtime
 @using System.Globalization
 @inject MenuVM MenuVM
+@inject ITrackerService TrackerService
 @inject RatScanner.VirtualScreenOffset VirtualScreenOffset
 @inject SettingsVM SettingsVM;
 @inject IJSRuntime JSRuntime;
@@ -15,8 +17,9 @@
        && itemScan.GetToolTipPosition() != null
        && itemScan.DissapearAt > DateTimeOffset.Now.ToUnixTimeMilliseconds())
         {
-            var taskRemaining = item.GetTaskRemaining().count;
-            var hideoutRemaining = item.GetHideoutRemaining();
+            var currentUser = TrackerService.State.CurrentUser;
+            var taskRemaining = item.GetTaskRemaining(currentUser).count;
+            var hideoutRemaining = item.GetHideoutRemaining(currentUser);
             @if (itemScan is ItemIconScan iconScan)
             {
                 var leftPos = iconScan.GetToolTipPosition().X - VirtualScreenOffset.XOffset;
