@@ -55,7 +55,7 @@ public sealed class RebuildCoordinatorTests
         Task second = coordinator.RequestAsync(testCancellation);
         Task third = coordinator.RequestAsync(testCancellation);
 
-        // Release the first rebuild; the dirty flag must trigger exactly one
+        // Release the first rebuild; the pending batch must trigger exactly one
         // follow-up, not one rebuild per queued request.
         releaseFirstRebuild.TrySetResult();
 
@@ -154,5 +154,51 @@ public sealed class RebuildCoordinatorTests
         await waiter.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
 
         Assert.Equal(2, rebuildCount);
+    }
+
+    [Fact]
+    public async Task Cancelled_claimed_waiter_does_not_drop_a_later_request()
+    {
+        CancellationToken testCancellation = TestContext.Current.CancellationToken;
+        int rebuildCount = 0;
+        TaskCompletionSource firstRebuildStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource secondRebuildStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseFirstRebuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseSecondRebuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task Rebuild(CancellationToken cancellationToken)
+        {
+            int current = Interlocked.Increment(ref rebuildCount);
+            if (current == 1)
+            {
+                firstRebuildStarted.TrySetResult();
+                await releaseFirstRebuild.Task.ConfigureAwait(false);
+            }
+            else if (current == 2)
+            {
+                secondRebuildStarted.TrySetResult();
+                await releaseSecondRebuild.Task.ConfigureAwait(false);
+            }
+        }
+
+        using RebuildCoordinator coordinator = new(Rebuild);
+        Task first = coordinator.RequestAsync(testCancellation);
+        await firstRebuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+
+        using CancellationTokenSource claimedWaiterCts = new();
+        Task claimedWaiter = coordinator.RequestAsync(claimedWaiterCts.Token);
+        releaseFirstRebuild.TrySetResult();
+        await secondRebuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+
+        // The second request's batch is already claimed. Cancelling its wait must not
+        // mutate pending work, and a request made during rebuild #2 must run rebuild #3.
+        claimedWaiterCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => claimedWaiter);
+        Task laterRequest = coordinator.RequestAsync(testCancellation);
+
+        releaseSecondRebuild.TrySetResult();
+        await Task.WhenAll(first, laterRequest).WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+
+        Assert.Equal(3, rebuildCount);
     }
 }

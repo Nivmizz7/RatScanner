@@ -5,18 +5,23 @@ using System.Threading.Tasks;
 namespace RatScanner.Runtime;
 
 /// <summary>
-/// Serializes and coalesces repeated rebuild requests. The first request acquires the
-/// gate and runs the rebuild loop; requests that arrive while a rebuild is in flight
-/// bump a pending counter and wait on the gate. The in-flight loop observes the counter
-/// and runs exactly one follow-up rebuild that picks up the latest configuration, then
-/// the waiting requests acquire the gate, find the counter already drained, and return
-/// without doing redundant work. Thread-safe.
+/// Serializes rebuilds and coalesces requests that arrive during an in-flight rebuild
+/// into one follow-up batch. Each caller waits for the batch containing its request.
+/// Thread-safe.
 /// </summary>
 internal sealed class RebuildCoordinator : IDisposable
 {
+    private sealed class RebuildBatch
+    {
+        internal readonly TaskCompletionSource Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int ActiveRequests;
+        internal bool IsClaimed;
+    }
+
     private readonly Func<CancellationToken, Task> _rebuild;
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private int _pending;
+    private readonly object _stateLock = new();
+    private RebuildBatch? _pendingBatch;
+    private bool _runnerActive;
     private bool _disposed;
 
     internal RebuildCoordinator(Func<CancellationToken, Task> rebuild)
@@ -26,58 +31,97 @@ internal sealed class RebuildCoordinator : IDisposable
 
     /// <summary>
     /// Requests a rebuild, coalescing with any rebuild already in progress.
-    /// The returned task completes when this request's rebuild has finished.
+    /// Cancellation stops this caller from waiting; it does not cancel shared work
+    /// that has already been claimed for execution.
     /// </summary>
     internal Task RequestAsync(CancellationToken cancellationToken = default)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Count the request before contending for the gate so the in-flight loop can
-        // observe it. A counter (rather than a single dirty bit) lets a request that is
-        // cancelled while waiting remove exactly its own contribution without disturbing
-        // a concurrent waiter's.
-        Interlocked.Increment(ref _pending);
-        return RunAsync(cancellationToken);
+        RebuildBatch batch;
+        bool startRunner;
+        lock (_stateLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            batch = _pendingBatch ??= new RebuildBatch();
+            batch.ActiveRequests++;
+            startRunner = !_runnerActive;
+            if (startRunner)
+                _runnerActive = true;
+        }
+
+        if (startRunner)
+            _ = RunBatchesAsync();
+
+        return WaitForBatchAsync(batch, cancellationToken);
     }
 
-    private async Task RunAsync(CancellationToken cancellationToken)
+    private async Task WaitForBatchAsync(RebuildBatch batch, CancellationToken cancellationToken)
     {
         try
         {
-            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await batch.Completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // The request never entered the loop; undo its contribution so an in-flight
-            // (or future) rebuild does not run a follow-up for a cancelled request.
-            Interlocked.Decrement(ref _pending);
+            lock (_stateLock)
+            {
+                if (!batch.IsClaimed)
+                {
+                    batch.ActiveRequests--;
+                    if (batch.ActiveRequests == 0 && ReferenceEquals(_pendingBatch, batch))
+                        _pendingBatch = null;
+                }
+            }
+
             throw;
         }
+    }
 
-        try
+    private async Task RunBatchesAsync()
+    {
+        while (true)
         {
-            while (Volatile.Read(ref _pending) > 0)
+            RebuildBatch batch;
+            lock (_stateLock)
             {
-                // Check cancellation before draining so a cancelled holder exits without
-                // consuming a waiting request's pending count; that waiter then acquires
-                // the gate and runs the rebuild itself.
-                cancellationToken.ThrowIfCancellationRequested();
-                Volatile.Write(ref _pending, 0);
-                await _rebuild(cancellationToken).ConfigureAwait(false);
+                if (_pendingBatch is null)
+                {
+                    _runnerActive = false;
+                    return;
+                }
+
+                batch = _pendingBatch;
+                _pendingBatch = null;
+                batch.IsClaimed = true;
             }
-        }
-        finally
-        {
-            _gate.Release();
+
+            try
+            {
+                await _rebuild(CancellationToken.None).ConfigureAwait(false);
+                batch.Completion.TrySetResult();
+            }
+            catch (Exception exception)
+            {
+                batch.Completion.TrySetException(exception);
+            }
         }
     }
 
     public void Dispose()
     {
-        // Only WaitAsync is used, so the SemaphoreSlim never materializes an OS wait
-        // handle and holds no unmanaged resource. Deliberately do not dispose _gate:
-        // disposing it during shutdown would race an in-flight RunAsync that is about
-        // to Release() and surface a spurious ObjectDisposedException on exit.
-        _disposed = true;
+        RebuildBatch? abandonedBatch;
+        lock (_stateLock)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            abandonedBatch = _pendingBatch;
+            _pendingBatch = null;
+        }
+
+        abandonedBatch?.Completion.TrySetException(new ObjectDisposedException(nameof(RebuildCoordinator)));
     }
 }
