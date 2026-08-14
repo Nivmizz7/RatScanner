@@ -19,10 +19,13 @@ public sealed class EngineLifecycleGateTests
         TestResource? published = null;
         TestResource replacement = new();
         using EngineLifecycleGate<TestResource> gate = new();
+        TaskCompletionSource<bool> rebuildCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        Task rebuild = Task.Run(
-            () =>
-                gate.BuildAndPublish(
+        Thread rebuildThread = new(() =>
+        {
+            try
+            {
+                bool wasPublished = gate.BuildAndPublish(
                     () =>
                     {
                         buildStarted.TrySetResult();
@@ -35,18 +38,33 @@ public sealed class EngineLifecycleGateTests
                         published = resource;
                         return previous;
                     }
-                ),
-            testCancellation
-        );
+                );
+                rebuildCompletion.TrySetResult(wasPublished);
+            }
+            catch (Exception exception)
+            {
+                rebuildCompletion.TrySetException(exception);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "EngineLifecycleGateTests.Build",
+        };
+        rebuildThread.Start();
 
-        await buildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+        try
+        {
+            await buildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+            Task stop = Task.Run(() => gate.Stop(() => published?.Dispose()), testCancellation);
+            await stop.WaitAsync(TimeSpan.FromSeconds(1), testCancellation);
+        }
+        finally
+        {
+            releaseBuild.TrySetResult();
+        }
+        bool wasPublished = await rebuildCompletion.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
 
-        Task stop = Task.Run(() => gate.Stop(() => published?.Dispose()), testCancellation);
-        await stop.WaitAsync(TimeSpan.FromSeconds(1), testCancellation);
-
-        releaseBuild.TrySetResult();
-        await rebuild.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
-
+        Assert.False(wasPublished);
         Assert.Null(published);
         Assert.True(replacement.IsDisposed);
     }

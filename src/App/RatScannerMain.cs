@@ -212,6 +212,7 @@ public sealed class RatScannerMain
                 _ = RefreshApiCacheAsync();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (_disposed) { }
         catch (Exception exception)
         {
             Logger.LogWarning("RatEye initialization failed; scanning will remain unavailable.", exception);
@@ -424,7 +425,10 @@ public sealed class RatScannerMain
         );
 
         if (!wasPublished)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             return;
+        }
 
         double elapsedMs = PerfTrace.MonotonicMs() - startedAtMs;
         PerfTraceStore.Increment("engine.rebuild_total");
@@ -1075,6 +1079,18 @@ public sealed class RatScannerMain
             if (_disposed)
                 return;
             _disposed = true;
+            _engineLifecycle.Stop(() =>
+            {
+                lock (NameScanLock)
+                {
+                    lock (IconScanLock)
+                    {
+                        RatEyeEngine?.Dispose();
+                        RatEyeEngine = null!;
+                        _ratEyeReady = false;
+                    }
+                }
+            });
             TarkovDevAPI.ItemsCacheUpdated -= OnItemsCacheUpdated;
             _lifetimeCancellation.Cancel();
 
@@ -1092,18 +1108,6 @@ public sealed class RatScannerMain
             ItemScans.Changed -= OnItemScansChanged;
             HotkeyManager.Dispose();
             TarkovTrackerDB.Dispose();
-            _engineLifecycle.Stop(() =>
-            {
-                lock (NameScanLock)
-                {
-                    lock (IconScanLock)
-                    {
-                        RatEyeEngine?.Dispose();
-                        RatEyeEngine = null!;
-                        _ratEyeReady = false;
-                    }
-                }
-            });
             _scanDiagnostics.Dispose();
             _rebuildCoordinator.Dispose();
             _engineLifecycle.Dispose();
