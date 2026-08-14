@@ -25,6 +25,27 @@ public sealed class SettingsLayoutContractTests
         Assert.Contains("min-width: 0", css, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Failed_credential_save_reports_untested_instead_of_connected()
+    {
+        string root = FindRepositoryRoot();
+        string tracking = File.ReadAllText(
+            Path.Combine(root, "src", "App", "Pages", "App", "Settings", "SettingsTracking.razor")
+        );
+
+        // The candidate never reaches storage on this path, so nothing verified the
+        // credential that remains persisted. Claiming Connected would contradict the
+        // Untested state used everywhere else IsModeConfigured gates the status.
+        int failure = tracking.IndexOf("CredentialSaveFailed", StringComparison.Ordinal);
+        Assert.True(failure >= 0, "Expected the credential save failure branch to exist.");
+        int end = tracking.IndexOf("return;", failure, StringComparison.Ordinal);
+        Assert.True(end > failure, "Expected the failure branch to return early.");
+
+        string branch = tracking[failure..end];
+        Assert.Contains("TrackerConnectionState.Untested", branch, StringComparison.Ordinal);
+        Assert.DoesNotContain("TrackerConnectionState.Connected", branch, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);

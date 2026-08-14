@@ -233,8 +233,11 @@
             if (!saved.Succeeded)
             {
                 _error[mode] = Localizer["CredentialSaveFailed"];
+                // The candidate never reached storage, so the stored key is still the
+                // previous one and nothing verified it during this attempt. Report it
+                // as unverified rather than claiming a connection was established.
                 _state[mode] = IsModeConfigured(mode)
-                    ? TrackerConnectionState.Connected
+                    ? TrackerConnectionState.Untested
                     : TrackerConnectionState.NotConfigured;
                 return;
             }
