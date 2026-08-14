@@ -15,6 +15,15 @@ namespace RatScanner.Tests;
 
 public class TarkovDevJsonApiTests
 {
+    [Theory]
+    [InlineData(GameMode.Regular, "regular")]
+    [InlineData(GameMode.Pve, "pve")]
+    [InlineData(GameMode.Seasonal, "pvp-season")]
+    public void GameModePath_maps_each_mode_to_the_json_api_segment(GameMode mode, string expectedPath)
+    {
+        Assert.Equal(expectedPath, TarkovDevAPI.GameModePath(mode));
+    }
+
     [Fact]
     public void ExtractMapsDictionary_skips_sibling_blob_data()
     {

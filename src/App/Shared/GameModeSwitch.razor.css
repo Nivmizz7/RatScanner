@@ -1,44 +1,15 @@
 .game-mode-switch {
-	display: flex;
-	align-items: stretch;
-	flex: none;
+	display: block;
+	width: 100%;
 	min-width: 0;
 }
 
-/* Quiet segmented control: dark envelope, tinted selected segment. */
-::deep .mud-toggle-group {
-	gap: 2px;
-	width: 100%;
-	padding: 3px;
-	border: 1px solid var(--rs-border);
-	border-radius: var(--rs-radius-sm);
-	background: var(--rs-bg);
-	outline: none;
+/* Keep the selector compact enough for the sidebar while retaining full,
+   unambiguous mode names in both the field and its popover. */
+::deep .mud-input-control {
+	margin: 0;
 }
 
-::deep .mud-toggle-item {
-	flex: 1 1 0;
-	min-height: 30px;
-	padding: 4px 10px;
-	border-radius: 6px;
-	color: var(--rs-text-2);
+::deep .mud-input-slot {
 	font-weight: 600;
-}
-
-::deep .mud-toggle-item:hover {
-	background: var(--rs-surface-2);
-	color: var(--rs-text);
-}
-
-::deep .mud-toggle-item.mud-toggle-item-selected {
-	background: var(--rs-accent-surface);
-	color: var(--rs-accent-hover);
-}
-
-::deep .mud-toggle-item.mud-toggle-item-selected .mud-typography {
-	color: var(--rs-accent-hover);
-}
-
-::deep .mud-toggle-group.mud-toggle-group-disabled {
-	opacity: 0.6;
 }

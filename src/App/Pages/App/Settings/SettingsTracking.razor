@@ -1,4 +1,5 @@
 @page "/app/settings/tracking"
+@using System.Linq
 @using System.Threading
 @using RatScanner.Components
 @using RatScanner.Runtime
@@ -36,11 +37,17 @@
     </section>
 
     <section class="settings-section">
-        <header class="section-heading">
+        <header class="section-heading tracker-section-heading">
             <div>
                 <h2>@Localizer["TarkovTrackerSection"]</h2>
                 <p>@Localizer["TarkovTrackerIntro"]</p>
             </div>
+            <MudLink Href="@Constants.Links.TarkovTracker"
+                     Target="_blank"
+                     Typo="Typo.body2"
+                     Class="tracker-section-manage-link">
+                @Localizer["ManageApiKeys"]
+            </MudLink>
         </header>
 
         @foreach (GameMode mode in Modes)
@@ -52,10 +59,6 @@
                         @if (IsModeConfigured(mode))
                         {
                             <p class="tracker-mode-source">@ModeSourceLabel(mode)</p>
-                        }
-                        else if (mode == GameMode.Pve)
-                        {
-                            <p class="tracker-mode-hint">@Localizer["PveRequiresOrg"]</p>
                         }
                     </div>
                     <span class="@StatusClass(GetCredentialState(mode)) tracker-mode-status">@StatusLabel(GetCredentialState(mode))</span>
@@ -123,7 +126,6 @@
                                 </div>
                             </div>
                         </MudRadioGroup>
-                        <p class="source-shared-note">@Localizer["SourceSharedNote"]</p>
                     }
 
                     @if (IsEditingIoCredential(mode))
@@ -161,7 +163,7 @@
                             <p class="inline-error" role="alert">@_ioError</p>
                         }
                         <MudLink Href="@Constants.Links.TarkovTrackerIo" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
-                            @Localizer["ManageApiKey"]
+                            @Localizer["ManageLegacyApiKey"]
                         </MudLink>
                     }
                     else
@@ -199,14 +201,11 @@
                         {
                             <p class="inline-error" role="alert">@_orgError[mode]</p>
                         }
-                        <MudLink Href="@Constants.Links.TarkovTracker" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
-                            @Localizer["ManageApiKey"]
-                        </MudLink>
                     }
                 }
             </div>
 
-            @if (mode == GameMode.Regular)
+            @if (mode != GameMode.Seasonal)
             {
                 <hr class="tracker-divider" />
             }
@@ -215,17 +214,21 @@
 </div>
 
 @code {
-    private static readonly GameMode[] Modes = [GameMode.Regular, GameMode.Pve];
-    private readonly Dictionary<GameMode, string> _orgDraft = new() { [GameMode.Regular] = "", [GameMode.Pve] = "" };
-    private readonly Dictionary<GameMode, string?> _orgError = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
-    private readonly Dictionary<GameMode, bool> _orgTesting = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
-    private readonly Dictionary<GameMode, bool> _orgVisible = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
-    private readonly Dictionary<GameMode, TrackerConnectionState> _orgState = new()
-    {
-        [GameMode.Regular] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PvpToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
-        [GameMode.Pve] = string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.PveToken) ? TrackerConnectionState.NotConfigured : TrackerConnectionState.Untested,
-    };
-    private readonly Dictionary<GameMode, CancellationTokenSource?> _orgValidation = new() { [GameMode.Regular] = null, [GameMode.Pve] = null };
+    private static readonly GameMode[] Modes = [GameMode.Regular, GameMode.Pve, GameMode.Seasonal];
+    private readonly Dictionary<GameMode, string> _orgDraft = Modes.ToDictionary(mode => mode, _ => "");
+    private readonly Dictionary<GameMode, string?> _orgError = Modes.ToDictionary(mode => mode, _ => (string?)null);
+    private readonly Dictionary<GameMode, bool> _orgTesting = Modes.ToDictionary(mode => mode, _ => false);
+    private readonly Dictionary<GameMode, bool> _orgVisible = Modes.ToDictionary(mode => mode, _ => false);
+    private readonly Dictionary<GameMode, TrackerConnectionState> _orgState = Modes.ToDictionary(
+        mode => mode,
+        mode => string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.TokenForMode(mode))
+            ? TrackerConnectionState.NotConfigured
+            : TrackerConnectionState.Untested
+    );
+    private readonly Dictionary<GameMode, CancellationTokenSource?> _orgValidation = Modes.ToDictionary(
+        mode => mode,
+        _ => (CancellationTokenSource?)null
+    );
     private bool _ioVisible;
     private bool _ioTesting;
     private string _ioDraft = "";
@@ -242,7 +245,7 @@
 
     // Overflow menu open state per mode. Bound to MudMenu.Open so the menu
     // can be programmatically closed before opening a dialog.
-    private readonly Dictionary<GameMode, bool> _menuOpen = new() { [GameMode.Regular] = false, [GameMode.Pve] = false };
+    private readonly Dictionary<GameMode, bool> _menuOpen = Modes.ToDictionary(mode => mode, _ => false);
 
     private bool HasIoKey => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.IoToken);
 
@@ -275,8 +278,8 @@
 
     private static bool HasOrgKey(GameMode mode) => !string.IsNullOrWhiteSpace(RatConfig.Tracking.TarkovTracker.TokenForMode(mode));
 
-    // The PvP credential driving the active connection is Io when the persisted
-    // source is Io; PvE is always org.
+    // The persistent PvP credential driving the active connection is Io when the persisted
+    // source is Io; PvE and Seasonal PvP are always org.
     private static bool IsIoCredential(GameMode mode) =>
         mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io;
 
@@ -285,7 +288,7 @@
     private bool IsEditingIoCredential(GameMode mode) =>
         mode == GameMode.Regular && _pvpDraftSource == PvpSource.Io;
 
-    private bool IsModeConfigured(GameMode mode) => mode == GameMode.Regular ? HasActivePvpToken : HasOrgKey(GameMode.Pve);
+    private bool IsModeConfigured(GameMode mode) => mode == GameMode.Regular ? HasActivePvpToken : HasOrgKey(mode);
 
     private bool IsTesting(GameMode mode) =>
         IsEditingIoCredential(mode) ? _ioTesting : _orgTesting[mode];
@@ -308,10 +311,16 @@
         return _orgState[mode];
     }
 
-    private string ModeLabel(GameMode mode) => mode == GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"];
+    private string ModeLabel(GameMode mode) => mode switch
+    {
+        GameMode.Regular => Localizer["PvpMode"],
+        GameMode.Pve => Localizer["PveMode"],
+        GameMode.Seasonal => Localizer["SeasonalMode"],
+        _ => Localizer["PvpMode"],
+    };
 
     private string ModeSourceLabel(GameMode mode) =>
-        mode == GameMode.Pve || RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Org
+        mode != GameMode.Regular || RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Org
             ? Localizer["SourceOrg"]
             : Localizer["SourceIo"];
 
@@ -639,7 +648,7 @@
     {
         bool showProvider = mode == GameMode.Regular;
         PvpSource currentSource = RatConfig.Tracking.TarkovTracker.PvpSource;
-        string manageLabel = Localizer["ManageApiKey"];
+        string manageLabel = Localizer["ManageApiKeys"];
 
         DialogParameters<ChangeConnectionDialog> changeParams = new()
         {

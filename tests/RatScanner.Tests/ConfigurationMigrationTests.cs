@@ -127,6 +127,7 @@ public sealed class ConfigurationMigrationTests
 
             Assert.Equal(legacyKey, RatConfig.Tracking.TarkovTracker.PvpToken);
             Assert.Equal("", RatConfig.Tracking.TarkovTracker.PveToken);
+            Assert.Equal("", RatConfig.Tracking.TarkovTracker.SeasonalToken);
             Assert.Equal("", RatConfig.Tracking.TarkovTracker.IoToken);
             Assert.True(File.Exists(configPath + ".v2.bak"));
 
@@ -180,6 +181,7 @@ public sealed class ConfigurationMigrationTests
             config.WriteInt("Backend", 0);
             config.WriteSecureString("PvpToken", "PVP_current");
             config.WriteSecureString("PveToken", "PVE_current");
+            config.WriteSecureString("SeasonalToken", "SZN_current");
             config.WriteSecureString("IoToken", "");
             config.Section = "Other";
             config.WriteInt("ConfigVersion", 3);
@@ -188,6 +190,7 @@ public sealed class ConfigurationMigrationTests
 
             Assert.Equal("PVP_current", RatConfig.Tracking.TarkovTracker.PvpToken);
             Assert.Equal("PVE_current", RatConfig.Tracking.TarkovTracker.PveToken);
+            Assert.Equal("SZN_current", RatConfig.Tracking.TarkovTracker.SeasonalToken);
             Assert.Equal("", RatConfig.Tracking.TarkovTracker.IoToken);
         }
         finally
@@ -394,6 +397,36 @@ public sealed class ConfigurationMigrationTests
         }
         finally
         {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Save_and_reload_preserve_seasonal_mode_and_token()
+    {
+        string root = CreateTemporaryDirectory();
+        try
+        {
+            string configPath = Path.Combine(root, "config.cfg");
+            SimpleConfig config = new(configPath, "Other");
+            config.WriteInt("ConfigVersion", 3);
+
+            RatConfig.LoadConfig(configPath);
+            RatConfig.GameMode = GameMode.Seasonal;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "SZN_current";
+            RatConfig.SaveConfig(configPath);
+
+            RatConfig.GameMode = GameMode.Regular;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "";
+            RatConfig.LoadConfig(configPath);
+
+            Assert.Equal(GameMode.Seasonal, RatConfig.GameMode);
+            Assert.Equal("SZN_current", RatConfig.Tracking.TarkovTracker.SeasonalToken);
+        }
+        finally
+        {
+            RatConfig.GameMode = GameMode.Regular;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "";
             Directory.Delete(root, recursive: true);
         }
     }

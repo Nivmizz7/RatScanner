@@ -1,3 +1,16 @@
+.tracker-section-heading > div {
+    min-width: 0;
+}
+
+.tracker-section-manage-link {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: var(--rs-purple);
+}
+
 /* Mode header: title | status | overflow menu.
    The 3-column grid keeps the overflow on the same row at all widths —
    the title shrinks via minmax(0, 1fr), status and overflow are auto-sized. */
@@ -19,13 +32,6 @@
 }
 
 .tracker-mode-source {
-    margin: 2px 0 0;
-    color: var(--rs-text-2);
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.tracker-mode-hint {
     margin: 2px 0 0;
     color: var(--rs-text-2);
     font-size: 0.75rem;
@@ -202,14 +208,6 @@
 .source-card-detail {
     color: var(--rs-text);
     opacity: 0.72;
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-/* Shared note beneath both provider choices. */
-.source-shared-note {
-    margin: 0 0 12px;
-    color: var(--rs-text-2);
     font-size: 0.75rem;
     line-height: 1.4;
 }

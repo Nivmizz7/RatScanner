@@ -138,6 +138,20 @@ public class TarkovTrackerDatabaseReliabilityTests
         }
         """;
 
+    private const string SeasonalProgressResponse = """
+        {
+          "data": {
+            "userId": "seasonal-self",
+            "displayName": "Seasonal PvP",
+            "tasksProgress": [],
+            "taskObjectivesProgress": [],
+            "hideoutModulesProgress": [],
+            "hideoutPartsProgress": []
+          },
+          "meta": {"self":"seasonal-self","gameMode":"seasonal"}
+        }
+        """;
+
     [Fact]
     public void Dispose_is_idempotent()
     {
@@ -198,9 +212,30 @@ public class TarkovTrackerDatabaseReliabilityTests
         Assert.Equal([TarkovTrackerPermissions.ReadProgress], missing.MissingPermissions);
     }
 
+    [Fact]
+    public async Task Seasonal_token_loads_isolated_seasonal_progress()
+    {
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal)
+                        ? """{"token":"SZN_abc","permissions":["GP"],"gameMode":"seasonal"}"""
+                        : SeasonalProgressResponse
+                )
+        );
+        database.Configure("SZN_abc", "https://api.example", GameMode.Seasonal);
+
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("seasonal-self", database.Self);
+        Assert.Single(database.Progress);
+        Assert.Equal("Seasonal PvP", database.Progress[0].DisplayName);
+    }
+
     [Theory]
     [InlineData("PVP_abc", "pve", GameMode.Regular)]
     [InlineData("PVE_abc", "pvp", GameMode.Pve)]
+    [InlineData("SZN_abc", "pvp", GameMode.Seasonal)]
+    [InlineData("PVP_abc", "seasonal", GameMode.Regular)]
     public async Task Wrong_mode_key_is_rejected(string token, string apiMode, GameMode expectedMode)
     {
         TarkovTrackerDB database = new(
@@ -246,6 +281,7 @@ public class TarkovTrackerDatabaseReliabilityTests
     [Theory]
     [InlineData("PVP_abc", GameMode.Regular, GameMode.Pve)]
     [InlineData("PVE_abc", GameMode.Pve, GameMode.Regular)]
+    [InlineData("SZN_abc", GameMode.Seasonal, GameMode.Regular)]
     public async Task Prefix_scoped_key_without_game_mode_matches_only_its_mode(
         string token,
         GameMode matchingMode,

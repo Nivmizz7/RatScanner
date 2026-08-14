@@ -43,7 +43,6 @@
                     </div>
                 </div>
             </MudRadioGroup>
-            <p class="source-shared-note">@Localizer["SourceSharedNote"]</p>
         }
 
         <MudTextField T="string"
@@ -66,7 +65,7 @@
         }
 
         <MudLink Href="@ManageKeyUrl" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
-            @ManageKeyLabel
+            @(IsIoDraft ? Localizer["ManageLegacyApiKey"] : ManageKeyLabel)
         </MudLink>
     </DialogContent>
     <DialogActions>

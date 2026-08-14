@@ -89,7 +89,14 @@ public static class TarkovDevAPI
         TypeNameHandling = TypeNameHandling.None,
     };
 
-    private static string GameModePath(GameMode mode) => mode == GameMode.Pve ? "pve" : "regular";
+    internal static string GameModePath(GameMode mode) =>
+        mode switch
+        {
+            GameMode.Regular => "regular",
+            GameMode.Pve => "pve",
+            GameMode.Seasonal => "pvp-season",
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported game mode."),
+        };
 
     private static string LocaleCode() => RatConfig.NameScan.Language.ToTarkovDevLocale();
 
@@ -962,7 +969,7 @@ public static class TarkovDevAPI
         {
             string body = await PostGraphqlAsync(
                     SlimMapsQuery,
-                    new { lang = locale, gameMode = gameMode == GameMode.Pve ? "pve" : "regular" }
+                    new { lang = locale, gameMode = GameModePath(gameMode) }
                 )
                 .ConfigureAwait(false);
 

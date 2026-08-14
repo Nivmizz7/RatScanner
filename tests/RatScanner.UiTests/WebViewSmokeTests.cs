@@ -128,6 +128,82 @@ public sealed class WebViewSmokeTests
             await AssertVisibleAsync(page.Locator(".settings-page"));
             Assert.NotEqual("BODY", await page.EvaluateAsync<string>("document.activeElement?.tagName ?? ''"));
 
+            await page.Locator("a[href='/app/settings/tracking']").ClickAsync();
+            await page.WaitForURLAsync("**/app/settings/tracking");
+            ILocator gameModeSelect = page.GetByRole(AriaRole.Combobox, new() { Name = "Game mode", Exact = true });
+            await AssertVisibleAsync(gameModeSelect);
+            await gameModeSelect.ClickAsync();
+            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "PvP", Exact = true }));
+            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "PvE", Exact = true }));
+            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "Seasonal PvP", Exact = true }));
+            await page.Keyboard.PressAsync("Escape");
+            ILocator seasonalTrackingHeading = page.Locator(".tracking-settings .tracker-mode-title h3")
+                .GetByText("Seasonal PvP", new() { Exact = true });
+            await AssertVisibleAsync(seasonalTrackingHeading);
+            Assert.Equal(3, await page.Locator(".tracking-settings .tracker-mode").CountAsync());
+            ILocator manageApiKeysLink = page.GetByRole(
+                AriaRole.Link,
+                new() { Name = "Manage API keys", Exact = true }
+            );
+            await AssertVisibleAsync(manageApiKeysLink);
+            Assert.Equal(1, await manageApiKeysLink.CountAsync());
+            Assert.Equal("https://tarkovtracker.org", await manageApiKeysLink.GetAttributeAsync("href"));
+            Assert.Equal(0, await page.Locator(".tracker-manage-link").CountAsync());
+            Assert.Equal(0, await page.Locator(".tracker-mode-hint").CountAsync());
+
+            ILocator ioSourceCard = page.Locator(".source-card").Filter(new() { HasText = "TarkovTracker.io" });
+            await ioSourceCard.ClickAsync();
+            ILocator manageLegacyKeyLink = page.GetByRole(
+                AriaRole.Link,
+                new() { Name = "Manage TarkovTracker.io key", Exact = true }
+            );
+            await AssertVisibleAsync(manageLegacyKeyLink);
+            Assert.Equal("https://tarkovtracker.io", await manageLegacyKeyLink.GetAttributeAsync("href"));
+
+            await page.Locator(".source-card").Filter(new() { HasText = "TarkovTracker.org" }).ClickAsync();
+            await manageLegacyKeyLink.WaitForAsync(new() { State = WaitForSelectorState.Detached });
+            await AssertNoHorizontalOverflowAsync(page, "desktop tracking settings");
+            await seasonalTrackingHeading.ScrollIntoViewIfNeededAsync();
+            await page.ScreenshotAsync(
+                new PageScreenshotOptions
+                {
+                    Path = Path.Combine(runDirectory, "desktop-seasonal-tracking.png"),
+                    FullPage = false,
+                }
+            );
+
+            await ResizeAppWindowAsync(app, page, width: 600, height: 850);
+            await page.Locator(".sidebar.overlay")
+                .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
+            await page.WaitForFunctionAsync(
+                "() => document.querySelector('.sidebar.overlay')?.getBoundingClientRect().right <= 0"
+            );
+            await page.EvaluateAsync(
+                """
+                () => {
+                    window.scrollTo(0, 0);
+                    const main = document.querySelector('.main-content');
+                    if (main) main.scrollTo({ left: 0, top: 0 });
+                }
+                """
+            );
+            await page.Locator(".tracker-section-heading").ScrollIntoViewIfNeededAsync();
+            await AssertNoHorizontalOverflowAsync(page, "narrow tracking settings");
+            int trackingViewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
+            await AssertInsideViewportAsync(
+                page.Locator(".tracking-settings"),
+                width: trackingViewportWidth,
+                surface: "narrow tracking settings"
+            );
+            await page.ScreenshotAsync(
+                new PageScreenshotOptions
+                {
+                    Path = Path.Combine(runDirectory, "narrow-tracking-settings.png"),
+                    FullPage = false,
+                }
+            );
+            await ResizeAppWindowAsync(app, page, width: 1100, height: 850);
+
             ILocator aboutLink = page.Locator("a[href='/app/credits']");
             await aboutLink.ClickAsync();
             await page.WaitForURLAsync("**/app/credits");
