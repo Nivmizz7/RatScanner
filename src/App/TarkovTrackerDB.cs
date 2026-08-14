@@ -677,11 +677,16 @@ public class TarkovTrackerDB : IDisposable
 
         // The tracker gateway guarantees mode-scoped prefixes. Legacy tt_ keys
         // predate them, so an omitted gameMode must never bind one to PvE or Seasonal.
+        if (
+            token.StartsWith("PVP_", StringComparison.OrdinalIgnoreCase)
+            || token.StartsWith("tt_", StringComparison.OrdinalIgnoreCase)
+        )
+            return expected == GameMode.Regular;
         if (token.StartsWith("PVE_", StringComparison.OrdinalIgnoreCase))
             return expected == GameMode.Pve;
         if (token.StartsWith("SZN_", StringComparison.OrdinalIgnoreCase))
             return expected == GameMode.Seasonal;
-        return expected == GameMode.Regular;
+        return false;
     }
 
     private static string? ExtractPermission(string message)

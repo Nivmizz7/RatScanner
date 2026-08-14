@@ -21,8 +21,9 @@ namespace RatScanner;
 /// Catalog/tasks/hideout/crafts/barters use <c>json.tarkov.dev</c> GET documents
 /// (no GraphQL schema generator). Prices ship with the items document (MediumTTL).
 ///
-/// Maps use a slim GraphQL selection on <c>api.tarkov.dev</c> so we never download the
-/// ~9MB json.tarkov.dev maps placement blob for id/name/normalizedName only.
+/// Regular and PvE maps use a slim GraphQL selection on <c>api.tarkov.dev</c> to avoid
+/// the ~9MB json.tarkov.dev maps placement blob for id/name/normalizedName only. Seasonal
+/// maps use the JSON fallback because the GraphQL GameMode enum does not support them.
 /// Maps stay off the cold-start critical path (background + offline projected cache).
 /// </summary>
 public static class TarkovDevAPI
@@ -95,6 +96,15 @@ public static class TarkovDevAPI
             GameMode.Regular => "regular",
             GameMode.Pve => "pve",
             GameMode.Seasonal => "pvp-season",
+            _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported game mode."),
+        };
+
+    internal static string? GraphqlGameMode(GameMode mode) =>
+        mode switch
+        {
+            GameMode.Regular => "regular",
+            GameMode.Pve => "pve",
+            GameMode.Seasonal => null,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported game mode."),
         };
 
@@ -964,24 +974,27 @@ public static class TarkovDevAPI
 
     private static async Task<object> FetchMapsAsync(string locale, GameMode gameMode)
     {
-        // Prefer slim GraphQL (~1.5KB for 16 maps) over the multi-MB json.tarkov.dev maps blob.
-        try
+        // Prefer slim GraphQL (~1.5KB for 16 maps) when its GameMode enum supports the mode.
+        string? graphqlGameMode = GraphqlGameMode(gameMode);
+        if (graphqlGameMode is not null)
         {
-            string body = await PostGraphqlAsync(
-                    SlimMapsQuery,
-                    new { lang = locale, gameMode = GameModePath(gameMode) }
-                )
-                .ConfigureAwait(false);
+            try
+            {
+                string body = await PostGraphqlAsync(SlimMapsQuery, new { lang = locale, gameMode = graphqlGameMode })
+                    .ConfigureAwait(false);
 
-            Map[] projected = ProjectMapsFromGraphql(body);
-            if (projected.Length > 0)
-                return projected;
+                Map[] projected = ProjectMapsFromGraphql(body);
+                if (projected.Length > 0)
+                    return projected;
 
-            Logger.LogWarning("Slim maps GraphQL returned no maps; falling back to json.tarkov.dev stream extract.");
-        }
-        catch (Exception e)
-        {
-            Logger.LogWarning("Slim maps GraphQL failed; falling back to json.tarkov.dev stream extract.", e);
+                Logger.LogWarning(
+                    "Slim maps GraphQL returned no maps; falling back to json.tarkov.dev stream extract."
+                );
+            }
+            catch (Exception e)
+            {
+                Logger.LogWarning("Slim maps GraphQL failed; falling back to json.tarkov.dev stream extract.", e);
+            }
         }
 
         return await FetchMapsFromJsonBlobAsync(locale, gameMode).ConfigureAwait(false);

@@ -5,8 +5,8 @@
 | System | Client | Role |
 | --- | --- | --- |
 | Catalog bulk (items, tasks, hideout, crafts, barters) | `TarkovDevAPI` → **json.tarkov.dev** | Primary market/quest/hideout data |
-| Maps (id/name/normalizedName) | `TarkovDevAPI` slim **GraphQL** on api.tarkov.dev | Avoid multi-MB maps JSON on critical path |
-| Maps fallback | json.tarkov.dev maps stream extract | When GraphQL fails/empty |
+| Maps (id/name/normalizedName) | `TarkovDevAPI` slim **GraphQL** on api.tarkov.dev | Avoid multi-MB Regular/PvE maps JSON on critical path |
+| Maps fallback | json.tarkov.dev maps stream extract | Seasonal (unsupported GraphQL enum), or when GraphQL fails/empty |
 | RatScannerData runtime bundle | `scripts/setup-data.ps1` + `scripts/RatScannerData.ps1` | Pinned icon templates, OCR models, maps, fallback image, and provenance manifest |
 | Interactive map tiles/meta | local `Data/maps.json` via `MapDataLoader` | Overlay map viewer |
 | Progress tracking | `TarkovTrackerDB` + `APIClient` | Quests/hideout/team |
@@ -59,9 +59,10 @@ The bundle's icons are named by tarkov.dev item ID and use RatEye's 63-pixel slo
 
 Intentional dual path (documented on `TarkovDevAPI`):
 
-1. Prefer slim GraphQL query selecting only `id`, `name`, `normalizedName` on `https://api.tarkov.dev/graphql`.
-2. On failure or empty: extract maps dictionary from json.tarkov.dev without loading unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
-3. Maps stay **off cold-start critical path** (background queue + offline projected cache).
+1. Prefer slim GraphQL query selecting only `id`, `name`, `normalizedName` on `https://api.tarkov.dev/graphql` for Regular and PvE.
+2. Seasonal skips GraphQL because its `GameMode` enum does not support `pvp-season`; fetch the seasonal JSON documents directly.
+3. For Seasonal, or when GraphQL fails/returns empty, extract the maps dictionary from json.tarkov.dev without loading unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
+4. Maps stay **off cold-start critical path** (background queue + offline projected cache).
 
 `MapDataLoader` combines local interactive `maps.json` with the live catalog ids; empty catalog means “not ready yet” (retryable), not permanent failure.
 

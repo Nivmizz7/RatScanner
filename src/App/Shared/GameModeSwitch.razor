@@ -12,18 +12,19 @@
 	           Dense="true"
 	           FullWidth="true"
 	           Strict="true"
+	           ListClass="game-mode-list"
 	           Disabled="@_switching">
 		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
 		               Value="RatScanner.TarkovDev.GameMode.Regular">
-			@Localizer["PvpMode"]
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Regular, Localizer)
 		</MudSelectItem>
 		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
 		               Value="RatScanner.TarkovDev.GameMode.Pve">
-			@Localizer["PveMode"]
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Pve, Localizer)
 		</MudSelectItem>
 		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
 		               Value="RatScanner.TarkovDev.GameMode.Seasonal">
-			@Localizer["SeasonalMode"]
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Seasonal, Localizer)
 		</MudSelectItem>
 	</MudSelect>
 </div>

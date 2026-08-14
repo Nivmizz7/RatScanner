@@ -6,10 +6,7 @@
 
 /* Keep the selector compact enough for the sidebar while retaining full,
    unambiguous mode names in both the field and its popover. */
+/* stylelint-disable-next-line selector-pseudo-element-no-unknown -- Blazor CSS isolation combinator */
 ::deep .mud-input-control {
 	margin: 0;
-}
-
-::deep .mud-input-slot {
-	font-weight: 600;
 }

@@ -121,7 +121,7 @@
                 }
             </div>
 
-            @if (mode != GameMode.Seasonal)
+            @if (mode != Modes[^1])
             {
                 <hr class="tracker-divider" />
             }
@@ -168,13 +168,7 @@
     private bool CanConnect(GameMode mode) =>
         !_testing[mode] && !string.IsNullOrWhiteSpace(_draft[mode]);
 
-    private string ModeLabel(GameMode mode) => mode switch
-    {
-        GameMode.Regular => Localizer["PvpMode"],
-        GameMode.Pve => Localizer["PveMode"],
-        GameMode.Seasonal => Localizer["SeasonalMode"],
-        _ => Localizer["PvpMode"],
-    };
+    private string ModeLabel(GameMode mode) => GameModeDisplay.GetLabel(mode, Localizer);
 
     private string StatusLabel(TrackerConnectionState state) => state switch
     {

@@ -278,6 +278,24 @@ public class TarkovTrackerDatabaseReliabilityTests
         Assert.True(pvpResult.Succeeded);
     }
 
+    [Fact]
+    public async Task Unknown_prefix_without_game_mode_is_rejected()
+    {
+        TarkovTrackerDB database = new(
+            (_, suppliedToken, _) => Task.FromResult($$"""{"token":"{{suppliedToken}}","permissions":["GP"]}""")
+        );
+
+        TrackerValidationResult result = await database.ValidateCandidateAsync(
+            "UNKNOWN_abc",
+            "https://api.example",
+            GameMode.Regular,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(TrackerValidationFailure.WrongGameMode, result.Failure);
+    }
+
     [Theory]
     [InlineData("PVP_abc", GameMode.Regular, GameMode.Pve)]
     [InlineData("PVE_abc", GameMode.Pve, GameMode.Regular)]

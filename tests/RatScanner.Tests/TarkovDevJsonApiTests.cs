@@ -24,6 +24,15 @@ public class TarkovDevJsonApiTests
         Assert.Equal(expectedPath, TarkovDevAPI.GameModePath(mode));
     }
 
+    [Theory]
+    [InlineData(GameMode.Regular, "regular")]
+    [InlineData(GameMode.Pve, "pve")]
+    [InlineData(GameMode.Seasonal, null)]
+    public void GraphqlGameMode_skips_modes_unsupported_by_the_graphql_enum(GameMode mode, string? expectedGraphqlMode)
+    {
+        Assert.Equal(expectedGraphqlMode, TarkovDevAPI.GraphqlGameMode(mode));
+    }
+
     [Fact]
     public void ExtractMapsDictionary_skips_sibling_blob_data()
     {

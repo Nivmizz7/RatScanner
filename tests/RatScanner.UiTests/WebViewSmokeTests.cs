@@ -133,9 +133,17 @@ public sealed class WebViewSmokeTests
             ILocator gameModeSelect = page.GetByRole(AriaRole.Combobox, new() { Name = "Game mode", Exact = true });
             await AssertVisibleAsync(gameModeSelect);
             await gameModeSelect.ClickAsync();
-            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "PvP", Exact = true }));
+            ILocator pvpModeOption = page.GetByRole(AriaRole.Option, new() { Name = "PvP", Exact = true });
+            await AssertVisibleAsync(pvpModeOption);
             await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "PvE", Exact = true }));
             await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "Seasonal PvP", Exact = true }));
+            string selectedModeWeight = await gameModeSelect.EvaluateAsync<string>(
+                "element => getComputedStyle(element).fontWeight"
+            );
+            string optionModeWeight = await pvpModeOption
+                .Locator(".mud-list-item-text")
+                .EvaluateAsync<string>("element => getComputedStyle(element).fontWeight");
+            Assert.Equal(selectedModeWeight, optionModeWeight);
             await page.Keyboard.PressAsync("Escape");
             ILocator seasonalTrackingHeading = page.Locator(".tracking-settings .tracker-mode-title h3")
                 .GetByText("Seasonal PvP", new() { Exact = true });
