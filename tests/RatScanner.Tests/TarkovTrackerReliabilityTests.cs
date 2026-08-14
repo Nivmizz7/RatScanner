@@ -401,6 +401,29 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 
     [Fact]
+    public async Task Replacing_a_mode_key_does_not_load_another_accounts_cached_progress()
+    {
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse : PvpProgressResponse
+                )
+        );
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("pvp-self", database.Self);
+
+        database.Configure("PVP_other-account", "https://api.example", GameMode.Regular);
+
+        Assert.Empty(database.Progress);
+        Assert.Equal("", database.Self);
+
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+    }
+
+    [Fact]
     public async Task Invalid_replacement_validation_does_not_mutate_the_configured_key()
     {
         TarkovTrackerDB database = new((_, _, _) => throw new UnauthorizedTokenException());

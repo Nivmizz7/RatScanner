@@ -155,7 +155,7 @@ public sealed class WebViewSmokeTests
             );
             await AssertVisibleAsync(manageApiKeysLink);
             Assert.Equal(1, await manageApiKeysLink.CountAsync());
-            Assert.Equal("https://tarkovtracker.org", await manageApiKeysLink.GetAttributeAsync("href"));
+            Assert.Equal("https://tarkovtracker.org/settings#api", await manageApiKeysLink.GetAttributeAsync("href"));
             Assert.Equal(0, await page.Locator(".tracker-manage-link").CountAsync());
             Assert.Equal(0, await page.Locator(".source-card").CountAsync());
             Assert.Equal(0, await page.GetByText("TarkovTracker.io", new() { Exact = false }).CountAsync());

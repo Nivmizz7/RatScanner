@@ -65,7 +65,7 @@ public class TarkovTrackerDB : IDisposable
 {
     private readonly Func<string, string?, CancellationToken, Task<string>> _get;
     private readonly object _stateLock = new();
-    private readonly Dictionary<GameMode, ProgressSnapshot> _cachedProgress = new();
+    private readonly Dictionary<ProgressCacheKey, ProgressSnapshot> _cachedProgress = new();
     private TokenResponse? _token;
     private string? _configuredToken;
     private string _configuredEndpoint;
@@ -86,6 +86,8 @@ public class TarkovTrackerDB : IDisposable
         CancellationToken CancellationToken,
         CancellationTokenSource? OwnedCancellation = null
     );
+
+    private readonly record struct ProgressCacheKey(GameMode Mode, string Endpoint, string Token);
 
     private sealed record ProgressSnapshot(string Self, List<UserProgress> Progress);
 
@@ -182,7 +184,7 @@ public class TarkovTrackerDB : IDisposable
             if (string.IsNullOrWhiteSpace(token))
                 ClearProgressStateLocked();
             else
-                LoadCachedProgressLocked(mode);
+                LoadCachedProgressLocked(mode, endpoint, token);
             return _configurationGeneration;
         }
     }
@@ -628,7 +630,8 @@ public class TarkovTrackerDB : IDisposable
                 return;
             _self = self;
             _progress = progress;
-            _cachedProgress[configuration.Mode] = new ProgressSnapshot(self, progress.ToList());
+            ProgressCacheKey cacheKey = new(configuration.Mode, configuration.Endpoint, configuration.Token!);
+            _cachedProgress[cacheKey] = new ProgressSnapshot(self, progress.ToList());
         }
     }
 
@@ -644,9 +647,10 @@ public class TarkovTrackerDB : IDisposable
         }
     }
 
-    private void LoadCachedProgressLocked(GameMode mode)
+    private void LoadCachedProgressLocked(GameMode mode, string endpoint, string token)
     {
-        if (_cachedProgress.TryGetValue(mode, out ProgressSnapshot? cached))
+        ProgressCacheKey cacheKey = new(mode, endpoint, token);
+        if (_cachedProgress.TryGetValue(cacheKey, out ProgressSnapshot? cached))
         {
             _self = cached.Self;
             _progress = cached.Progress.ToList();
