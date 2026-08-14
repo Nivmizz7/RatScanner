@@ -237,7 +237,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             (Language)value,
             () => RatConfig.NameScan.Language,
             v => RatConfig.NameScan.Language = v,
-            _ => _scanOrchestrator.RebuildEngine()
+            ignored => _ = _scanOrchestrator.RebuildEngineAsync()
         );
 
     internal Task<SettingSaveResult> SetEnableIconScanAsync(bool value) =>
@@ -258,7 +258,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.IconScan.ScanRotatedIcons,
             v => RatConfig.IconScan.ScanRotatedIcons = v,
-            _ => _scanOrchestrator.RebuildEngine()
+            ignored => _ = _scanOrchestrator.RebuildEngineAsync()
         );
 
     internal Task<SettingSaveResult> SetUseCachedIconsAsync(bool value) =>
@@ -268,7 +268,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             value,
             () => RatConfig.IconScan.UseCachedIcons,
             v => RatConfig.IconScan.UseCachedIcons = v,
-            _ => _scanOrchestrator.RebuildEngine()
+            ignored => _ = _scanOrchestrator.RebuildEngineAsync()
         );
 
     internal Task<SettingSaveResult> SetIconScanHotkeyAsync(Hotkey value) =>
@@ -484,12 +484,12 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
                     next,
                     RatConfig.GetGameDisplayPreferences,
                     RatConfig.SetGameDisplayPreferences,
-                    _ =>
+                    ignored =>
                     {
                         bool changed = RatConfig.RefreshGameDisplayConfiguration(force: true);
                         ApplyDisplayConfiguration(RatConfig.GameDisplayConfiguration, resetDraft: false);
                         if (changed)
-                            _scanOrchestrator.RebuildEngine();
+                            _ = _scanOrchestrator.RebuildEngineAsync();
                     }
                 )
                 .ConfigureAwait(false);
@@ -520,7 +520,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         bool updateResolution = RatConfig.RefreshGameDisplayConfiguration(force: true);
         LoadDisplaySettings();
         if (updateResolution)
-            _scanOrchestrator.RebuildEngine();
+            _ = _scanOrchestrator.RebuildEngineAsync();
     }
 
     public async System.Threading.Tasks.Task RefreshGameDisplaysAsync()
@@ -532,7 +532,7 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
         );
         LoadDisplaySettings();
         if (updateResolution)
-            _scanOrchestrator.RebuildEngine();
+            await _scanOrchestrator.RebuildEngineAsync();
     }
 
     internal static bool TryParseDisplayScalePercentage(string? text, out float scale)

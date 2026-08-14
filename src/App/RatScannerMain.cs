@@ -101,6 +101,8 @@ public sealed class RatScannerMain
     /// </summary>
     private readonly ScanThrottle _scanThrottle = new(RatConfig.NameScan.CooldownMs);
 
+    private readonly RebuildCoordinator _rebuildCoordinator;
+
     public TarkovTrackerDB TarkovTrackerDB;
 
     internal RatEyeEngine RatEyeEngine = null!;
@@ -123,6 +125,7 @@ public sealed class RatScannerMain
         using PerfTrace.PerfScope constructorScope = startup.Measure("startup.ratscanner_main_ctor");
 
         _instance = this;
+        _rebuildCoordinator = new RebuildCoordinator(RebuildEngineCoreAsync);
         _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
         ItemScans.Changed += OnItemScansChanged;
 
@@ -426,7 +429,32 @@ public sealed class RatScannerMain
         Logger.LogDebug($"SetupRatEye: completed in {elapsedMs:F1} ms");
     }
 
-    void IScanOrchestrator.RebuildEngine() => SetupRatEye();
+    Task IScanOrchestrator.RebuildEngineAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed)
+            return Task.CompletedTask;
+        return _rebuildCoordinator.RequestAsync(cancellationToken);
+    }
+
+    private async Task RebuildEngineCoreAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Run(SetupRatEye, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation (shutdown) is expected; nothing to do.
+        }
+        catch (ObjectDisposedException) when (_disposed)
+        {
+            // Shutdown raced the rebuild; the engine is already being torn down.
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("Failed to rebuild the RatEye engine after a settings change.", exception);
+        }
+    }
 
     private void UpdateHotkeyReadiness()
     {
@@ -1066,6 +1094,7 @@ public sealed class RatScannerMain
                 }
             }
             _scanDiagnostics.Dispose();
+            _rebuildCoordinator.Dispose();
             _lifetimeCancellation.Dispose();
         }
     }
