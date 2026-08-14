@@ -4,14 +4,12 @@ Working notes for issues found but not yet fixed. Append new items under the mat
 
 ## UI/UX
 
-### Manage-key link points to the TarkovTracker.org home page
+### ~~Manage-key link points to the TarkovTracker.org home page~~
 
-**Status:** Not started
+**Status:** Done
 **Files:** `src/App/Constants.cs`, `src/App/Pages/App/Settings/SettingsTracking.razor`, `src/App/Components/ChangeConnectionDialog.razor`
 
-The single "Manage API keys" link in Tracking settings and the replacement dialog use `Constants.Links.TarkovTracker` (`https://tarkovtracker.org`) rather than the API-key settings page (`https://tarkovtracker.org/settings#api`). The same constant is also used by the About page for a site button that should remain the home page.
-
-Add a dedicated `TarkovTrackerSettings` constant and use it only for API-key management links.
+Resolved: the tracking settings and replacement dialog use a dedicated `TarkovTrackerSettings` link to `https://tarkovtracker.org/settings#api`, while the About page continues to use the site home page.
 
 ### About page spacing is inconsistent
 

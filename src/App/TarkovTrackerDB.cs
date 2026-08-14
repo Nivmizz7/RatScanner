@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -63,14 +65,17 @@ internal static class TarkovTrackerPermissions
 // Storing information about progression from TarkovTracker API.
 public class TarkovTrackerDB : IDisposable
 {
+    internal const int ProgressCacheCapacity = 12;
+
     private readonly Func<string, string?, CancellationToken, Task<string>> _get;
     private readonly object _stateLock = new();
-    private readonly Dictionary<GameMode, ProgressSnapshot> _cachedProgress = new();
+    private readonly Dictionary<ProgressCacheKey, ProgressSnapshot> _cachedProgress = new();
     private TokenResponse? _token;
     private string? _configuredToken;
     private string _configuredEndpoint;
     private GameMode _configuredMode;
     private long _configurationGeneration;
+    private long _progressCacheAccessOrder;
     private CancellationTokenSource _configurationCancellation = new();
     private List<UserProgress> _progress = new();
     private string _self = "";
@@ -87,7 +92,9 @@ public class TarkovTrackerDB : IDisposable
         CancellationTokenSource? OwnedCancellation = null
     );
 
-    private sealed record ProgressSnapshot(string Self, List<UserProgress> Progress);
+    private readonly record struct ProgressCacheKey(GameMode Mode, string Endpoint, string TokenFingerprint);
+
+    private sealed record ProgressSnapshot(string Self, List<UserProgress> Progress, long LastAccessOrder);
 
     public List<UserProgress> Progress
     {
@@ -182,7 +189,7 @@ public class TarkovTrackerDB : IDisposable
             if (string.IsNullOrWhiteSpace(token))
                 ClearProgressStateLocked();
             else
-                LoadCachedProgressLocked(mode);
+                LoadCachedProgressLocked(mode, endpoint, token);
             return _configurationGeneration;
         }
     }
@@ -628,7 +635,13 @@ public class TarkovTrackerDB : IDisposable
                 return;
             _self = self;
             _progress = progress;
-            _cachedProgress[configuration.Mode] = new ProgressSnapshot(self, progress.ToList());
+            ProgressCacheKey cacheKey = CreateProgressCacheKey(
+                configuration.Mode,
+                configuration.Endpoint,
+                configuration.Token!
+            );
+            _cachedProgress[cacheKey] = new ProgressSnapshot(self, progress.ToList(), ++_progressCacheAccessOrder);
+            TrimProgressCacheLocked(cacheKey);
         }
     }
 
@@ -644,10 +657,13 @@ public class TarkovTrackerDB : IDisposable
         }
     }
 
-    private void LoadCachedProgressLocked(GameMode mode)
+    private void LoadCachedProgressLocked(GameMode mode, string endpoint, string token)
     {
-        if (_cachedProgress.TryGetValue(mode, out ProgressSnapshot? cached))
+        ProgressCacheKey cacheKey = CreateProgressCacheKey(mode, endpoint, token);
+        if (_cachedProgress.TryGetValue(cacheKey, out ProgressSnapshot? cached))
         {
+            cached = cached with { LastAccessOrder = ++_progressCacheAccessOrder };
+            _cachedProgress[cacheKey] = cached;
             _self = cached.Self;
             _progress = cached.Progress.ToList();
         }
@@ -655,7 +671,24 @@ public class TarkovTrackerDB : IDisposable
         {
             ClearProgressStateLocked();
         }
+        TrimProgressCacheLocked(cacheKey);
     }
+
+    private void TrimProgressCacheLocked(ProgressCacheKey retainedKey)
+    {
+        while (_cachedProgress.Count > ProgressCacheCapacity)
+        {
+            ProgressCacheKey oldestKey = _cachedProgress
+                .Where(entry => entry.Key != retainedKey)
+                .OrderBy(entry => entry.Value.LastAccessOrder)
+                .First()
+                .Key;
+            _cachedProgress.Remove(oldestKey);
+        }
+    }
+
+    private static ProgressCacheKey CreateProgressCacheKey(GameMode mode, string endpoint, string token) =>
+        new(mode, endpoint, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))));
 
     private void ClearProgressStateLocked()
     {

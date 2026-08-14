@@ -80,7 +80,7 @@ TTL policy lives in `TarkovDevAPI` using `RatConfig` TTL fields and file mtime â
 - TarkovTracker API keys are never saved while typing. The user explicitly tests a key; only successful mode and permission validation commits it.
 - There is no global Settings Save/Cancel bar.
 
-Game mode is exposed as an immediate PvP/PvE/Seasonal selector: the `GameModeSwitch` dropdown in the sidebar scanner section is the single authoritative control; when the sidebar is collapsed or hidden, a compact `GameModeIndicator` beside search shows the current mode and opens the sidebar to change it. A switch refreshes the selected mode's catalog caches, rebuilds RatEye item data, updates current scan items, selects the matching tracker credential/progress cache, and persists `RatConfig.GameMode`; failure restores the previous mode.
+Game mode is exposed as an immediate PvP/PvE/Seasonal selector: the `GameModeSwitch` dropdown in the sidebar scanner section is the single authoritative control; when the sidebar is collapsed or hidden, a compact `GameModeIndicator` beside search shows the current mode and opens the sidebar to change it. A switch refreshes the selected mode's catalog caches, rebuilds RatEye item data, updates current scan items, selects the matching tracker credential and account/endpoint-scoped progress cache, and persists `RatConfig.GameMode`; failure restores the previous mode. Progress cache keys retain only token fingerprints, and the bounded least-recently-used cache evicts old account or endpoint snapshots.
 
 ## Advanced overrides
 

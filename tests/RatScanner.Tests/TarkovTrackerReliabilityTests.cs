@@ -401,6 +401,78 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 
     [Fact]
+    public async Task Changing_a_mode_endpoint_does_not_load_another_endpoints_cached_progress()
+    {
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse : PvpProgressResponse
+                )
+        );
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("pvp-self", database.Self);
+
+        database.Configure("PVP_abc", "https://other-api.example", GameMode.Regular);
+
+        Assert.Empty(database.Progress);
+        Assert.Equal("", database.Self);
+
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+    }
+
+    [Fact]
+    public async Task Changing_a_mode_token_does_not_load_another_accounts_cached_progress()
+    {
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse : PvpProgressResponse
+                )
+        );
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+
+        database.Configure("PVP_other-account", "https://api.example", GameMode.Regular);
+
+        Assert.Empty(database.Progress);
+        Assert.Equal("", database.Self);
+    }
+
+    [Fact]
+    public async Task Progress_cache_evicts_the_oldest_snapshot_and_retains_the_current_snapshot()
+    {
+        using TarkovTrackerDB database = new(
+            (url, _, _) =>
+                Task.FromResult(
+                    url.EndsWith("/token", StringComparison.Ordinal) ? PvpTokenResponse : PvpProgressResponse
+                )
+        );
+        for (int index = 0; index < TarkovTrackerDB.ProgressCacheCapacity; index++)
+        {
+            database.Configure("PVP_abc", $"https://api-{index}.example", GameMode.Regular);
+            Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+        }
+
+        database.Configure("PVP_abc", "https://api-0.example", GameMode.Regular);
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+
+        database.Configure("PVP_abc", $"https://api-{TarkovTrackerDB.ProgressCacheCapacity}.example", GameMode.Regular);
+        Assert.True(await database.InitAsync(TestContext.Current.CancellationToken));
+
+        database.Configure("PVP_abc", "https://api-1.example", GameMode.Regular);
+        Assert.Empty(database.Progress);
+        Assert.Equal("", database.Self);
+
+        database.Configure("PVP_abc", "https://api-0.example", GameMode.Regular);
+        Assert.Equal("pvp-self", database.Self);
+        Assert.Equal("PvP", Assert.Single(database.Progress).DisplayName);
+    }
+
+    [Fact]
     public async Task Invalid_replacement_validation_does_not_mutate_the_configured_key()
     {
         TarkovTrackerDB database = new((_, _, _) => throw new UnauthorizedTokenException());
