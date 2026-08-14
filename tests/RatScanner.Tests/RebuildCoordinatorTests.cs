@@ -82,6 +82,20 @@ public sealed class RebuildCoordinatorTests
     }
 
     [Fact]
+    public async Task Rebuild_failure_is_propagated_to_the_request()
+    {
+        CancellationToken testCancellation = TestContext.Current.CancellationToken;
+        InvalidOperationException failure = new("rebuild failed");
+        using RebuildCoordinator coordinator = new(_ => Task.FromException(failure));
+
+        InvalidOperationException actual = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            coordinator.RequestAsync(testCancellation)
+        );
+
+        Assert.Same(failure, actual);
+    }
+
+    [Fact]
     public async Task Cancelled_waiter_does_not_trigger_an_extra_followup_rebuild()
     {
         CancellationToken testCancellation = TestContext.Current.CancellationToken;

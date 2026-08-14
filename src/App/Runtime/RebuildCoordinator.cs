@@ -104,8 +104,18 @@ internal sealed class RebuildCoordinator : IDisposable
             }
             catch (Exception exception)
             {
-                batch.Completion.TrySetException(exception);
+                CompleteWithException(batch, exception);
             }
+        }
+    }
+
+    private static void CompleteWithException(RebuildBatch batch, Exception exception)
+    {
+        if (batch.Completion.TrySetException(exception))
+        {
+            // A claimed batch may have no remaining waiters if every caller cancelled.
+            // Observe the fault here while preserving it for any callers still awaiting it.
+            _ = batch.Completion.Task.Exception;
         }
     }
 
@@ -122,6 +132,7 @@ internal sealed class RebuildCoordinator : IDisposable
             _pendingBatch = null;
         }
 
-        abandonedBatch?.Completion.TrySetException(new ObjectDisposedException(nameof(RebuildCoordinator)));
+        if (abandonedBatch is not null)
+            CompleteWithException(abandonedBatch, new ObjectDisposedException(nameof(RebuildCoordinator)));
     }
 }
