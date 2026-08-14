@@ -61,7 +61,7 @@ Intentional dual path (documented on `TarkovDevAPI`):
 
 1. Prefer slim GraphQL query selecting only `id`, `name`, `normalizedName` on `https://api.tarkov.dev/graphql` for Regular and PvE.
 2. Seasonal skips GraphQL because its `GameMode` enum does not support `pvp-season`; fetch the seasonal JSON documents directly.
-3. For Seasonal, or when GraphQL fails/returns empty, extract the maps dictionary from json.tarkov.dev without loading unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
+3. For Seasonal, or when GraphQL fails/returns empty, extract the maps dictionary from json.tarkov.dev without materializing unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
 4. Maps stay **off cold-start critical path** (background queue + offline projected cache).
 
 `MapDataLoader` combines local interactive `maps.json` with the live catalog ids; empty catalog means “not ready yet” (retryable), not permanent failure.
