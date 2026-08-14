@@ -215,4 +215,40 @@ public sealed class RebuildCoordinatorTests
 
         Assert.Equal(3, rebuildCount);
     }
+
+    [Fact]
+    public async Task Dispose_faults_pending_requests_and_rejects_new_requests()
+    {
+        CancellationToken testCancellation = TestContext.Current.CancellationToken;
+        int rebuildCount = 0;
+        TaskCompletionSource firstRebuildStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseFirstRebuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task Rebuild(CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref rebuildCount) == 1)
+            {
+                firstRebuildStarted.TrySetResult();
+                await releaseFirstRebuild.Task.ConfigureAwait(false);
+            }
+        }
+
+        RebuildCoordinator coordinator = new(Rebuild);
+        Task first = coordinator.RequestAsync(testCancellation);
+        await firstRebuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+        Task pending = coordinator.RequestAsync(testCancellation);
+
+        coordinator.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => pending);
+        Assert.Throws<ObjectDisposedException>(() =>
+        {
+            _ = coordinator.RequestAsync(testCancellation);
+        });
+
+        releaseFirstRebuild.TrySetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+
+        Assert.Equal(1, rebuildCount);
+    }
 }
