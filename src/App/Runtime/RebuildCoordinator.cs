@@ -7,16 +7,16 @@ namespace RatScanner.Runtime;
 /// <summary>
 /// Serializes and coalesces repeated rebuild requests. The first request acquires the
 /// gate and runs the rebuild loop; requests that arrive while a rebuild is in flight
-/// set the dirty flag and wait on the gate. The in-flight loop observes the flag and
-/// runs exactly one follow-up rebuild that picks up the latest configuration, then the
-/// waiting requests acquire the gate, find the flag already cleared, and return without
-/// doing redundant work. Thread-safe.
+/// bump a pending counter and wait on the gate. The in-flight loop observes the counter
+/// and runs exactly one follow-up rebuild that picks up the latest configuration, then
+/// the waiting requests acquire the gate, find the counter already drained, and return
+/// without doing redundant work. Thread-safe.
 /// </summary>
 internal sealed class RebuildCoordinator : IDisposable
 {
     private readonly Func<CancellationToken, Task> _rebuild;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private int _requested;
+    private int _pending;
     private bool _disposed;
 
     internal RebuildCoordinator(Func<CancellationToken, Task> rebuild)
@@ -32,22 +32,37 @@ internal sealed class RebuildCoordinator : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // Mark a rebuild as desired before contending for the gate. The volatile write
-        // is the release half of the dirty-flag protocol; the loop below reads it with
-        // Volatile.Read (acquire) so a request that lands during a rebuild is always seen.
-        Volatile.Write(ref _requested, 1);
+        // Count the request before contending for the gate so the in-flight loop can
+        // observe it. A counter (rather than a single dirty bit) lets a request that is
+        // cancelled while waiting remove exactly its own contribution without disturbing
+        // a concurrent waiter's.
+        Interlocked.Increment(ref _pending);
         return RunAsync(cancellationToken);
     }
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            while (Volatile.Read(ref _requested) != 0)
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The request never entered the loop; undo its contribution so an in-flight
+            // (or future) rebuild does not run a follow-up for a cancelled request.
+            Interlocked.Decrement(ref _pending);
+            throw;
+        }
+
+        try
+        {
+            while (Volatile.Read(ref _pending) > 0)
             {
-                Volatile.Write(ref _requested, 0);
+                // Check cancellation before draining so a cancelled holder exits without
+                // consuming a waiting request's pending count; that waiter then acquires
+                // the gate and runs the rebuild itself.
                 cancellationToken.ThrowIfCancellationRequested();
+                Volatile.Write(ref _pending, 0);
                 await _rebuild(cancellationToken).ConfigureAwait(false);
             }
         }
