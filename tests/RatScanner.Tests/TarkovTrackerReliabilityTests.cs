@@ -401,7 +401,7 @@ public class TarkovTrackerDatabaseReliabilityTests
     }
 
     [Fact]
-    public async Task Replacing_a_mode_key_does_not_load_another_accounts_cached_progress()
+    public async Task Changing_a_mode_endpoint_does_not_load_another_endpoints_cached_progress()
     {
         using TarkovTrackerDB database = new(
             (url, _, _) =>
