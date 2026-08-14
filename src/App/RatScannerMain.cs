@@ -1000,7 +1000,17 @@ public sealed class RatScannerMain
             PerfTraceStore.Increment("engine.rebuild_on_scan_path");
             PerfTraceStore.NoteScan(PerfTraceStore.CurrentScanSequence, "engineRebuild", "yes");
             Logger.LogDebug("RefreshGameDisplayForScan: calling SetupRatEye (may block on locks)...");
-            SetupRatEye();
+            try
+            {
+                SetupRatEye();
+            }
+            catch (ObjectDisposedException) when (_disposed)
+            {
+                // Shutdown owns engine teardown now. The scan entrypoint still holds its
+                // scan lock, so the currently published engine remains valid until that
+                // scan returns and disposal can acquire the same lock.
+                return;
+            }
             Logger.LogDebug("RefreshGameDisplayForScan: SetupRatEye complete");
         }
     }
