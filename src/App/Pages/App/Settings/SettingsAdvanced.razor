@@ -1,8 +1,10 @@
 @page "/app/settings/advanced"
 @inherits SettingsPageBase
 @using RatScanner.Display
+@using RatScanner.Runtime
 @using System.Globalization
 @inject SettingsVM SettingsVM
+@inject IScanOrchestrator ScanOrchestrator
 @implements IDisposable
 
 <div class="settings-page">
@@ -197,7 +199,7 @@
         _exportingScanDiagnostics = true;
         try
         {
-            ScanDiagnosticExportResult result = await Task.Run(RatScannerMain.Instance.ExportLastScanDiagnostics);
+            ScanDiagnosticExportResult result = await Task.Run(ScanOrchestrator.ExportLastScanDiagnostics);
             if (result.Succeeded)
             {
                 Snackbar.Add(string.Format(Localizer["ScanDiagnosticsExported"], result.Directory), Severity.Success);

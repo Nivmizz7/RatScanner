@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using RatScanner.FetchModels.TarkovTracker;
+using RatScanner.Runtime;
 using GameMode = RatScanner.TarkovDev.GameMode;
 
 namespace RatScanner;
@@ -137,6 +138,12 @@ public class TarkovTrackerDB : IDisposable
             lock (_stateLock)
                 return _lastSuccessfulValidationUtc;
         }
+    }
+
+    internal TrackerStateSnapshot GetSnapshot()
+    {
+        lock (_stateLock)
+            return new TrackerStateSnapshot(_progress.ToArray(), _self, _configuredToken, _connectionState);
     }
 
     public TarkovTrackerDB()

@@ -26,6 +26,7 @@ examples/                # Sample resolution screenshots
 | WPF Application | `App.xaml`, `App.xaml.cs` (single-instance, WebView2 install) |
 | Main window / tray | `PageSwitcher.xaml(.cs)` |
 | Domain bootstrap | `RatScannerMain.cs` |
+| WPF/Blazor composition boundary | `Runtime/ApplicationCompositionRoot.cs`, `Runtime/I*` contracts |
 | Branding constants | `Constants.cs` |
 
 ## UI and navigation

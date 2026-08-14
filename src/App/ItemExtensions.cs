@@ -8,19 +8,7 @@ namespace RatScanner;
 
 public static class ItemExtensions
 {
-    private static UserProgress GetUserProgress()
-    {
-        TarkovTrackerDB db = RatScannerMain.Instance.TarkovTrackerDB;
-        List<UserProgress> progress = db.Progress;
-        if (progress.Count >= 1)
-        {
-            string self = db.Self;
-            return progress.FirstOrDefault(x => x.UserId == self) ?? new UserProgress();
-        }
-        return new UserProgress();
-    }
-
-    public static (int count, int kappaCount) GetTaskRemaining(this Item item, UserProgress? progress = null)
+    public static (int count, int kappaCount) GetTaskRemaining(this Item item, UserProgress progress)
     {
         QuestNeedReport report = item.GetQuestNeedReport(progress);
         return (report.CurrentTotal, report.KappaTotal);
@@ -30,20 +18,14 @@ public static class ItemExtensions
     /// Full applicability-aware quest need classification for the item.
     /// Does not inspect the scanned item's FIR state (no vision yet).
     /// </summary>
-    internal static QuestNeedReport GetQuestNeedReport(this Item item, UserProgress? progress = null) =>
-        QuestNeedClassifier.Classify(
-            item,
-            TarkovDevAPI.GetTasks(),
-            progress ?? GetUserProgress(),
-            RatConfig.Tracking.ShowNonFIRNeeds
-        );
+    internal static QuestNeedReport GetQuestNeedReport(this Item item, UserProgress progress) =>
+        QuestNeedClassifier.Classify(item, TarkovDevAPI.GetTasks(), progress, RatConfig.Tracking.ShowNonFIRNeeds);
 
     /// <summary>
     /// Remaining active quest needs, split by whether the objective requires found-in-raid.
     /// </summary>
-    public static RequirementBreakdown GetTaskRequirementBreakdown(this Item item, UserProgress? progress = null)
+    public static RequirementBreakdown GetTaskRequirementBreakdown(this Item item, UserProgress progress)
     {
-        progress ??= GetUserProgress();
         bool showNonFir = RatConfig.Tracking.ShowNonFIRNeeds;
 
         TarkovDev.Task[] tasks = TarkovDevAPI.GetTasks();
@@ -224,16 +206,14 @@ public static class ItemExtensions
         return 0;
     }
 
-    public static int GetHideoutRemaining(this Item item, UserProgress? progress = null) =>
+    public static int GetHideoutRemaining(this Item item, UserProgress progress) =>
         item.GetHideoutRequirementBreakdown(progress).Total;
 
     /// <summary>
     /// Remaining hideout upgrade needs, split by FIR attribute on the station item requirement.
     /// </summary>
-    public static RequirementBreakdown GetHideoutRequirementBreakdown(this Item item, UserProgress? progress = null)
+    public static RequirementBreakdown GetHideoutRequirementBreakdown(this Item item, UserProgress progress)
     {
-        progress ??= GetUserProgress();
-
         int fir = 0;
         int nonFir = 0;
         HideoutStation[] stations = TarkovDevAPI.GetHideoutStations();

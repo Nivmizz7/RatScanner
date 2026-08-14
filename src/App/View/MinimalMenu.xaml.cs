@@ -2,6 +2,7 @@
 using System.Windows.Forms;
 using System.Windows.Input;
 using RatEye;
+using RatScanner.Runtime;
 using RatScanner.ViewModel;
 using RCMinUi = RatScanner.RatConfig.MinimalUi;
 using UserControl = System.Windows.Controls.UserControl;
@@ -19,7 +20,8 @@ public partial class MinimalMenu : UserControl, ISwitchable
     private MinimalMenu()
     {
         InitializeComponent();
-        DataContext = new MenuVM(RatScannerMain.Instance);
+        ApplicationCompositionRoot services = ApplicationCompositionRoot.Current;
+        DataContext = new MenuVM(services.ScanOrchestrator, services.TrackerService);
         UpdateElements();
     }
 
