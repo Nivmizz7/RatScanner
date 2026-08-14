@@ -471,10 +471,24 @@ public sealed class WebViewSmokeTests
 
     private static async Task AssertNoHorizontalOverflowAsync(IPage page, string surface)
     {
-        bool fits = await page.EvaluateAsync<bool>(
-            "() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        // The document element and .main-content are independent scroll containers, so
+        // an inner overflow can hide behind a clean document-level measurement. Report
+        // the offending container and its measurements to keep failures diagnosable.
+        string? overflow = await page.EvaluateAsync<string?>(
+            """
+            () => {
+                const containers = [['document', document.documentElement]];
+                const main = document.querySelector('.main-content');
+                if (main) containers.push(['.main-content', main]);
+                for (const [name, element] of containers) {
+                    if (element.scrollWidth > element.clientWidth)
+                        return name + ' ' + element.scrollWidth + 'px > ' + element.clientWidth + 'px';
+                }
+                return null;
+            }
+            """
         );
-        Assert.True(fits, $"Unexpected horizontal overflow on {surface}.");
+        Assert.True(overflow is null, $"Unexpected horizontal overflow on {surface}: {overflow}.");
     }
 
     private static async Task AssertVisibleAsync(ILocator locator)
