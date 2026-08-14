@@ -49,11 +49,12 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         instance?.Dispose();
     }
 
-    public static BlazorOverlay BlazorOverlay { get; set; } = null!;
-
     public IServiceProvider Services => _serviceProvider;
 
     private readonly ServiceProvider _serviceProvider;
+    private readonly object _overlayInitializationLock = new();
+    private BlazorOverlay? _blazorOverlay;
+    private DispatcherOperation? _pendingOverlayInitialization;
     private WebView2CompositionControl? _initializedWebView;
     private Window? _dpiHostWindow;
     private DispatcherOperation? _pendingDpiRefresh;
@@ -106,18 +107,15 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
         Resources.Add("services", _serviceProvider);
 
-        // Constructing the overlay resolves MenuVM, which constructs RatScannerMain
-        // (catalog load + scan engine) synchronously on this thread.
-        using (startup.Measure("startup.create_overlay"))
-        {
-            BlazorOverlay ??= new BlazorOverlay(_serviceProvider);
-            BlazorOverlay.Show();
-        }
-
         using (startup.Measure("startup.blazor_ui_initialize_component"))
             InitializeComponent();
         Loaded += BlazorUI_Loaded;
         Unloaded += BlazorUI_Unloaded;
+
+        // The passive tooltip overlay owns a second WebView2 process tree. Creating
+        // it before the main shell's first paint made Chromium startup, the offline
+        // catalog parse, and RatEye construction land in one dispatcher burst. Queue
+        // it from Loaded so WPF has attached this control to the visible window first.
     }
 
     private void BlazorWebView_Initialized(object? sender, BlazorWebViewInitializedEventArgs e)
@@ -165,12 +163,49 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
     {
         AttachDpiHostWindow();
         QueueDpiRefresh();
+        QueueOverlayInitialization();
     }
 
     private void BlazorUI_Unloaded(object sender, RoutedEventArgs e)
     {
         WebView2DpiWorkaround.CancelPendingRefresh(ref _pendingDpiRefresh);
         DetachDpiHostWindow();
+    }
+
+    private void QueueOverlayInitialization()
+    {
+        if (_disposed || _blazorOverlay is not null || _pendingOverlayInitialization is not null)
+            return;
+
+        _pendingOverlayInitialization = Dispatcher.BeginInvoke(
+            DispatcherPriority.ApplicationIdle,
+            EnsureOverlayInitialized
+        );
+    }
+
+    private void EnsureOverlayInitialized()
+    {
+        lock (_overlayInitializationLock)
+        {
+            _pendingOverlayInitialization = null;
+            if (_disposed || _blazorOverlay is not null)
+                return;
+
+            try
+            {
+                double startedAtMs = Diagnostics.PerfTrace.MonotonicMs();
+                _blazorOverlay = new BlazorOverlay(_serviceProvider);
+                _blazorOverlay.Show();
+                Diagnostics.PerfTraceStore.SetGauge(
+                    "overlay.bootstrap_ms",
+                    (long)Math.Round(Diagnostics.PerfTrace.MonotonicMs() - startedAtMs)
+                );
+            }
+            catch (Exception exception)
+            {
+                Logger.LogWarning("Unable to initialize the scan tooltip overlay.", exception);
+            }
+        }
     }
 
     private void HostWindow_DpiChanged(object sender, DpiChangedEventArgs e)
@@ -231,6 +266,10 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
 
     public void OnOpen()
     {
+        // OnOpen also runs before a startup restore into minimal mode swaps this
+        // control out. Queueing here guarantees the passive tooltip overlay still
+        // boots even when BlazorUI never reaches Loaded in that startup path.
+        QueueOverlayInitialization();
         UpdateElements();
         WebView2PowerSaver.Resume(_initializedWebView);
     }
@@ -276,11 +315,16 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         if (_initializedWebView is not null)
             _initializedWebView.NavigationCompleted -= WebView_Loaded;
 
-        BlazorOverlay?.Close();
+        _pendingOverlayInitialization?.Abort();
+        _pendingOverlayInitialization = null;
+        lock (_overlayInitializationLock)
+        {
+            _blazorOverlay?.Close();
+            _blazorOverlay = null;
+        }
         // WebView may not be created if startup failed or exit happened before init.
         blazorWebView?.WebView?.Dispose();
         Resources.Remove("services");
         _serviceProvider.Dispose();
-        BlazorOverlay = null!;
     }
 }

@@ -6,7 +6,9 @@ user report of "it feels slow" that you cannot reproduce.
 ## Why it exists
 
 Scan and startup slowness is environment-dependent: display count, refresh rate,
-DPI, virtual-screen size, and WebView2 version all change the outcome. Reproducing
+DPI, virtual-screen size, and WebView2 version all change the outcome. Startup's
+`total` ends at the first main-window paint; deferred overlay/catalog/engine work
+continues in the same trace only while that snapshot remains open. Reproducing
 a user's machine is usually impossible, so the scanner measures itself and puts the
 result where the user already looks — the ordinary log.
 
@@ -84,10 +86,11 @@ ones:
 | Name | Meaning |
 | --- | --- |
 | `overlay.shown` / `overlay.hidden` | Overlay window show/hide cycles |
+| `overlay.bootstrap_ms` | Deferred passive-overlay construction time after first paint |
 | `overlay.surface_px` | Composited overlay area; the overlay spans the whole virtual screen |
 | `webview.resume_from_suspended` | Renderer un-freezes, each one on a tooltip's critical path |
 | `webview.suspend_succeeded` / `webview.suspend_failed` | Renderer suspend outcomes |
-| `window.fit_resize` | Main-window height writes; each resizes the WebView2 surface |
+| `window.fit_resize` | Main-window height writes; each resizes the WebView2 surface (content-fit animation is intentionally capped near 30 Hz) |
 | `window.fit_animation_started` | Content-fit animations begun |
 | `engine.rebuild_on_scan_path` | Engine rebuilds that happened inside a scan |
 | `scan.throttled` | Scans dropped by the cooldown |

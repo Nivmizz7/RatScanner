@@ -68,6 +68,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
     private readonly ScanDiagnosticStore _scanDiagnostics = new();
     private int _trackerRefreshInProgress;
     private bool _ratEyeReady;
+    private bool _runtimeInitialized;
     private bool _disposed;
 
     /// <summary>
@@ -96,7 +97,7 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     public TarkovTrackerDB TarkovTrackerDB;
 
-    internal RatEyeEngine RatEyeEngine;
+    internal RatEyeEngine RatEyeEngine = null!;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -104,18 +105,16 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
     private RatScannerMain()
     {
-        // This constructor currently runs on the WPF dispatcher (PageSwitcher ->
-        // BlazorUI -> BlazorOverlay -> MenuVM), so every span below is time the UI
-        // is frozen. Keep it measured until that ordering changes.
+        // This constructor is resolved after the main window's first paint, when the
+        // deferred passive overlay asks for MenuVM. Cache parsing remains synchronous
+        // but is no longer part of time-to-first-frame; RatEye setup then runs on a
+        // worker thread so the dispatcher stays responsive.
         PerfTrace startup = PerfTraceStore.Startup;
         using PerfTrace.PerfScope constructorScope = startup.Measure("startup.ratscanner_main_ctor");
 
         _instance = this;
         _scanRefreshTimer = new Timer(RefreshOverlay, null, Timeout.Infinite, Timeout.Infinite);
         ItemScans.Changed += OnItemScansChanged;
-
-        // Remove old log
-        Logger.Clear();
 
         Logger.LogInfo("----- " + RatConfig.FullVersionLabel + " -----");
         _ = CheckForUpdatesAsync();
@@ -175,14 +174,43 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
 
         Logger.LogInfo("UI Ready!");
 
-        Logger.LogInfo("Initializing RatEye...");
-        using (startup.Measure("startup.rateye_setup"))
-            SetupRatEye();
         TarkovDevAPI.ItemsCacheUpdated += OnItemsCacheUpdated;
+        _ = InitializeRatEyeAsync(cacheRefreshNeeded, _lifetimeCancellation.Token);
+    }
 
-        if (cacheRefreshNeeded)
-            _ = RefreshApiCacheAsync();
-        _ = InitializeRuntimeAsync(_lifetimeCancellation.Token);
+    private async Task InitializeRatEyeAsync(bool cacheRefreshNeeded, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Give WPF/WebView2 one frame to present the shell before loading OCR
+            // native libraries and building the item database. The engine remains
+            // unavailable until the replacement is published atomically by SetupRatEye.
+            await System.Windows.Application.Current.Dispatcher.InvokeAsync(
+                static () => { },
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                cancellationToken
+            );
+
+            cancellationToken.ThrowIfCancellationRequested();
+            Logger.LogInfo("Initializing RatEye...");
+            await Task.Run(SetupRatEye, cancellationToken).ConfigureAwait(false);
+
+            if (cacheRefreshNeeded)
+                _ = RefreshApiCacheAsync();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            Logger.LogWarning("RatEye initialization failed; scanning will remain unavailable.", exception);
+            if (cacheRefreshNeeded)
+                _ = RefreshApiCacheAsync();
+        }
+        finally
+        {
+            // Tracker progress and timers are independent of OCR. HotkeyManager gates
+            // its live registrations until SetupRatEye publishes engine readiness.
+            _ = InitializeRuntimeAsync(cancellationToken);
+        }
     }
 
     private static async Task RefreshApiCacheAsync()
@@ -204,14 +232,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         try
         {
             await Task.Delay(1000, cancellationToken);
-            Logger.LogInfo("Loading TarkovTracker data...");
-            await ActivateTrackerModeAsync(RatConfig.GameMode, cancellationToken);
 
+            // Install periodic refresh independently of the initial activation.
+            // A settings change can supersede/cancel that request, but must not leave
+            // the session without future tracker refreshes.
             cancellationToken.ThrowIfCancellationRequested();
             Logger.LogInfo("Setting up timer routines...");
             lock (_tarkovTrackerTimerLock)
             {
-                if (!_disposed)
+                if (!_disposed && !_runtimeInitialized)
                 {
                     _tarkovTrackerDBRefreshTimer = new Timer(
                         RefreshTarkovTrackerDB,
@@ -222,15 +251,24 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
                 }
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
-            Logger.LogInfo("Enabling hotkeys...");
-            HotkeyManager.RegisterHotkeys();
-            Logger.LogInfo("Ready!");
+            Logger.LogInfo("Loading TarkovTracker data...");
+            await ActivateTrackerModeAsync(RatConfig.GameMode, cancellationToken);
+            Logger.LogInfo("Runtime services initialized.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception e)
         {
             Logger.LogWarning("Runtime initialization failed; RatScanner will continue in degraded mode.", e);
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested && !_disposed)
+            {
+                // Tracker/network failures must not gate local scanning.
+                _runtimeInitialized = true;
+                UpdateHotkeyReadiness();
+                Logger.LogInfo(_ratEyeReady ? "Ready!" : "Runtime ready; scanner engine unavailable.");
+            }
         }
     }
 
@@ -360,7 +398,15 @@ public sealed class RatScannerMain : INotifyPropertyChanged, IDisposable
         // Attributed to whichever trace is open: the startup timeline during boot, or
         // the in-flight scan when a viewport change forces a mid-scan rebuild.
         PerfTraceStore.RecordScanStage(PerfTraceStore.CurrentScanSequence, "engine.rebuild", elapsedMs);
+        UpdateHotkeyReadiness();
         Logger.LogDebug($"SetupRatEye: completed in {elapsedMs:F1} ms");
+    }
+
+    private void UpdateHotkeyReadiness()
+    {
+        if (_disposed)
+            return;
+        HotkeyManager.SetEngineReady(_runtimeInitialized && _ratEyeReady);
     }
 
     private static RatEye.Config GetRatEyeConfig(bool highlighted = true)

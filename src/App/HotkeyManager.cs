@@ -9,7 +9,9 @@ namespace RatScanner;
 internal sealed class HotkeyManager : IDisposable
 {
     private readonly RatScannerMain _owner;
+    private readonly object _registrationLock = new();
     private long _last_mouse_click = 0;
+    private bool _engineReady;
     private bool _disposed;
 
     internal ActiveHotkey NameScanHotkey;
@@ -36,10 +38,25 @@ internal sealed class HotkeyManager : IDisposable
     [MemberNotNull(nameof(NameScanHotkey), nameof(IconScanHotkey))]
     internal void RegisterHotkeys()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        lock (_registrationLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            RegisterHotkeysLocked();
+        }
+    }
 
-        // Unregister hotkeys to prevent multiple listeners for the same hotkey
-        UnregisterHotkeys();
+    [MemberNotNull(nameof(NameScanHotkey), nameof(IconScanHotkey))]
+    private void RegisterHotkeysLocked()
+    {
+        // Unregister hotkeys to prevent multiple listeners for the same hotkey.
+        // Settings can request a rebuild while RatEye is still initializing; keep
+        // the live hooks disabled until the owner explicitly publishes readiness.
+        UnregisterHotkeysLocked();
+        if (!_engineReady)
+        {
+            CreateDisabledHotkeys();
+            return;
+        }
 
         // IMPORTANT: pass enabled/suppressHotkey explicitly by name. Without
         // the named argument, C# resolves to the 3-param constructor
@@ -63,10 +80,40 @@ internal sealed class HotkeyManager : IDisposable
         );
     }
 
+    internal void SetEngineReady(bool ready)
+    {
+        lock (_registrationLock)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_engineReady == ready)
+                return;
+
+            _engineReady = ready;
+            RegisterHotkeysLocked();
+        }
+    }
+
+    [MemberNotNull(nameof(NameScanHotkey), nameof(IconScanHotkey))]
+    private void CreateDisabledHotkeys()
+    {
+        IconScanHotkey = new ActiveHotkey(IconScan.Hotkey, OnIconScanHotkey, enabled: false, suppressHotkey: false);
+        NameScanHotkey = new ActiveHotkey(
+            new Hotkey(null, new[] { MouseButton.Left }),
+            OnNameScanHotkey,
+            enabled: false
+        );
+    }
+
     /// <summary>
     /// Unregister hotkeys
     /// </summary>
     internal void UnregisterHotkeys()
+    {
+        lock (_registrationLock)
+            UnregisterHotkeysLocked();
+    }
+
+    private void UnregisterHotkeysLocked()
     {
         NameScanHotkey?.Dispose();
         IconScanHotkey?.Dispose();
@@ -87,8 +134,15 @@ internal sealed class HotkeyManager : IDisposable
         // thread affinity — only run them from an explicit Dispose(), never the finalizer.
         if (disposing)
         {
-            UnregisterHotkeys();
-            UserActivityHelper.Stop(true, true, false);
+            lock (_registrationLock)
+            {
+                if (_disposed)
+                    return;
+                _disposed = true;
+                UnregisterHotkeysLocked();
+                UserActivityHelper.Stop(true, true, false);
+            }
+            return;
         }
         _disposed = true;
     }
