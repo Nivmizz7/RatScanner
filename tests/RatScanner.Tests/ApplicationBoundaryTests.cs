@@ -96,7 +96,11 @@ public sealed class ApplicationBoundaryTests
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        public void RebuildEngine() => RebuildCount++;
+        public Task RebuildEngineAsync(CancellationToken cancellationToken = default)
+        {
+            RebuildCount++;
+            return Task.CompletedTask;
+        }
 
         public ScanDiagnosticExportResult ExportLastScanDiagnostics() => throw new NotSupportedException();
 
