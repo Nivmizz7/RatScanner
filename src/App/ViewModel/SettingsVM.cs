@@ -348,25 +348,6 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             token => RatConfig.Tracking.TarkovTracker.SetTokenForMode(mode, token)
         );
 
-    internal Task<SettingSaveResult> SetTarkovTrackerIoTokenAsync(string value) =>
-        SaveAsync(
-            "TarkovTracker.IO.PvP",
-            "TarkovTracker.io API key",
-            value,
-            () => RatConfig.Tracking.TarkovTracker.IoToken,
-            token => RatConfig.Tracking.TarkovTracker.IoToken = token
-        );
-
-    internal Task<SettingSaveResult> SetTarkovTrackerPvpSourceAsync(PvpSource value) =>
-        SaveAsync(
-            "TarkovTracker.PvpSource",
-            "PvP tracker source",
-            value,
-            () => RatConfig.Tracking.TarkovTracker.PvpSource,
-            source => RatConfig.Tracking.TarkovTracker.PvpSource = source,
-            _ => RefreshTrackerInBackground("Unable to refresh tracker progress after changing the PvP tracker source.")
-        );
-
     internal Task<SettingSaveResult> SetShowTarkovTrackerTeamAsync(bool value) =>
         SaveAsync(
             nameof(RatConfig.Tracking.TarkovTracker.ShowTeam),
@@ -377,9 +358,8 @@ internal class SettingsVM : INotifyPropertyChanged, IDisposable
             _ => RefreshTrackerInBackground("Unable to refresh tracker progress after changing team visibility.")
         );
 
-    // The tracker database only re-reads the active token/endpoint on activation, so
-    // runtime-affecting changes (PvP source, team visibility) must re-activate it
-    // explicitly instead of waiting for the periodic refresh.
+    // The tracker database only re-reads runtime-affecting settings on activation,
+    // so team visibility changes must re-activate it instead of waiting for the periodic refresh.
     //
     // Fire-and-forget is safe here: TarkovTrackerDB.Configure assigns a monotonically
     // increasing generation to each configuration, and stale async operations check

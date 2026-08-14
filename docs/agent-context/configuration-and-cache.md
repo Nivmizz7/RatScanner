@@ -23,7 +23,7 @@ Logical groups (nested static classes):
 | `ToolTip` | duration, digit grouping |
 | `UserInterface` | UI language |
 | `MinimalUi` | field visibility, opacity |
-| `Tracking` / `TarkovTracker` | DPAPI-protected PvP/PvE `.org` keys, legacy PvP-only `.io` key, team, refresh |
+| `Tracking` / `TarkovTracker` | DPAPI-protected TarkovTracker.org PvP/PvE/Seasonal keys, team, refresh |
 | Other top-level | game mode, always on top, tray, TTLs, window position/mode |
 
 Game display preferences (monitor id, custom resolution/scale) are also on `RatConfig` and refreshed through `Display/*` services (`WindowsGameDisplayService`, `GameDisplayPreferencesStore`).
@@ -35,6 +35,7 @@ Game display preferences (monitor id, custom resolution/scale) are also on `RatC
 - Unsupported or unversioned config â†’ preserve original bytes, best-effort migrate readable fields, and rewrite only after the backup succeeds.
 - Backups are never overwritten; repeated migrations choose the next available suffix.
 - Prefer explicit version bumps when field semantics change, and add migration regression coverage.
+- Config version 4 retires TarkovTracker.io: migration preserves `.org` mode keys, ignores legacy `.io` credentials, and removes obsolete `IoToken`, `PvpSource`, `Token`, and `Backend` values from the rewritten config.
 
 ## Path constants
 
@@ -79,11 +80,11 @@ TTL policy lives in `TarkovDevAPI` using `RatConfig` TTL fields and file mtime â
 - TarkovTracker API keys are never saved while typing. The user explicitly tests a key; only successful mode and permission validation commits it.
 - There is no global Settings Save/Cancel bar.
 
-Game mode is exposed as an immediate PVP/PVE selector: the segmented `GameModeSwitch` in the sidebar scanner section is the single authoritative control; when the sidebar is collapsed or hidden, a compact `GameModeIndicator` beside search shows the current mode and opens the sidebar to change it. A switch refreshes the selected mode's catalog caches, rebuilds RatEye item data, updates current scan items, selects the matching tracker credential/progress cache, and persists `RatConfig.GameMode`; failure restores the previous mode.
+Game mode is exposed as an immediate PvP/PvE/Seasonal selector: the `GameModeSwitch` dropdown in the sidebar scanner section is the single authoritative control; when the sidebar is collapsed or hidden, a compact `GameModeIndicator` beside search shows the current mode and opens the sidebar to change it. A switch refreshes the selected mode's catalog caches, rebuilds RatEye item data, updates current scan items, selects the matching tracker credential/progress cache, and persists `RatConfig.GameMode`; failure restores the previous mode.
 
 ## Advanced overrides
 
-Hotkeys, tray minimize, always-on-top, game mode (regular/PVE), and mode-specific tracker credentials are first-class settings. Prefer extending existing sections over inventing side channel files.
+Hotkeys, tray minimize, always-on-top, game mode (PvP/PvE/Seasonal), and mode-specific tracker credentials are first-class settings. Prefer extending existing sections over inventing side channel files.
 
 ## Agent rules
 

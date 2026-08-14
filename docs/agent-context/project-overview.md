@@ -14,7 +14,7 @@ It does **not** read game memory or inject into the client.
 4. **Recent scans** — five deduplicated scan-time snapshots retained for the session and shown on the Scan page.
 5. **Overlays** — non-interactive tooltip overlay; interactive search/map overlay via hotkey.
 6. **Minimal UI** — compact always-on-top window with configurable fields.
-7. **Tracking (optional)** — mode-specific TarkovTracker.org PvP/PvE keys (or the legacy PvP-only TarkovTracker.io key) enable quest/hideout need hints and optional team progress.
+7. **Tracking (optional)** — mode-specific TarkovTracker.org PvP/PvE/Seasonal keys enable quest/hideout need hints and optional team progress.
 8. **Updates** — GitHub Releases on the fork (`GitHubUpdateService`), not upstream updater CDN.
 
 ## Supported platform

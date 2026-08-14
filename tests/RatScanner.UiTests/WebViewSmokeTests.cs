@@ -149,19 +149,8 @@ public sealed class WebViewSmokeTests
             Assert.Equal(1, await manageApiKeysLink.CountAsync());
             Assert.Equal("https://tarkovtracker.org", await manageApiKeysLink.GetAttributeAsync("href"));
             Assert.Equal(0, await page.Locator(".tracker-manage-link").CountAsync());
-            Assert.Equal(0, await page.Locator(".tracker-mode-hint").CountAsync());
-
-            ILocator ioSourceCard = page.Locator(".source-card").Filter(new() { HasText = "TarkovTracker.io" });
-            await ioSourceCard.ClickAsync();
-            ILocator manageLegacyKeyLink = page.GetByRole(
-                AriaRole.Link,
-                new() { Name = "Manage TarkovTracker.io key", Exact = true }
-            );
-            await AssertVisibleAsync(manageLegacyKeyLink);
-            Assert.Equal("https://tarkovtracker.io", await manageLegacyKeyLink.GetAttributeAsync("href"));
-
-            await page.Locator(".source-card").Filter(new() { HasText = "TarkovTracker.org" }).ClickAsync();
-            await manageLegacyKeyLink.WaitForAsync(new() { State = WaitForSelectorState.Detached });
+            Assert.Equal(0, await page.Locator(".source-card").CountAsync());
+            Assert.Equal(0, await page.GetByText("TarkovTracker.io", new() { Exact = false }).CountAsync());
             await AssertNoHorizontalOverflowAsync(page, "desktop tracking settings");
             await seasonalTrackingHeading.ScrollIntoViewIfNeededAsync();
             await page.ScreenshotAsync(

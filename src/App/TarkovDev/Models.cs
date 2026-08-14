@@ -11,13 +11,6 @@ public enum GameMode
     Seasonal,
 }
 
-/// <summary>Which TarkovTracker backend supplies PvP progress.</summary>
-public enum PvpSource
-{
-    Org = 0,
-    Io = 1,
-}
-
 /// <summary>
 /// App-facing item model populated from <c>json.tarkov.dev</c> (not GraphQL).
 /// Field set is intentionally slim — only what the scanner UI / tracking needs today.

@@ -17,7 +17,6 @@ using RatStash;
 using GameMode = RatScanner.TarkovDev.GameMode;
 using MessageBox = System.Windows.MessageBox;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
-using PvpSource = RatScanner.TarkovDev.PvpSource;
 using Size = System.Drawing.Size;
 using TarkovItem = RatScanner.TarkovDev.Item;
 using Timer = System.Threading.Timer;
@@ -352,17 +351,6 @@ public sealed class RatScannerMain
             cancellationToken
         );
 
-    internal Task<TrackerValidationResult> ValidateTarkovTrackerIoKeyAsync(
-        string token,
-        CancellationToken cancellationToken = default
-    ) =>
-        TarkovTrackerDB.ValidateCandidateAsync(
-            token,
-            RatConfig.Tracking.TarkovTracker.IoEndpoint,
-            GameMode.Regular,
-            cancellationToken
-        );
-
     Task ITrackerService.ActivateModeAsync(GameMode mode, CancellationToken cancellationToken) =>
         ActivateTrackerModeAsync(mode, cancellationToken);
 
@@ -372,26 +360,8 @@ public sealed class RatScannerMain
         CancellationToken cancellationToken
     ) => ValidateTarkovTrackerOrgKeyAsync(mode, token, cancellationToken);
 
-    Task<TrackerValidationResult> ITrackerService.ValidateIoKeyAsync(
-        string token,
-        CancellationToken cancellationToken
-    ) => ValidateTarkovTrackerIoKeyAsync(token, cancellationToken);
-
-    private static (string Token, string Endpoint) GetActiveTrackerConfiguration(GameMode mode)
-    {
-        if (mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource == PvpSource.Io)
-        {
-            string ioToken = RatConfig.Tracking.TarkovTracker.IoToken;
-            if (!string.IsNullOrWhiteSpace(ioToken))
-                return (ioToken, RatConfig.Tracking.TarkovTracker.IoEndpoint);
-            // Configured for Io but no Io token: fall back to org PvP if present
-            // so a misconfigured source never silently disables tracking.
-        }
-        string orgToken = RatConfig.Tracking.TarkovTracker.TokenForMode(mode);
-        if (!string.IsNullOrWhiteSpace(orgToken))
-            return (orgToken, RatConfig.Tracking.TarkovTracker.OrgEndpoint);
-        return ("", RatConfig.Tracking.TarkovTracker.OrgEndpoint);
-    }
+    private static (string Token, string Endpoint) GetActiveTrackerConfiguration(GameMode mode) =>
+        (RatConfig.Tracking.TarkovTracker.TokenForMode(mode), RatConfig.Tracking.TarkovTracker.OrgEndpoint);
 
     internal void SetupRatEye()
     {

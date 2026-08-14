@@ -73,7 +73,7 @@ Intentional dual path (documented on `TarkovDevAPI`):
 
 ## TarkovTracker
 
-- Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP, PvE, and Seasonal PvP keys plus a legacy TarkovTracker.io key. The `.io` key is persistent-PvP-only and is inactive in PvE and Seasonal modes.
+- Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP, PvE, and Seasonal PvP keys. TarkovTracker.io is retired and unsupported; config migration removes its obsolete credential and source fields.
 - `TarkovTrackerDB` holds only the active mode's progress while retaining separate in-memory last-good snapshots by mode. Configuration generation and cancellation prevent stale PvP/PvE/Seasonal responses from crossing modes.
 - API keys are validated explicitly against `/token`: RatScanner requires `GP` (progress read), uses `TP` only when team display is enabled and available, and does not require `WP` because the app does not write progress.
 - Periodic refresh (`RefreshProgressAsync`, every 30 min) skips the redundant `/token` call and only fetches `/progress` (or `/team/progress`). If the progress call rejects the key, `_token` is cleared and the next refresh falls back to a full `/token` + `/progress` cycle to correct the connection state. Explicit user actions (mode switch, settings save, key validation) always use the full `InitAsync` flow.

@@ -1,49 +1,10 @@
 @using System.Threading
 @using RatScanner.Runtime
 @using GameMode = RatScanner.TarkovDev.GameMode
-@using PvpSource = RatScanner.TarkovDev.PvpSource
 @implements IDisposable
 <MudDialog ContentClass="change-connection-dialog">
     <DialogContent>
         <MudText Typo="Typo.body2" Color="Color.Surface" Class="mb-3">@Localizer["ChangeConnectionSafety"]</MudText>
-
-        @if (ShowProviderChoice)
-        {
-            <p class="source-label">@Localizer["ConnectionSource"]</p>
-            <MudRadioGroup T="PvpSource"
-                           Value="@_draftSource"
-                           ValueChanged="OnDraftSourceChanged"
-                           Class="source-cards">
-                <div class="@(_draftSource == PvpSource.Org ? "source-card source-card-selected" : "source-card")"
-                         @onclick="() => OnDraftSourceChanged(PvpSource.Org)">
-                    <MudRadio T="PvpSource"
-                              Value="PvpSource.Org"
-                              Disabled="_testing"
-                              @onclick:stopPropagation="true" />
-                    <div class="source-card-body">
-                        <div class="source-card-title">
-                            @Localizer["SourceOrg"]
-                            <span class="source-badge source-badge-recommended">@Localizer["SourceOrgRecommended"]</span>
-                        </div>
-                        <div class="source-card-detail">@Localizer["SourceOrgSupports"]</div>
-                    </div>
-                </div>
-                <div class="@(_draftSource == PvpSource.Io ? "source-card source-card-selected" : "source-card")"
-                         @onclick="() => OnDraftSourceChanged(PvpSource.Io)">
-                    <MudRadio T="PvpSource"
-                              Value="PvpSource.Io"
-                              Disabled="_testing"
-                              @onclick:stopPropagation="true" />
-                    <div class="source-card-body">
-                        <div class="source-card-title">
-                            @Localizer["SourceIo"]
-                            <span class="source-badge source-badge-legacy">@Localizer["SourceIoPvpOnly"]</span>
-                        </div>
-                        <div class="source-card-detail">@Localizer["SourceIoSupports"]</div>
-                    </div>
-                </div>
-            </MudRadioGroup>
-        }
 
         <MudTextField T="string"
                       @bind-Value="_tokenDraft"
@@ -64,8 +25,8 @@
             <p class="inline-error" role="alert">@_error</p>
         }
 
-        <MudLink Href="@ManageKeyUrl" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
-            @(IsIoDraft ? Localizer["ManageLegacyApiKey"] : ManageKeyLabel)
+        <MudLink Href="@Constants.Links.TarkovTracker" Target="_blank" Typo="Typo.body2" Class="tracker-manage-link">
+            @Localizer["ManageApiKeys"]
         </MudLink>
     </DialogContent>
     <DialogActions>
@@ -91,16 +52,7 @@
     public GameMode Mode { get; set; }
 
     [Parameter]
-    public PvpSource CurrentSource { get; set; }
-
-    [Parameter]
-    public bool ShowProviderChoice { get; set; }
-
-    [Parameter]
     public string ModeLabel { get; set; } = "";
-
-    [Parameter]
-    public string ManageKeyLabel { get; set; } = "";
 
     [Inject]
     SettingsVM SettingsVM { get; set; } = null!;
@@ -109,41 +61,15 @@
     LocalizationService Localizer { get; set; } = null!;
 
     [Inject]
-    ISnackbar Snackbar { get; set; } = null!;
-
-    [Inject]
     ITrackerService TrackerService { get; set; } = null!;
 
-    private PvpSource _draftSource;
     private string _tokenDraft = "";
     private string? _error;
     private bool _tokenVisible;
     private bool _testing;
     private CancellationTokenSource? _validation;
 
-    protected override void OnInitialized()
-    {
-        _draftSource = CurrentSource;
-    }
-
     private bool CanSubmit => !_testing && !string.IsNullOrWhiteSpace(_tokenDraft);
-
-    private bool IsIoDraft => ShowProviderChoice && _draftSource == PvpSource.Io;
-
-    // Compute the manage-key URL from the draft source so switching providers
-    // inside the dialog updates the link. PvE always uses the org site.
-    private string ManageKeyUrl => IsIoDraft
-        ? Constants.Links.TarkovTrackerIo
-        : Constants.Links.TarkovTracker;
-
-    private void OnDraftSourceChanged(PvpSource source)
-    {
-        if (_testing)
-            return;
-
-        _draftSource = source;
-        _error = null;
-    }
 
     private async Task HandleKeyDownAsync(KeyboardEventArgs args)
     {
@@ -164,10 +90,6 @@
         if (string.IsNullOrWhiteSpace(candidate) || _testing)
             return;
 
-        // Snapshot the provider for the entire asynchronous operation. Even if
-        // a future UI change permits source edits while validation is running,
-        // the validated provider and persisted credential cannot diverge.
-        bool submitToIo = IsIoDraft;
         _validation?.Cancel();
         _validation?.Dispose();
         CancellationTokenSource cancellation = new();
@@ -176,9 +98,11 @@
         _error = null;
         try
         {
-            TrackerValidationResult result = submitToIo
-                ? await TrackerService.ValidateIoKeyAsync(candidate, cancellation.Token)
-                : await TrackerService.ValidateOrgKeyAsync(Mode, candidate, cancellation.Token);
+            TrackerValidationResult result = await TrackerService.ValidateOrgKeyAsync(
+                Mode,
+                candidate,
+                cancellation.Token
+            );
             cancellation.Token.ThrowIfCancellationRequested();
             if (!result.Succeeded)
             {
@@ -186,61 +110,19 @@
                 return;
             }
 
-            SettingSaveResult saved;
-            if (submitToIo)
-            {
-                string previousIo = RatConfig.Tracking.TarkovTracker.IoToken;
-                saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
-                    () => SettingsVM.SetTarkovTrackerIoTokenAsync(candidate),
-                    () => SettingsVM.SetTarkovTrackerIoTokenAsync(previousIo),
-                    cancellation.Token
-                );
-                if (saved.Succeeded && RatConfig.Tracking.TarkovTracker.PvpSource != PvpSource.Io)
-                {
-                    SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Io);
-                    if (!sourceResult.Succeeded)
-                    {
-                        // Roll back the token so config stays consistent with the
-                        // unchanged source. Fail closed: keep dialog open with error.
-                        _ = await SettingsVM.SetTarkovTrackerIoTokenAsync(previousIo);
-                        _error = Localizer["CredentialSaveFailed"];
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                string previousOrg = RatConfig.Tracking.TarkovTracker.TokenForMode(Mode);
-                saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
-                    () => SettingsVM.SetTarkovTrackerOrgTokenAsync(Mode, candidate),
-                    () => SettingsVM.SetTarkovTrackerOrgTokenAsync(Mode, previousOrg),
-                    cancellation.Token
-                );
-                if (saved.Succeeded && Mode == GameMode.Regular && RatConfig.Tracking.TarkovTracker.PvpSource != PvpSource.Org)
-                {
-                    SettingSaveResult sourceResult = await SettingsVM.SetTarkovTrackerPvpSourceAsync(PvpSource.Org);
-                    if (!sourceResult.Succeeded)
-                    {
-                        // Roll back the token so config stays consistent with the
-                        // unchanged source. Fail closed: keep dialog open with error.
-                        _ = await SettingsVM.SetTarkovTrackerOrgTokenAsync(Mode, previousOrg);
-                        _error = Localizer["CredentialSaveFailed"];
-                        return;
-                    }
-                }
-            }
+            string previousToken = RatConfig.Tracking.TarkovTracker.TokenForMode(Mode);
+            SettingSaveResult saved = await CredentialPersistenceCoordinator.PersistCandidateAsync(
+                () => SettingsVM.SetTarkovTrackerOrgTokenAsync(Mode, candidate),
+                () => SettingsVM.SetTarkovTrackerOrgTokenAsync(Mode, previousToken),
+                cancellation.Token
+            );
             if (!saved.Succeeded)
             {
                 _error = Localizer["CredentialSaveFailed"];
                 return;
             }
 
-            // Activate only when this credential drives the active game mode.
-            // At this point PvpSource always equals the snapshotted submission
-            // source: the source change above either succeeded or was skipped
-            // because they already matched, so only the game-mode check matters.
-            bool drivesActiveMode = RatConfig.GameMode == Mode;
-            if (drivesActiveMode)
+            if (RatConfig.GameMode == Mode)
                 await TrackerService.ActivateModeAsync(Mode, cancellation.Token);
 
             DialogInstance.Close(DialogResult.Ok(true));
@@ -270,9 +152,6 @@
         _ => Localizer["CredentialUnexpectedResponse"],
     };
 
-    // Cancel any in-flight validation/persist when the dialog is dismissed
-    // via Escape, backdrop click, or title-bar close — not just the Cancel
-    // button. Prevents a dismissed replace from mutating config after close.
     public void Dispose()
     {
         _validation?.Cancel();

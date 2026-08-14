@@ -21,7 +21,6 @@ public static class Constants
         public const string OfficialWebsite = "https://ratscanner.com/";
         public const string TarkovDev = "https://tarkov.dev";
         public const string TarkovTracker = "https://tarkovtracker.org";
-        public const string TarkovTrackerIo = "https://tarkovtracker.io";
     }
 
     public static class Icon
