@@ -23,6 +23,8 @@ The App owns capture, hotkeys, mapping to tarkov.dev catalog models, and UI. The
 3. Swaps engine under name/icon locks; disposes previous instance.
 4. Rebuilds when items cache updates or settings that affect processing change.
 
+`EngineLifecycleGate` serializes engine construction and owns the publication/stop race. Shutdown marks publication stopped and disposes the currently published engine without waiting for a synchronous build already in progress. If that build later completes, its replacement is disposed instead of being published. This keeps shutdown prompt without requiring RatEye to depend on App lifetime concerns or claiming that a running constructor can be cancelled.
+
 Scan entrypoints (`NameScan`, `IconScan`, `NameScanScreen`) call `RatEyeEngine.NewInspection` / inventory icon processing, then wrap results in `ItemNameScan` / `ItemIconScan`. `NameScan` and `IconScan` are rate-limited by a shared `ScanThrottle` (`RatConfig.NameScan.CooldownMs`, default 300 ms and loaded once at startup) using a monotonic clock, so hotkey spam or wall-clock corrections cannot disrupt the OCR pipeline and overlay compositor; `NameScanScreen` is exempt because it is opt-in and already debounced by the 500 ms auto-scan click window.
 
 Lock order (App): name scan (0) then icon scan (1).

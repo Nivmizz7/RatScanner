@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
@@ -68,7 +67,7 @@ public sealed class RatScannerMain
     private Timer? _scanRefreshTimer;
     private readonly object _scanRefreshTimerLock = new();
     private readonly object _tarkovTrackerTimerLock = new();
-    private readonly object _ratEyeSetupLock = new();
+    private readonly object _disposeLock = new();
     private readonly object _trackerConfigurationLock = new();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private readonly ScanDiagnosticStore _scanDiagnostics = new();
@@ -102,6 +101,7 @@ public sealed class RatScannerMain
     private readonly ScanThrottle _scanThrottle = new(RatConfig.NameScan.CooldownMs);
 
     private readonly RebuildCoordinator _rebuildCoordinator;
+    private readonly EngineLifecycleGate<RatEyeEngine> _engineLifecycle = new();
 
     public TarkovTrackerDB TarkovTrackerDB;
 
@@ -212,6 +212,7 @@ public sealed class RatScannerMain
                 _ = RefreshApiCacheAsync();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (_disposed) { }
         catch (Exception exception)
         {
             Logger.LogWarning("RatEye initialization failed; scanning will remain unavailable.", exception);
@@ -392,31 +393,41 @@ public sealed class RatScannerMain
         return ("", RatConfig.Tracking.TarkovTracker.OrgEndpoint);
     }
 
-    [MemberNotNull(nameof(RatEyeEngine))]
     internal void SetupRatEye()
     {
         double startedAtMs = PerfTrace.MonotonicMs();
-        lock (_ratEyeSetupLock)
+        bool hasItems = false;
+        bool wasPublished = _engineLifecycle.BuildAndPublish(
+            () =>
+            {
+                Config.LogDebug = RatConfig.LogDebug;
+                Config.Path.LogFile = "RatEyeLog.txt";
+                Config.Path.TesseractLibSearchPath = AppDomain.CurrentDomain.BaseDirectory;
+                Database database = RatStashDatabaseFromTarkovDev(out hasItems);
+                return new RatEyeEngine(GetRatEyeConfig(), database);
+            },
+            replacement =>
+            {
+                RatEyeEngine? previous = null;
+                lock (NameScanLock)
+                {
+                    lock (IconScanLock)
+                    {
+                        if (RatEyeEngine is not null)
+                            previous = RatEyeEngine;
+                        RatEyeEngine = replacement;
+                        _ratEyeReady = hasItems;
+                    }
+                }
+
+                return previous;
+            }
+        );
+
+        if (!wasPublished)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-
-            Config.LogDebug = RatConfig.LogDebug;
-            Config.Path.LogFile = "RatEyeLog.txt";
-            Config.Path.TesseractLibSearchPath = AppDomain.CurrentDomain.BaseDirectory;
-            Database database = RatStashDatabaseFromTarkovDev(out bool hasItems);
-            RatEyeEngine replacement = new(GetRatEyeConfig(), database);
-            RatEyeEngine? previous = null;
-            lock (NameScanLock)
-            {
-                lock (IconScanLock)
-                {
-                    if (RatEyeEngine is not null)
-                        previous = RatEyeEngine;
-                    RatEyeEngine = replacement;
-                    _ratEyeReady = hasItems;
-                }
-            }
-            previous?.Dispose();
+            return;
         }
 
         double elapsedMs = PerfTrace.MonotonicMs() - startedAtMs;
@@ -989,7 +1000,17 @@ public sealed class RatScannerMain
             PerfTraceStore.Increment("engine.rebuild_on_scan_path");
             PerfTraceStore.NoteScan(PerfTraceStore.CurrentScanSequence, "engineRebuild", "yes");
             Logger.LogDebug("RefreshGameDisplayForScan: calling SetupRatEye (may block on locks)...");
-            SetupRatEye();
+            try
+            {
+                SetupRatEye();
+            }
+            catch (ObjectDisposedException) when (_disposed)
+            {
+                // Shutdown owns engine teardown now. The scan entrypoint still holds its
+                // scan lock, so the currently published engine remains valid until that
+                // scan returns and disposal can acquire the same lock.
+                return;
+            }
             Logger.LogDebug("RefreshGameDisplayForScan: SetupRatEye complete");
         }
     }
@@ -1063,11 +1084,23 @@ public sealed class RatScannerMain
 
     public void Dispose()
     {
-        lock (_ratEyeSetupLock)
+        lock (_disposeLock)
         {
             if (_disposed)
                 return;
             _disposed = true;
+            _engineLifecycle.Stop(() =>
+            {
+                lock (NameScanLock)
+                {
+                    lock (IconScanLock)
+                    {
+                        RatEyeEngine?.Dispose();
+                        RatEyeEngine = null!;
+                        _ratEyeReady = false;
+                    }
+                }
+            });
             TarkovDevAPI.ItemsCacheUpdated -= OnItemsCacheUpdated;
             _lifetimeCancellation.Cancel();
 
@@ -1085,16 +1118,9 @@ public sealed class RatScannerMain
             ItemScans.Changed -= OnItemScansChanged;
             HotkeyManager.Dispose();
             TarkovTrackerDB.Dispose();
-            lock (NameScanLock)
-            {
-                lock (IconScanLock)
-                {
-                    RatEyeEngine?.Dispose();
-                    _ratEyeReady = false;
-                }
-            }
             _scanDiagnostics.Dispose();
             _rebuildCoordinator.Dispose();
+            _engineLifecycle.Dispose();
             _lifetimeCancellation.Dispose();
         }
     }

@@ -10,7 +10,7 @@ Single Windows process (`StartupObject` = `RatScanner.Program`):
 4. `PageSwitcher` loads config, shows `BlazorUI`, tray icon, jump list, window mode restore.
 5. `BlazorUI` builds DI (`ServiceCollection`), hosts the main `BlazorWebView`, and defers the passive overlay WebView until WPF application-idle after the first main-shell paint; both share that provider.
 6. `RatScannerMain` (lazy singleton) is first resolved by the deferred overlay after the main shell's first paint; it loads the scanner-critical API cache, then builds RatEye on a worker thread. TarkovTracker initializes independently; scan hotkeys remain disabled until both runtime initialization and RatEye readiness are true, including after a cache-driven engine recovery.
-7. `App.OnExit` disposes `RatScannerMain` and `BlazorUI`, single-instance cleanup, log flush.
+7. `App.OnExit` disposes `RatScannerMain` and `BlazorUI`, single-instance cleanup, log flush. Engine shutdown stops publication immediately rather than waiting for an in-flight synchronous RatEye build; a replacement completed afterward is disposed without becoming visible.
 
 Secondary process entry is not used for normal UI; second launches activate the first instance (`ISingleInstance.OnInstanceInvoked`, CLI switches like `/showUI`).
 
