@@ -10,6 +10,9 @@
 @implements IDisposable
 
 <div style="transform-origin: top left; transform: scale(@((1f / SettingsVM.ScreenScale).ToString(CultureInfo.InvariantCulture)));">
+    @{
+        var currentUser = TrackerService.State.CurrentUser;
+    }
     @foreach (var itemScan in MenuVM.ItemScans)
     {
         var item = itemScan.Item;
@@ -17,7 +20,6 @@
        && itemScan.GetToolTipPosition() != null
        && itemScan.DissapearAt > DateTimeOffset.Now.ToUnixTimeMilliseconds())
         {
-            var currentUser = TrackerService.State.CurrentUser;
             var taskRemaining = item.GetTaskRemaining(currentUser).count;
             var hideoutRemaining = item.GetHideoutRemaining(currentUser);
             @if (itemScan is ItemIconScan iconScan)
