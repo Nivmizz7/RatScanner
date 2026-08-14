@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
@@ -68,7 +67,7 @@ public sealed class RatScannerMain
     private Timer? _scanRefreshTimer;
     private readonly object _scanRefreshTimerLock = new();
     private readonly object _tarkovTrackerTimerLock = new();
-    private readonly object _ratEyeSetupLock = new();
+    private readonly object _disposeLock = new();
     private readonly object _trackerConfigurationLock = new();
     private readonly CancellationTokenSource _lifetimeCancellation = new();
     private readonly ScanDiagnosticStore _scanDiagnostics = new();
@@ -102,6 +101,7 @@ public sealed class RatScannerMain
     private readonly ScanThrottle _scanThrottle = new(RatConfig.NameScan.CooldownMs);
 
     private readonly RebuildCoordinator _rebuildCoordinator;
+    private readonly EngineLifecycleGate<RatEyeEngine> _engineLifecycle = new();
 
     public TarkovTrackerDB TarkovTrackerDB;
 
@@ -392,32 +392,39 @@ public sealed class RatScannerMain
         return ("", RatConfig.Tracking.TarkovTracker.OrgEndpoint);
     }
 
-    [MemberNotNull(nameof(RatEyeEngine))]
     internal void SetupRatEye()
     {
         double startedAtMs = PerfTrace.MonotonicMs();
-        lock (_ratEyeSetupLock)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
-            Config.LogDebug = RatConfig.LogDebug;
-            Config.Path.LogFile = "RatEyeLog.txt";
-            Config.Path.TesseractLibSearchPath = AppDomain.CurrentDomain.BaseDirectory;
-            Database database = RatStashDatabaseFromTarkovDev(out bool hasItems);
-            RatEyeEngine replacement = new(GetRatEyeConfig(), database);
-            RatEyeEngine? previous = null;
-            lock (NameScanLock)
+        bool hasItems = false;
+        bool wasPublished = _engineLifecycle.BuildAndPublish(
+            () =>
             {
-                lock (IconScanLock)
+                Config.LogDebug = RatConfig.LogDebug;
+                Config.Path.LogFile = "RatEyeLog.txt";
+                Config.Path.TesseractLibSearchPath = AppDomain.CurrentDomain.BaseDirectory;
+                Database database = RatStashDatabaseFromTarkovDev(out hasItems);
+                return new RatEyeEngine(GetRatEyeConfig(), database);
+            },
+            replacement =>
+            {
+                RatEyeEngine? previous = null;
+                lock (NameScanLock)
                 {
-                    if (RatEyeEngine is not null)
-                        previous = RatEyeEngine;
-                    RatEyeEngine = replacement;
-                    _ratEyeReady = hasItems;
+                    lock (IconScanLock)
+                    {
+                        if (RatEyeEngine is not null)
+                            previous = RatEyeEngine;
+                        RatEyeEngine = replacement;
+                        _ratEyeReady = hasItems;
+                    }
                 }
+
+                return previous;
             }
-            previous?.Dispose();
-        }
+        );
+
+        if (!wasPublished)
+            return;
 
         double elapsedMs = PerfTrace.MonotonicMs() - startedAtMs;
         PerfTraceStore.Increment("engine.rebuild_total");
@@ -1063,7 +1070,7 @@ public sealed class RatScannerMain
 
     public void Dispose()
     {
-        lock (_ratEyeSetupLock)
+        lock (_disposeLock)
         {
             if (_disposed)
                 return;
@@ -1085,16 +1092,21 @@ public sealed class RatScannerMain
             ItemScans.Changed -= OnItemScansChanged;
             HotkeyManager.Dispose();
             TarkovTrackerDB.Dispose();
-            lock (NameScanLock)
+            _engineLifecycle.Stop(() =>
             {
-                lock (IconScanLock)
+                lock (NameScanLock)
                 {
-                    RatEyeEngine?.Dispose();
-                    _ratEyeReady = false;
+                    lock (IconScanLock)
+                    {
+                        RatEyeEngine?.Dispose();
+                        RatEyeEngine = null!;
+                        _ratEyeReady = false;
+                    }
                 }
-            }
+            });
             _scanDiagnostics.Dispose();
             _rebuildCoordinator.Dispose();
+            _engineLifecycle.Dispose();
             _lifetimeCancellation.Dispose();
         }
     }
