@@ -159,6 +159,8 @@ public sealed class WebViewSmokeTests
             Assert.Equal(0, await page.Locator(".tracker-manage-link").CountAsync());
             Assert.Equal(0, await page.Locator(".source-card").CountAsync());
             Assert.Equal(0, await page.GetByText("TarkovTracker.io", new() { Exact = false }).CountAsync());
+            // A stale link can survive with a different label, so assert on the href too.
+            Assert.Equal(0, await page.Locator("a[href*='tarkovtracker.io' i]").CountAsync());
             await AssertNoHorizontalOverflowAsync(page, "desktop tracking settings");
             await seasonalTrackingHeading.ScrollIntoViewIfNeededAsync();
             await page.ScreenshotAsync(
