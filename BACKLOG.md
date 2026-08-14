@@ -4,29 +4,14 @@ Working notes for issues found but not yet fixed. Append new items under the mat
 
 ## UI/UX
 
-### Manage-key link points to home page and duplicates across PVP/PVE
+### Manage-key link points to the TarkovTracker.org home page
 
 **Status:** Not started
 **Files:** `src/App/Constants.cs`, `src/App/Pages/App/Settings/SettingsTracking.razor`, `src/App/Components/ChangeConnectionDialog.razor`
 
-The "Create or manage a TarkovTracker.org API key" / "...TarkovTracker.io key" links in Tracking settings point at the site home pages, not the API-key settings pages:
+The single "Manage API keys" link in Tracking settings and the replacement dialog use `Constants.Links.TarkovTracker` (`https://tarkovtracker.org`) rather than the API-key settings page (`https://tarkovtracker.org/settings#api`). The same constant is also used by the About page for a site button that should remain the home page.
 
-- Org link uses `Constants.Links.TarkovTracker` = `https://tarkovtracker.org` — should be `https://tarkovtracker.org/settings#api`.
-- Io link uses `Constants.Links.TarkovTrackerIo` = `https://tarkovtracker.io` — should be `https://tarkovtracker.io/settings`.
-
-`Constants.Links.TarkovTracker` is also used by `Credits.razor:31` for a "site" button that **should** stay the home page, so do not repurpose the existing constant. Add new `TarkovTrackerSettings` / `TarkovTrackerIoSettings` constants and point the manage-key links at those.
-
-The link renders in three places, all currently using the home-page constants:
-
-- `SettingsTracking.razor:148` — PVP unconfigured inline form, Io branch.
-- `SettingsTracking.razor:187` — unconfigured inline form, Org branch (PVP-Org or PVE).
-- `SettingsTracking.razor:522-524` — `OpenChangeConnectionDialogAsync` builds `manageUrl` for the configured-state `ChangeConnectionDialog`.
-
-**Duplication problem:** the inline link lives inside `@if (!IsModeConfigured(mode))` within the `foreach (GameMode mode in Modes)` loop over `[Regular, Pve]`. When **both** modes are unconfigured **and** the PVP draft source is `Org`, the identical Org link renders under the PVP block **and** under the PVE block. When PVP draft is `Io`, the two blocks show different links (Io under PVP, Org under PVE) so there is no duplicate.
-
-Edge case for any "show once" fix: if PVE is configured and PVP is unconfigured with Org draft, PVE's block shows no link (it's configured), so suppressing the PVP Org link would leave PVP with no manage-key link at all.
-
-**Suggested fix shape:** add the two `…Settings` constants; point all three call sites at them; dedup by either (a) moving the link into a single footer after the mode loop that picks the right URL per current draft/configured state, or (b) keeping it inline but suppressing the PVP Org link only when PVE is also unconfigured with the same Org link.
+Add a dedicated `TarkovTrackerSettings` constant and use it only for API-key management links.
 
 ### About page spacing is inconsistent
 

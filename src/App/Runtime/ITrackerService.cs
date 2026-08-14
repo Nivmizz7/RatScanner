@@ -29,6 +29,4 @@ internal interface ITrackerService
         string token,
         CancellationToken cancellationToken = default
     );
-
-    Task<TrackerValidationResult> ValidateIoKeyAsync(string token, CancellationToken cancellationToken = default);
 }

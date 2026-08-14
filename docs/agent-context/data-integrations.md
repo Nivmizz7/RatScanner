@@ -5,8 +5,8 @@
 | System | Client | Role |
 | --- | --- | --- |
 | Catalog bulk (items, tasks, hideout, crafts, barters) | `TarkovDevAPI` → **json.tarkov.dev** | Primary market/quest/hideout data |
-| Maps (id/name/normalizedName) | `TarkovDevAPI` slim **GraphQL** on api.tarkov.dev | Avoid multi-MB maps JSON on critical path |
-| Maps fallback | json.tarkov.dev maps stream extract | When GraphQL fails/empty |
+| Maps (id/name/normalizedName) | `TarkovDevAPI` slim **GraphQL** on api.tarkov.dev | Avoid multi-MB Regular/PvE maps JSON on critical path |
+| Maps fallback | json.tarkov.dev maps stream extract | Seasonal (unsupported GraphQL enum), or when GraphQL fails/empty |
 | RatScannerData runtime bundle | `scripts/setup-data.ps1` + `scripts/RatScannerData.ps1` | Pinned icon templates, OCR models, maps, fallback image, and provenance manifest |
 | Interactive map tiles/meta | local `Data/maps.json` via `MapDataLoader` | Overlay map viewer |
 | Progress tracking | `TarkovTrackerDB` + `APIClient` | Quests/hideout/team |
@@ -21,7 +21,7 @@ User-Agent for APIs: `RatScanner/{version}` (and GitHub-specific UA).
 Authoritative entry: `src/App/TarkovDevAPI.cs`.
 
 - Base: `https://json.tarkov.dev`
-- Paths are game-mode + document, e.g. `{regular|pve}/items`, locale overlays `{mode}/items_{locale}`, same pattern for tasks/hideout/maps.
+- Paths are game-mode + document, e.g. `{regular|pve|pvp-season}/items`, locale bundles `{mode}/items_{locale}`, same pattern for tasks/hideout/maps. RatScanner's internal `Seasonal` mode maps to `pvp-season`.
 - Prices ride with the items document (medium TTL).
 - Domain models: `src/App/TarkovDev/*` (app-facing projections, not raw GraphQL types).
 - **Do not** reintroduce GraphQL schema generators for bulk catalog.
@@ -59,9 +59,10 @@ The bundle's icons are named by tarkov.dev item ID and use RatEye's 63-pixel slo
 
 Intentional dual path (documented on `TarkovDevAPI`):
 
-1. Prefer slim GraphQL query selecting only `id`, `name`, `normalizedName` on `https://api.tarkov.dev/graphql`.
-2. On failure or empty: extract maps dictionary from json.tarkov.dev without loading unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
-3. Maps stay **off cold-start critical path** (background queue + offline projected cache).
+1. Prefer slim GraphQL query selecting only `id`, `name`, `normalizedName` on `https://api.tarkov.dev/graphql` for Regular and PvE.
+2. Seasonal skips GraphQL because its `GameMode` enum does not support `pvp-season`; fetch the seasonal JSON documents directly.
+3. For Seasonal, or when GraphQL fails/returns empty, extract the maps dictionary from json.tarkov.dev without materializing unrelated multi-MB siblings (`ExtractMapsDictionary` — unit-tested).
+4. Maps stay **off cold-start critical path** (background queue + offline projected cache).
 
 `MapDataLoader` combines local interactive `maps.json` with the live catalog ids; empty catalog means “not ready yet” (retryable), not permanent failure.
 
@@ -73,11 +74,11 @@ Intentional dual path (documented on `TarkovDevAPI`):
 
 ## TarkovTracker
 
-- Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP and PvE keys plus a legacy TarkovTracker.io key. The `.io` key is PvP-only and is inactive in PvE mode.
-- `TarkovTrackerDB` holds only the active mode's progress while retaining separate in-memory last-good snapshots by mode. Configuration generation and cancellation prevent stale PvP/PvE responses from crossing modes.
+- Config: `RatConfig.Tracking.TarkovTracker` stores independent DPAPI-protected TarkovTracker.org PvP, PvE, and Seasonal PvP keys. TarkovTracker.io is retired and unsupported; config migration removes its obsolete credential and source fields.
+- `TarkovTrackerDB` holds only the active mode's progress while retaining separate in-memory last-good snapshots by mode. Configuration generation and cancellation prevent stale PvP/PvE/Seasonal responses from crossing modes.
 - API keys are validated explicitly against `/token`: RatScanner requires `GP` (progress read), uses `TP` only when team display is enabled and available, and does not require `WP` because the app does not write progress.
 - Periodic refresh (`RefreshProgressAsync`, every 30 min) skips the redundant `/token` call and only fetches `/progress` (or `/team/progress`). If the progress call rejects the key, `_token` is cleared and the next refresh falls back to a full `/token` + `/progress` cycle to correct the connection state. Explicit user actions (mode switch, settings save, key validation) always use the full `InitAsync` flow.
-- `.org` token metadata (`gameMode`, with token-prefix fallback for legacy responses) must match the intended PvP/PvE slot before the key is saved.
+- `.org` token metadata (`gameMode`, with token-prefix fallback for responses that omit it) must match the intended slot before the key is saved: `pvp`/`PVP_`, `pve`/`PVE_`, or `seasonal`/`SZN_`.
 - `APIClient` performs bearer GETs with the shared UA, cancellation, and distinct unauthorized / forbidden permission / rate-limit / service failure mapping.
 - Models: `FetchModels/TarkovTracker/*`.
 - Progress payload facts the UI relies on: `/progress` exposes task/objective completion (including `failed` / `invalid` flags), `playerLevel`, `pmcFaction`, and `gameEdition`. It does **not** expose trader standing, Scav karma, or task-completion timestamps, so reputation-gated and timed tasks can never be classified as definitely active.

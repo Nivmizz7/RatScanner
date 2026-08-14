@@ -25,8 +25,7 @@
     /// </summary>
     private bool ShowIndicator => AppState.IsNarrow ? !AppState.DrawerOpen : !AppState.DesktopSidebarOpen;
 
-    private string CurrentModeText =>
-        RatConfig.GameMode == TarkovDev.GameMode.Pve ? Localizer["PveMode"] : Localizer["PvpMode"];
+    private string CurrentModeText => GameModeDisplay.GetLabel(RatConfig.GameMode, Localizer);
 
     private string AccessibleLabel => string.Format(Localizer["CurrentGameModeOpen"], CurrentModeText);
 

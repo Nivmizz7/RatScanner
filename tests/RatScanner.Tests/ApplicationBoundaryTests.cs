@@ -120,11 +120,6 @@ public sealed class ApplicationBoundaryTests
             string token,
             CancellationToken cancellationToken = default
         ) => throw new NotSupportedException();
-
-        public Task<TrackerValidationResult> ValidateIoKeyAsync(
-            string token,
-            CancellationToken cancellationToken = default
-        ) => throw new NotSupportedException();
     }
 
     private sealed class FakeHotkeyRegistrar : IHotkeyRegistrar

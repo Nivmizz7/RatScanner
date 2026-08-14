@@ -89,9 +89,6 @@ public sealed class ConfigurationMigrationTests
             File.WriteAllText(configPath, "[Other]\r\nconfigversion=1\r\n");
 
             RatConfig.ConfigLoadPlan first = RatConfig.PrepareConfigForLoad(configPath);
-
-            // Recreate the unsupported file so the same version is backed up again and the
-            // collision suffix path (config.cfg.v1.bak.1) is exercised.
             File.WriteAllText(configPath, "[Other]\r\nconfigversion=1\r\n");
             RatConfig.ConfigLoadPlan second = RatConfig.PrepareConfigForLoad(configPath);
 
@@ -121,20 +118,18 @@ public sealed class ConfigurationMigrationTests
             legacy.WriteInt("Backend", 1);
             legacy.Section = "Other";
             legacy.WriteInt("ConfigVersion", 2);
-            Assert.Equal(legacyKey, new SimpleConfig(configPath, "TarkovTracker").ReadSecureString("Token", ""));
 
             RatConfig.LoadConfig(configPath);
 
             Assert.Equal(legacyKey, RatConfig.Tracking.TarkovTracker.PvpToken);
             Assert.Equal("", RatConfig.Tracking.TarkovTracker.PveToken);
-            Assert.Equal("", RatConfig.Tracking.TarkovTracker.IoToken);
+            Assert.Equal("", RatConfig.Tracking.TarkovTracker.SeasonalToken);
             Assert.True(File.Exists(configPath + ".v2.bak"));
 
             RatConfig.LoadConfig(configPath);
 
             Assert.Equal(legacyKey, RatConfig.Tracking.TarkovTracker.PvpToken);
-            Assert.Equal("", RatConfig.Tracking.TarkovTracker.PveToken);
-            Assert.False(File.Exists(configPath + ".v3.bak"));
+            Assert.False(File.Exists(configPath + ".v4.bak"));
         }
         finally
         {
@@ -143,15 +138,14 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
-    public void Legacy_io_key_migrates_to_the_pvp_only_io_slot()
+    public void Legacy_io_key_is_not_migrated_and_retired_fields_are_removed()
     {
         string root = CreateTemporaryDirectory();
         try
         {
             string configPath = Path.Combine(root, "config.cfg");
-            const string legacyKey = "tt_legacy";
             SimpleConfig legacy = new(configPath, "TarkovTracker");
-            legacy.WriteSecureString("Token", legacyKey);
+            legacy.WriteSecureString("Token", "tt_legacy");
             legacy.WriteInt("Backend", 0);
             legacy.Section = "Other";
             legacy.WriteInt("ConfigVersion", 2);
@@ -159,8 +153,8 @@ public sealed class ConfigurationMigrationTests
             RatConfig.LoadConfig(configPath);
 
             Assert.Equal("", RatConfig.Tracking.TarkovTracker.PvpToken);
-            Assert.Equal("", RatConfig.Tracking.TarkovTracker.PveToken);
-            Assert.Equal(legacyKey, RatConfig.Tracking.TarkovTracker.IoToken);
+            Assert.Equal("missing", new SimpleConfig(configPath, "TarkovTracker").ReadSecureString("Token", "missing"));
+            Assert.Equal(42, new SimpleConfig(configPath, "TarkovTracker").ReadInt("Backend", 42));
         }
         finally
         {
@@ -169,18 +163,18 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
-    public void Current_config_does_not_resurrect_a_removed_io_key_from_legacy_fields()
+    public void Version_three_config_preserves_org_keys_and_scrubs_io_configuration()
     {
         string root = CreateTemporaryDirectory();
         try
         {
             string configPath = Path.Combine(root, "config.cfg");
             SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("Token", "tt_stale");
-            config.WriteInt("Backend", 0);
             config.WriteSecureString("PvpToken", "PVP_current");
             config.WriteSecureString("PveToken", "PVE_current");
-            config.WriteSecureString("IoToken", "");
+            config.WriteSecureString("SeasonalToken", "SZN_current");
+            config.WriteSecureString("IoToken", "tt_retired");
+            config.WriteInt("PvpSource", 1);
             config.Section = "Other";
             config.WriteInt("ConfigVersion", 3);
 
@@ -188,7 +182,11 @@ public sealed class ConfigurationMigrationTests
 
             Assert.Equal("PVP_current", RatConfig.Tracking.TarkovTracker.PvpToken);
             Assert.Equal("PVE_current", RatConfig.Tracking.TarkovTracker.PveToken);
-            Assert.Equal("", RatConfig.Tracking.TarkovTracker.IoToken);
+            Assert.Equal("SZN_current", RatConfig.Tracking.TarkovTracker.SeasonalToken);
+            SimpleConfig saved = new(configPath, "TarkovTracker");
+            Assert.Equal("missing", saved.ReadSecureString("IoToken", "missing"));
+            Assert.Equal(42, saved.ReadInt("PvpSource", 42));
+            Assert.True(File.Exists(configPath + ".v3.bak"));
         }
         finally
         {
@@ -197,7 +195,7 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
-    public void Malformed_legacy_key_is_preserved_in_the_pvp_slot_for_user_validation()
+    public void Malformed_legacy_org_key_is_preserved_for_user_validation()
     {
         string root = CreateTemporaryDirectory();
         try
@@ -222,129 +220,6 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
-    public void Config_without_pvp_source_defaults_to_org_when_org_pvp_token_present()
-    {
-        string root = CreateTemporaryDirectory();
-        try
-        {
-            string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "PVP_org");
-            config.WriteSecureString("PveToken", "PVE_org");
-            config.WriteSecureString("IoToken", "IO_legacy");
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
-
-            RatConfig.LoadConfig(configPath);
-
-            Assert.Equal(PvpSource.Org, RatConfig.Tracking.TarkovTracker.PvpSource);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Config_without_pvp_source_defaults_to_io_when_only_io_token_present()
-    {
-        string root = CreateTemporaryDirectory();
-        try
-        {
-            string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "");
-            config.WriteSecureString("PveToken", "");
-            config.WriteSecureString("IoToken", "IO_legacy");
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
-
-            RatConfig.LoadConfig(configPath);
-
-            Assert.Equal(PvpSource.Io, RatConfig.Tracking.TarkovTracker.PvpSource);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Config_without_pvp_source_defaults_to_org_when_no_pvp_token_present()
-    {
-        string root = CreateTemporaryDirectory();
-        try
-        {
-            string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "");
-            config.WriteSecureString("PveToken", "PVE_org");
-            config.WriteSecureString("IoToken", "");
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
-
-            RatConfig.LoadConfig(configPath);
-
-            Assert.Equal(PvpSource.Org, RatConfig.Tracking.TarkovTracker.PvpSource);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Stored_pvp_source_is_preserved_on_load()
-    {
-        string root = CreateTemporaryDirectory();
-        try
-        {
-            string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "PVP_org");
-            config.WriteSecureString("PveToken", "PVE_org");
-            config.WriteSecureString("IoToken", "IO_legacy");
-            config.WriteInt("PvpSource", 1); // Io
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
-
-            RatConfig.LoadConfig(configPath);
-
-            // Stored value wins over the org-token-present default.
-            Assert.Equal(PvpSource.Io, RatConfig.Tracking.TarkovTracker.PvpSource);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Out_of_range_pvp_source_falls_back_to_derived_default()
-    {
-        string root = CreateTemporaryDirectory();
-        try
-        {
-            string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "PVP_org");
-            config.WriteSecureString("PveToken", "");
-            config.WriteSecureString("IoToken", "");
-            config.WriteInt("PvpSource", 42); // invalid
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
-
-            RatConfig.LoadConfig(configPath);
-
-            Assert.Equal(PvpSource.Org, RatConfig.Tracking.TarkovTracker.PvpSource);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
     public void Negative_scan_cooldown_is_clamped_on_load()
     {
         string root = CreateTemporaryDirectory();
@@ -354,7 +229,7 @@ public sealed class ConfigurationMigrationTests
             SimpleConfig config = new(configPath, "NameScan");
             config.WriteInt("CooldownMs", -1);
             config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
+            config.WriteInt("ConfigVersion", 4);
 
             RatConfig.LoadConfig(configPath);
 
@@ -368,32 +243,31 @@ public sealed class ConfigurationMigrationTests
     }
 
     [Fact]
-    public void Save_persists_pvp_source_and_reload_preserves_it()
+    public void Save_and_reload_preserve_seasonal_mode_and_token()
     {
         string root = CreateTemporaryDirectory();
         try
         {
             string configPath = Path.Combine(root, "config.cfg");
-            SimpleConfig config = new(configPath, "TarkovTracker");
-            config.WriteSecureString("PvpToken", "PVP_org");
-            config.WriteSecureString("PveToken", "PVE_org");
-            config.WriteSecureString("IoToken", "IO_legacy");
-            config.Section = "Other";
-            config.WriteInt("ConfigVersion", 3);
+            SimpleConfig config = new(configPath, "Other");
+            config.WriteInt("ConfigVersion", 4);
 
             RatConfig.LoadConfig(configPath);
-            Assert.Equal(PvpSource.Org, RatConfig.Tracking.TarkovTracker.PvpSource);
-
-            RatConfig.Tracking.TarkovTracker.PvpSource = PvpSource.Io;
+            RatConfig.GameMode = GameMode.Seasonal;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "SZN_current";
             RatConfig.SaveConfig(configPath);
 
-            // Reset statics to defaults so the reload is meaningful.
-            RatConfig.Tracking.TarkovTracker.PvpSource = PvpSource.Org;
+            RatConfig.GameMode = GameMode.Regular;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "";
             RatConfig.LoadConfig(configPath);
-            Assert.Equal(PvpSource.Io, RatConfig.Tracking.TarkovTracker.PvpSource);
+
+            Assert.Equal(GameMode.Seasonal, RatConfig.GameMode);
+            Assert.Equal("SZN_current", RatConfig.Tracking.TarkovTracker.SeasonalToken);
         }
         finally
         {
+            RatConfig.GameMode = GameMode.Regular;
+            RatConfig.Tracking.TarkovTracker.SeasonalToken = "";
             Directory.Delete(root, recursive: true);
         }
     }

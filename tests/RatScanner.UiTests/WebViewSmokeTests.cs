@@ -128,6 +128,81 @@ public sealed class WebViewSmokeTests
             await AssertVisibleAsync(page.Locator(".settings-page"));
             Assert.NotEqual("BODY", await page.EvaluateAsync<string>("document.activeElement?.tagName ?? ''"));
 
+            await page.Locator("a[href='/app/settings/tracking']").ClickAsync();
+            await page.WaitForURLAsync("**/app/settings/tracking");
+            ILocator gameModeSelect = page.GetByRole(AriaRole.Combobox, new() { Name = "Game mode", Exact = true });
+            await AssertVisibleAsync(gameModeSelect);
+            await gameModeSelect.ClickAsync();
+            ILocator pvpModeOption = page.GetByRole(AriaRole.Option, new() { Name = "PvP", Exact = true });
+            await AssertVisibleAsync(pvpModeOption);
+            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "PvE", Exact = true }));
+            await AssertVisibleAsync(page.GetByRole(AriaRole.Option, new() { Name = "Seasonal PvP", Exact = true }));
+            string selectedModeWeight = await gameModeSelect.EvaluateAsync<string>(
+                "element => getComputedStyle(element).fontWeight"
+            );
+            string optionModeWeight = await pvpModeOption
+                .Locator(".mud-list-item-text")
+                .EvaluateAsync<string>("element => getComputedStyle(element).fontWeight");
+            Assert.Equal(selectedModeWeight, optionModeWeight);
+            await page.Keyboard.PressAsync("Escape");
+            ILocator seasonalTrackingHeading = page.Locator(".tracking-settings .tracker-mode-title h3")
+                .GetByText("Seasonal PvP", new() { Exact = true });
+            await AssertVisibleAsync(seasonalTrackingHeading);
+            Assert.Equal(3, await page.Locator(".tracking-settings .tracker-mode").CountAsync());
+            ILocator manageApiKeysLink = page.GetByRole(
+                AriaRole.Link,
+                new() { Name = "Manage API keys", Exact = true }
+            );
+            await AssertVisibleAsync(manageApiKeysLink);
+            Assert.Equal(1, await manageApiKeysLink.CountAsync());
+            Assert.Equal("https://tarkovtracker.org", await manageApiKeysLink.GetAttributeAsync("href"));
+            Assert.Equal(0, await page.Locator(".tracker-manage-link").CountAsync());
+            Assert.Equal(0, await page.Locator(".source-card").CountAsync());
+            Assert.Equal(0, await page.GetByText("TarkovTracker.io", new() { Exact = false }).CountAsync());
+            // A stale link can survive with a different label, so assert on the href too.
+            Assert.Equal(0, await page.Locator("a[href*='tarkovtracker.io' i]").CountAsync());
+            await AssertNoHorizontalOverflowAsync(page, "desktop tracking settings");
+            await seasonalTrackingHeading.ScrollIntoViewIfNeededAsync();
+            await page.ScreenshotAsync(
+                new PageScreenshotOptions
+                {
+                    Path = Path.Combine(runDirectory, "desktop-seasonal-tracking.png"),
+                    FullPage = false,
+                }
+            );
+
+            await ResizeAppWindowAsync(app, page, width: 600, height: 850);
+            await page.Locator(".sidebar.overlay")
+                .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
+            await page.WaitForFunctionAsync(
+                "() => document.querySelector('.sidebar.overlay')?.getBoundingClientRect().right <= 0"
+            );
+            await page.EvaluateAsync(
+                """
+                () => {
+                    window.scrollTo(0, 0);
+                    const main = document.querySelector('.main-content');
+                    if (main) main.scrollTo({ left: 0, top: 0 });
+                }
+                """
+            );
+            await page.Locator(".tracker-section-heading").ScrollIntoViewIfNeededAsync();
+            await AssertNoHorizontalOverflowAsync(page, "narrow tracking settings");
+            int trackingViewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
+            await AssertInsideViewportAsync(
+                page.Locator(".tracking-settings"),
+                width: trackingViewportWidth,
+                surface: "narrow tracking settings"
+            );
+            await page.ScreenshotAsync(
+                new PageScreenshotOptions
+                {
+                    Path = Path.Combine(runDirectory, "narrow-tracking-settings.png"),
+                    FullPage = false,
+                }
+            );
+            await ResizeAppWindowAsync(app, page, width: 1100, height: 850);
+
             ILocator aboutLink = page.Locator("a[href='/app/credits']");
             await aboutLink.ClickAsync();
             await page.WaitForURLAsync("**/app/credits");
@@ -396,10 +471,24 @@ public sealed class WebViewSmokeTests
 
     private static async Task AssertNoHorizontalOverflowAsync(IPage page, string surface)
     {
-        bool fits = await page.EvaluateAsync<bool>(
-            "() => document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        // The document element and .main-content are independent scroll containers, so
+        // an inner overflow can hide behind a clean document-level measurement. Report
+        // the offending container and its measurements to keep failures diagnosable.
+        string? overflow = await page.EvaluateAsync<string?>(
+            """
+            () => {
+                const containers = [['document', document.documentElement]];
+                const main = document.querySelector('.main-content');
+                if (main) containers.push(['.main-content', main]);
+                for (const [name, element] of containers) {
+                    if (element.scrollWidth > element.clientWidth)
+                        return name + ' ' + element.scrollWidth + 'px > ' + element.clientWidth + 'px';
+                }
+                return null;
+            }
+            """
         );
-        Assert.True(fits, $"Unexpected horizontal overflow on {surface}.");
+        Assert.True(overflow is null, $"Unexpected horizontal overflow on {surface}: {overflow}.");
     }
 
     private static async Task AssertVisibleAsync(ILocator locator)

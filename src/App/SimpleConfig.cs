@@ -18,7 +18,7 @@ internal class SimpleConfig
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool WritePrivateProfileString(string section, string key, string val, string filePath);
+    private static extern bool WritePrivateProfileString(string section, string key, string? val, string filePath);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetPrivateProfileString(
@@ -53,6 +53,12 @@ internal class SimpleConfig
         byte[] encryptedBytes = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
         string hexString = Convert.ToHexString(encryptedBytes);
         WriteString(key, hexString);
+    }
+
+    internal void RemoveValue(string key)
+    {
+        if (!WritePrivateProfileString(Section, key.ToLowerInvariant(), null, Path))
+            throw new Win32Exception(Marshal.GetLastWin32Error(), $"Unable to update configuration file '{Path}'.");
     }
 
     internal void WriteInt(string key, int value)

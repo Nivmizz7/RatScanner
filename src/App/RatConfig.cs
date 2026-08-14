@@ -141,23 +141,38 @@ internal static class RatConfig
         internal static class TarkovTracker
         {
             internal const string OrgEndpoint = "https://api.tarkovtracker.org";
-            internal const string IoEndpoint = "https://tarkovtracker.io/api/v2";
 
             internal static string PvpToken = "";
             internal static string PveToken = "";
-            internal static string IoToken = "";
-            internal static PvpSource PvpSource = PvpSource.Org;
+            internal static string SeasonalToken = "";
             internal static bool ShowTeam = true;
             internal static int RefreshTime = 30 * 60 * 1000; // 30 minutes
 
-            internal static string TokenForMode(GameMode mode) => mode == GameMode.Pve ? PveToken : PvpToken;
+            internal static string TokenForMode(GameMode mode) =>
+                mode switch
+                {
+                    GameMode.Regular => PvpToken,
+                    GameMode.Pve => PveToken,
+                    GameMode.Seasonal => SeasonalToken,
+                    _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported game mode."),
+                };
 
             internal static void SetTokenForMode(GameMode mode, string token)
             {
-                if (mode == GameMode.Pve)
-                    PveToken = token;
-                else
-                    PvpToken = token;
+                switch (mode)
+                {
+                    case GameMode.Regular:
+                        PvpToken = token;
+                        break;
+                    case GameMode.Pve:
+                        PveToken = token;
+                        break;
+                    case GameMode.Seasonal:
+                        SeasonalToken = token;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unsupported game mode.");
+                }
             }
         }
     }
@@ -179,7 +194,7 @@ internal static class RatConfig
     internal static int ShortTTL = 60 * 5; // 5 minutes
     internal static int MediumTTL = 60 * 60 * 1; // 1 hour
     internal static int LongTTL = 60 * 60 * 12; // 12 hours
-    private static int ConfigVersion => 3;
+    private static int ConfigVersion => 4;
 
     internal static int ScreenWidth = 1920;
     internal static int ScreenHeight = 1080;
@@ -334,38 +349,22 @@ internal static class RatConfig
         Tracking.ShowKappaNeeds = config.ReadBool(nameof(Tracking.ShowKappaNeeds), Tracking.ShowKappaNeeds);
 
         config.Section = nameof(Tracking.TarkovTracker);
-        // Only migrate the legacy single-token layout from pre-v3 configs. SaveConfig
-        // copies the existing file, so stale "Token"/"Backend" keys survive on disk;
-        // without the version gate a removed IoToken would resurrect from them on the
-        // next launch and clear the PvP token.
-        bool migrateLegacyTrackerToken = configFileExists && loadPlan.ExistingVersion < ConfigVersion;
-        string legacyToken = migrateLegacyTrackerToken ? config.ReadSecureString("Token", "") : "";
-        Tracking.TarkovTracker.PvpToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PvpToken), legacyToken);
+        // Pre-v3 configs stored one tracker token plus a backend flag. Preserve only
+        // TarkovTracker.org credentials; the retired TarkovTracker.io backend must
+        // not be reinterpreted as an org key. Version 3 already has explicit slots,
+        // so stale legacy fields copied forward by older saves are ignored.
+        bool migrateLegacyOrgToken =
+            configFileExists && loadPlan.ExistingVersion < 3 && config.ReadInt("Backend", 1) == 1;
+        string legacyOrgToken = migrateLegacyOrgToken ? config.ReadSecureString("Token", "") : "";
+        Tracking.TarkovTracker.PvpToken = config.ReadSecureString(
+            nameof(Tracking.TarkovTracker.PvpToken),
+            legacyOrgToken
+        );
         Tracking.TarkovTracker.PveToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.PveToken), "");
-        Tracking.TarkovTracker.IoToken = config.ReadSecureString(nameof(Tracking.TarkovTracker.IoToken), "");
-        if (
-            migrateLegacyTrackerToken
-            && string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken)
-            && config.ReadInt("Backend", 1) == 0
-        )
-        {
-            Tracking.TarkovTracker.IoToken = legacyToken;
-            Tracking.TarkovTracker.PvpToken = "";
-        }
-        // PvpSource is additive (introduced after the Io split). Existing configs
-        // have no key, so derive the initial value from whichever token was
-        // winning the silent fallback before: org PvP wins, else Io if present.
-        int storedPvpSource = config.ReadInt(nameof(Tracking.TarkovTracker.PvpSource), -1);
-        if (storedPvpSource >= 0 && storedPvpSource <= (int)PvpSource.Io)
-        {
-            Tracking.TarkovTracker.PvpSource = (PvpSource)storedPvpSource;
-        }
-        else
-        {
-            Tracking.TarkovTracker.PvpSource = string.IsNullOrWhiteSpace(Tracking.TarkovTracker.PvpToken)
-                ? (string.IsNullOrWhiteSpace(Tracking.TarkovTracker.IoToken) ? PvpSource.Org : PvpSource.Io)
-                : PvpSource.Org;
-        }
+        Tracking.TarkovTracker.SeasonalToken = config.ReadSecureString(
+            nameof(Tracking.TarkovTracker.SeasonalToken),
+            ""
+        );
         Tracking.TarkovTracker.ShowTeam = config.ReadBool(
             nameof(Tracking.TarkovTracker.ShowTeam),
             Tracking.TarkovTracker.ShowTeam
@@ -376,7 +375,8 @@ internal static class RatConfig
         ScreenHeight = config.ReadInt(nameof(ScreenHeight), ScreenHeight);
         ScreenScale = config.ReadFloat(nameof(ScreenScale), ScreenScale);
 
-        GameMode = (GameMode)config.ReadInt(nameof(GameMode), (int)GameMode);
+        int storedGameMode = config.ReadInt(nameof(GameMode), (int)GameMode);
+        GameMode = Enum.IsDefined(typeof(GameMode), storedGameMode) ? (GameMode)storedGameMode : GameMode.Regular;
         MinimizeToTray = config.ReadBool(nameof(MinimizeToTray), MinimizeToTray);
         AlwaysOnTop = config.ReadBool(nameof(AlwaysOnTop), AlwaysOnTop);
         LogDebug = config.ReadBool(nameof(LogDebug), LogDebug);
@@ -495,8 +495,16 @@ internal static class RatConfig
             config.Section = nameof(Tracking.TarkovTracker);
             config.WriteSecureString(nameof(Tracking.TarkovTracker.PvpToken), Tracking.TarkovTracker.PvpToken);
             config.WriteSecureString(nameof(Tracking.TarkovTracker.PveToken), Tracking.TarkovTracker.PveToken);
-            config.WriteSecureString(nameof(Tracking.TarkovTracker.IoToken), Tracking.TarkovTracker.IoToken);
-            config.WriteInt(nameof(Tracking.TarkovTracker.PvpSource), (int)Tracking.TarkovTracker.PvpSource);
+            config.WriteSecureString(
+                nameof(Tracking.TarkovTracker.SeasonalToken),
+                Tracking.TarkovTracker.SeasonalToken
+            );
+            // SaveConfig starts from a copy so unknown settings survive upgrades.
+            // Explicitly remove retired tracker fields, including the encrypted .io key.
+            config.RemoveValue("IoToken");
+            config.RemoveValue("PvpSource");
+            config.RemoveValue("Token");
+            config.RemoveValue("Backend");
             config.WriteBool(nameof(Tracking.TarkovTracker.ShowTeam), Tracking.TarkovTracker.ShowTeam);
 
             config.Section = "Other";

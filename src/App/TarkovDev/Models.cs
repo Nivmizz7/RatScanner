@@ -3,18 +3,12 @@ using System.Linq;
 
 namespace RatScanner.TarkovDev;
 
-/// <summary>Game mode segment used by json.tarkov.dev paths (regular / pve).</summary>
+/// <summary>Game mode segment used by json.tarkov.dev paths (regular / pve / pvp-season).</summary>
 public enum GameMode
 {
     Regular,
     Pve,
-}
-
-/// <summary>Which TarkovTracker backend supplies PvP progress.</summary>
-public enum PvpSource
-{
-    Org = 0,
-    Io = 1,
+    Seasonal,
 }
 
 /// <summary>

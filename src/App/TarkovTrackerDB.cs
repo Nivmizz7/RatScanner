@@ -665,15 +665,28 @@ public class TarkovTrackerDB : IDisposable
 
     private static bool MatchesGameMode(string? apiMode, string token, GameMode expected)
     {
-        string expectedApiMode = expected == GameMode.Pve ? "pve" : "pvp";
+        string expectedApiMode = expected switch
+        {
+            GameMode.Regular => "pvp",
+            GameMode.Pve => "pve",
+            GameMode.Seasonal => "seasonal",
+            _ => throw new ArgumentOutOfRangeException(nameof(expected), expected, "Unsupported game mode."),
+        };
         if (!string.IsNullOrWhiteSpace(apiMode))
             return string.Equals(apiMode, expectedApiMode, StringComparison.OrdinalIgnoreCase);
 
         // The tracker gateway guarantees mode-scoped prefixes. Legacy tt_ keys
-        // predate them, so an omitted gameMode must never bind one to the PvE slot.
+        // predate them, so an omitted gameMode must never bind one to PvE or Seasonal.
+        if (
+            token.StartsWith("PVP_", StringComparison.OrdinalIgnoreCase)
+            || token.StartsWith("tt_", StringComparison.OrdinalIgnoreCase)
+        )
+            return expected == GameMode.Regular;
         if (token.StartsWith("PVE_", StringComparison.OrdinalIgnoreCase))
             return expected == GameMode.Pve;
-        return expected == GameMode.Regular;
+        if (token.StartsWith("SZN_", StringComparison.OrdinalIgnoreCase))
+            return expected == GameMode.Seasonal;
+        return false;
     }
 
     private static string? ExtractPermission(string message)

@@ -1,3 +1,16 @@
+.tracker-section-heading > div {
+    min-width: 0;
+}
+
+.tracker-section-manage-link {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-self: flex-start;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: var(--rs-purple);
+}
+
 /* Mode header: title | status | overflow menu.
    The 3-column grid keeps the overflow on the same row at all widths —
    the title shrinks via minmax(0, 1fr), status and overflow are auto-sized. */
@@ -16,20 +29,6 @@
     margin: 0;
     color: var(--rs-text);
     font-size: 0.95rem;
-}
-
-.tracker-mode-source {
-    margin: 2px 0 0;
-    color: var(--rs-text-2);
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.tracker-mode-hint {
-    margin: 2px 0 0;
-    color: var(--rs-text-2);
-    font-size: 0.75rem;
-    line-height: 1.4;
 }
 
 .tracker-mode-status {
@@ -118,118 +117,6 @@
 
 .tracker-overflow ::deep .mud-icon-root {
     font-size: 1.25rem;
-}
-
-/* API-key helper link: muted, purple on hover. */
-.tracker-manage-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 8px;
-    font-size: 0.75rem;
-    text-transform: none;
-    color: var(--rs-text-2);
-    transition: color 0.15s;
-}
-
-.tracker-manage-link:hover,
-.tracker-manage-link:focus {
-    color: var(--rs-purple);
-}
-
-/* Provider selection: compact selectable cards. */
-.source-label {
-    margin: 0 0 6px;
-    color: var(--rs-text-2);
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.source-cards {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-
-.source-cards ::deep .mud-radio-group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.source-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--rs-border);
-    border-radius: var(--rs-radius-sm);
-    background: var(--rs-surface-2);
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-}
-
-.source-card:hover {
-    border-color: var(--rs-text-2);
-}
-
-.source-card-selected {
-    border-color: var(--rs-purple);
-    background: var(--rs-purple-surface);
-}
-
-.source-card ::deep .mud-radio {
-    margin: 0;
-    padding: 0;
-}
-
-.source-card-body {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.source-card-title {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    color: var(--rs-text);
-    font-size: 0.8125rem;
-    font-weight: 600;
-}
-
-.source-card-detail {
-    color: var(--rs-text);
-    opacity: 0.72;
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-/* Shared note beneath both provider choices. */
-.source-shared-note {
-    margin: 0 0 12px;
-    color: var(--rs-text-2);
-    font-size: 0.75rem;
-    line-height: 1.4;
-}
-
-.source-badge {
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: none;
-}
-
-.source-badge-recommended {
-    color: var(--rs-success);
-    background: color-mix(in srgb, var(--rs-success) 16%, transparent);
-}
-
-.source-badge-legacy {
-    color: var(--rs-text-2);
-    background: var(--rs-surface);
 }
 
 /* Sentence-case buttons — MudBlazor defaults to uppercase. */

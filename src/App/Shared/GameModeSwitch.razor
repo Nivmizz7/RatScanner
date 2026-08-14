@@ -3,21 +3,30 @@
 @implements IDisposable
 
 <div class="game-mode-switch">
-	<MudToggleGroup T="RatScanner.TarkovDev.GameMode"
-	                Value="@RatConfig.GameMode"
-	                ValueChanged="SetGameModeAsync"
-	                Disabled="@_switching"
-	                Size="Size.Small"
-	                Color="Color.Default"
-	                CheckMark="false"
-	                FixedContent="false">
-		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
-		               Value="RatScanner.TarkovDev.GameMode.Regular"
-		               Text="@Localizer["PvpMode"]" />
-		<MudToggleItem T="RatScanner.TarkovDev.GameMode"
-		               Value="RatScanner.TarkovDev.GameMode.Pve"
-		               Text="@Localizer["PveMode"]" />
-	</MudToggleGroup>
+	<MudSelect T="RatScanner.TarkovDev.GameMode"
+	           Value="@RatConfig.GameMode"
+	           ValueChanged="SetGameModeAsync"
+	           Label="@Localizer["GameMode"]"
+	           Variant="Variant.Outlined"
+	           Margin="Margin.Dense"
+	           Dense="true"
+	           FullWidth="true"
+	           Strict="true"
+	           ListClass="game-mode-list"
+	           Disabled="@_switching">
+		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Regular">
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Regular, Localizer)
+		</MudSelectItem>
+		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Pve">
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Pve, Localizer)
+		</MudSelectItem>
+		<MudSelectItem T="RatScanner.TarkovDev.GameMode"
+		               Value="RatScanner.TarkovDev.GameMode.Seasonal">
+			@GameModeDisplay.GetLabel(RatScanner.TarkovDev.GameMode.Seasonal, Localizer)
+		</MudSelectItem>
+	</MudSelect>
 </div>
 
 @code {

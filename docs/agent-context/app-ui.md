@@ -32,8 +32,8 @@ Package version: see App `.csproj` only.
 
 | Area | Location |
 | --- | --- |
-| App shell (collapsible sidebar, scanner section with the real PvP/PvE selector) | `Shared/AppLayout.razor(+.css)` |
-| PVP/PVE segmented selector (authoritative) + compact current-mode indicator | `Shared/GameModeSwitch.razor(+.css)`, `Shared/GameModeIndicator.razor(+.css)` |
+| App shell (collapsible sidebar, scanner section with the real PvP/PvE/Seasonal selector) | `Shared/AppLayout.razor(+.css)` |
+| PvP/PvE/Seasonal dropdown selector (authoritative) + compact current-mode indicator | `Shared/GameModeSwitch.razor(+.css)`, `Shared/GameModeIndicator.razor(+.css)` |
 | Mud providers / shared theme | `Shared/MainLayout.razor` |
 | Settings chrome | `Shared/SettingsLayout.razor(+.css)` |
 | Overlay shell | `Shared/OverlayLayout.razor`, passive tooltip page |
@@ -114,9 +114,9 @@ Capture is **not** in Razor; UI only reflects scan state. Capture orchestration:
 
 ## Configuration model (UI surface)
 
-Settings use control-specific persistence through `SettingsVM` and `SettingsPersistenceService` into `RatConfig` / `config.cfg`; there is no page-level Save or Cancel bar. Complete choices (switches, selects, presets, game mode) apply immediately and are saved asynchronously with per-setting rollback on failure. Editable capture fields keep draft text, validate on blur/Enter, and persist only when valid. TarkovTracker credentials are an explicit exception: they remain local drafts until a successful connection test.
+Settings use control-specific persistence through `SettingsVM` and `SettingsPersistenceService` into `RatConfig` / `config.cfg`; there is no page-level Save or Cancel bar. Complete choices (switches, selects, presets, game mode) apply immediately and are saved asynchronously with per-setting rollback on failure. Editable capture fields keep draft text, validate on blur/Enter, and persist only when valid. TarkovTracker credentials are an explicit exception: they remain local drafts until a successful connection test. Tracking settings expose one section-level TarkovTracker.org API-key management link; TarkovTracker.org is the only supported progress provider.
 
-The PVP/PVE selector (`GameModeSwitch`, the single authoritative control in the expanded sidebar) switches mode-specific tarkov.dev caches and the matching TarkovTracker.org progress context immediately, then persists the selection. Stale tracker requests are canceled or rejected by configuration generation before they can overwrite the active mode. When the sidebar is not expanded (rail or closed narrow drawer), the toolbar instead shows a compact `GameModeIndicator` button: it reflects the current mode, opens the sidebar to the scanner section on click, and hides whenever the sidebar itself is visible, so the two representations never coexist.
+The PvP/PvE/Seasonal dropdown (`GameModeSwitch`, the single authoritative control in the expanded sidebar) switches mode-specific tarkov.dev caches and the matching TarkovTracker.org progress context immediately, then persists the selection. Seasonal uses the `pvp-season` catalog and its independent `SZN_` progress token. Stale tracker requests are canceled or rejected by configuration generation before they can overwrite the active mode. When the sidebar is not expanded (rail or closed narrow drawer), the toolbar instead shows a compact `GameModeIndicator` button: it reflects the current mode, opens the sidebar to the scanner section on click, and hides whenever the sidebar itself is visible, so the two representations never coexist.
 
 ## Package ownership (UI-related)
 

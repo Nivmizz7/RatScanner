@@ -35,6 +35,11 @@ body { font-family: "Segoe UI", system-ui, sans-serif; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 
+/* MudSelect lists render in the global popover portal, outside the scoped
+   GameModeSwitch DOM. Keep the selected mode and open list at equal weight. */
+body .game-mode-switch .mud-input .mud-input-slot,
+.game-mode-list .mud-list-item-text { font-weight: 600; }
+
 /* Visually hidden but announced to assistive tech. */
 .sr-only {
     position: absolute;
