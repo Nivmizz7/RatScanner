@@ -5,10 +5,10 @@
 - **Analyzed:** 2026-08-12
 - **Analyzed source state:** `agent/application-boundaries` working tree based on integration commit `f3b4da4`
 - **RatEye submodule:** `24f8806` (v4.0.0-27-g24f8806 — merged upstream PR #2 + RatEyeTest cleanup)
-- **Source scope:** committed files at `07b6818`; architecture-document edits are excluded from code measurements.
+- **Source scope:** committed files at `f8c4efe`; architecture-document edits are excluded from code measurements.
 - **Method:** refreshed static evidence pass using physical line counts (`(Get-Content -LiteralPath <file>).Count`) and repository searches. No application source changes were made by this analysis. Every finding carries `Status` and `Last verified` so this document can serve as a living register instead of a one-time report.
 
-## Dependency map (at analyzed source state: `07b6818`)
+## Dependency map (at analyzed source state: `f8c4efe`)
 
 ```text
 Input hooks (UserActivityHelper, native) ─┐
