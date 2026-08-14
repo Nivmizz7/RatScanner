@@ -233,20 +233,27 @@ public sealed class RebuildCoordinatorTests
             }
         }
 
-        RebuildCoordinator coordinator = new(Rebuild);
+        using RebuildCoordinator coordinator = new(Rebuild);
         Task first = coordinator.RequestAsync(testCancellation);
-        await firstRebuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
-        Task pending = coordinator.RequestAsync(testCancellation);
-
-        coordinator.Dispose();
-
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => pending);
-        Assert.Throws<ObjectDisposedException>(() =>
+        try
         {
-            _ = coordinator.RequestAsync(testCancellation);
-        });
+            await firstRebuildStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
+            Task pending = coordinator.RequestAsync(testCancellation);
 
-        releaseFirstRebuild.TrySetResult();
+            coordinator.Dispose();
+
+            await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+                pending.WaitAsync(TimeSpan.FromSeconds(5), testCancellation)
+            );
+            Assert.Throws<ObjectDisposedException>(() =>
+            {
+                _ = coordinator.RequestAsync(testCancellation);
+            });
+        }
+        finally
+        {
+            releaseFirstRebuild.TrySetResult();
+        }
         await first.WaitAsync(TimeSpan.FromSeconds(5), testCancellation);
 
         Assert.Equal(1, rebuildCount);
