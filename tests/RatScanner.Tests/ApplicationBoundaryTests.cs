@@ -1,16 +1,11 @@
 #nullable enable
 
-using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Threading;
 using System.Threading.Tasks;
 using RatScanner.FetchModels.TarkovTracker;
 using RatScanner.Runtime;
-using RatScanner.Scan;
 using RatScanner.ViewModel;
 using Xunit;
-using GameMode = RatScanner.TarkovDev.GameMode;
 
 namespace RatScanner.Tests;
 
@@ -89,40 +84,6 @@ public sealed class ApplicationBoundaryTests
         Assert.Same(currentUser, snapshot.CurrentUser);
         Assert.Equal("token", snapshot.Token);
         Assert.Equal(TrackerConnectionState.Connected, snapshot.ConnectionState);
-    }
-
-    private sealed class FakeScanOrchestrator : IScanOrchestrator
-    {
-        public ItemQueue ItemScans { get; } = new();
-
-        public int RebuildCount { get; private set; }
-
-        public event PropertyChangedEventHandler? PropertyChanged;
-
-        public Task RebuildEngineAsync(CancellationToken cancellationToken = default)
-        {
-            RebuildCount++;
-            return Task.CompletedTask;
-        }
-
-        public ScanDiagnosticExportResult ExportLastScanDiagnostics() => throw new NotSupportedException();
-
-        internal void NotifyChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(null));
-    }
-
-    private sealed class FakeTrackerService : ITrackerService
-    {
-        public TrackerStateSnapshot State { get; } =
-            new(Array.Empty<UserProgress>(), "", null, TrackerConnectionState.NotConfigured);
-
-        public Task ActivateModeAsync(GameMode mode, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public Task<TrackerValidationResult> ValidateOrgKeyAsync(
-            GameMode mode,
-            string token,
-            CancellationToken cancellationToken = default
-        ) => throw new NotSupportedException();
     }
 
     private sealed class FakeHotkeyRegistrar : IHotkeyRegistrar

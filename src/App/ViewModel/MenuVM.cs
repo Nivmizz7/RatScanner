@@ -14,24 +14,45 @@ internal class MenuVM : INotifyPropertyChanged
 {
     private readonly IScanOrchestrator _scanOrchestrator;
     private readonly ITrackerService _trackerService;
+    private readonly DefaultItemScan _placeholderScan;
+
+    // Derived-value cache: quest/hideout classification iterates the whole catalog
+    // (tasks + hideout stations) and used to re-run on every property read — several
+    // times per Blazor render across main page, overlay, and minimal menu bindings.
+    // Compute once per (scan, item, tracker snapshot, ShowNonFIRNeeds, task catalog,
+    // hideout catalog) tuple.
+    // TarkovTrackerDB.GetSnapshot returns the same TrackerStateSnapshot instance until
+    // tracker data mutates, so reference equality is a reliable "tracker data changed"
+    // signal without an explicit version. The Item reference and ShowNonFIRNeeds are
+    // part of the key because RefreshItemsForGameMode replaces Item in place on
+    // already-enqueued scans (game-mode/language switch) and the setting toggle must
+    // not serve classification computed under the previous preference.
+    // The task and hideout catalogs are part of the key for the same reason: the
+    // classifier reads them, and TarkovDevAPI hands out empty arrays while a fetch is
+    // still queued (cold start, offline start, TTL refresh). Those arrays are
+    // reference-stable until a fetch replaces the cache entry, so comparing references
+    // recomputes exactly once when the catalog lands instead of pinning "not needed"
+    // classification for the current scan.
+    private ItemScan? _derivedSourceScan;
+    private Item? _derivedSourceItem;
+    private TrackerStateSnapshot? _derivedSourceState;
+    private bool _derivedSourceShowNonFirNeeds;
+    private TarkovDev.Task[]? _derivedSourceTasks;
+    private HideoutStation[]? _derivedSourceHideoutStations;
+    private DerivedScanState? _derivedState;
+
+    internal sealed class DerivedScanState
+    {
+        internal (int Count, int KappaCount) TaskRemaining;
+        internal int HideoutRemaining;
+        internal List<KeyValuePair<string, KeyValuePair<int, int>>>? TeamNeeds;
+    }
 
     public ItemQueue ItemScans => _scanOrchestrator.ItemScans;
 
     internal FetchModels.TarkovTracker.UserProgress CurrentUserProgress => _trackerService.State.CurrentUser;
 
-    public ItemScan LastItemScan =>
-        ItemScans.LastOrDefault()
-        ?? new DefaultItemScan(
-            new Item
-            {
-                Id = "loading",
-                Name = "Loading...",
-                ShortName = "Loading...",
-                Width = 1,
-                Height = 1,
-            },
-            isSeed: true
-        );
+    public ItemScan LastItemScan => ItemScans.LastOrDefault() ?? _placeholderScan;
 
     public Item LastItem => LastItemScan.Item;
 
@@ -105,79 +126,140 @@ internal class MenuVM : INotifyPropertyChanged
     public ItemSellPrice? BestTraderOffer => LastItem.GetBestTraderOffer();
     public TraderOffer? BestTraderOfferVendor => LastItem.GetBestTraderOfferVendor();
 
-    public (int count, int kappaCount) TaskRemainingResult => LastItem.GetTaskRemaining(CurrentUserProgress);
+    public (int count, int kappaCount) TaskRemainingResult => Derived.TaskRemaining;
 
-    public int TaskRemaining => TaskRemainingResult.count;
+    public int TaskRemaining => Derived.TaskRemaining.Count;
 
-    public int TaskRemainingKappa => TaskRemainingResult.kappaCount;
+    public int TaskRemainingKappa => Derived.TaskRemaining.KappaCount;
 
     public bool KappaNeeded => TaskRemainingKappa > 0;
 
-    public int HideoutRemaining => LastItem.GetHideoutRemaining(CurrentUserProgress);
+    public int HideoutRemaining => Derived.HideoutRemaining;
 
     public bool ItemNeeded => TaskRemaining + HideoutRemaining > 0;
 
     public static bool ShowKappaNeeds => RatConfig.Tracking.ShowKappaNeeds;
 
-    public List<KeyValuePair<string, KeyValuePair<int, int>>>? ItemTeamNeeds
-    {
-        get
-        {
-            TrackerStateSnapshot trackerState = _trackerService.State;
-            IReadOnlyList<FetchModels.TarkovTracker.UserProgress> progress = trackerState.Progress;
-            if (progress.Count == 0)
-                return null;
-            IEnumerable<FetchModels.TarkovTracker.UserProgress> teamProgress = progress.Where(x =>
-                x.UserId != trackerState.Self
-            );
+    public List<KeyValuePair<string, KeyValuePair<int, int>>>? ItemTeamNeeds => Derived.TeamNeeds;
 
-            List<KeyValuePair<string, KeyValuePair<int, int>>> needs = [];
-            foreach (FetchModels.TarkovTracker.UserProgress? memberProgress in teamProgress)
-            {
-                int task = LastItem.GetTaskRemaining(memberProgress).count;
-                int hideout = LastItem.GetHideoutRemaining(memberProgress);
-
-                if (task == 0 && hideout == 0)
-                    continue;
-
-                KeyValuePair<int, int> need = new(task, hideout);
-
-                string baseName = memberProgress.DisplayName ?? "Unknown";
-                string name = baseName;
-                for (int i = 2; i < 99; i++)
-                {
-                    if (needs.All(n => n.Key != name))
-                        break;
-                    name = $"{baseName} #{i}";
-                }
-                needs.Add(new KeyValuePair<string, KeyValuePair<int, int>>(name, need));
-            }
-            return needs;
-        }
-    }
     public (int task, int hideout) ItemTeamNeedsSummed
     {
         get
         {
-            List<KeyValuePair<string, KeyValuePair<int, int>>>? needs = ItemTeamNeeds;
+            List<KeyValuePair<string, KeyValuePair<int, int>>>? needs = Derived.TeamNeeds;
             return (needs?.Sum(i => i.Value.Key) ?? 0, needs?.Sum(i => i.Value.Value) ?? 0);
         }
     }
-    public bool ItemTeamNeeded
-    {
-        get
-        {
-            List<KeyValuePair<string, KeyValuePair<int, int>>>? needs = ItemTeamNeeds;
-            return needs != null && needs.Count != 0;
-        }
-    }
+
+    public bool ItemTeamNeeded => Derived.TeamNeeds is { Count: > 0 };
     public event PropertyChangedEventHandler? PropertyChanged;
 
     internal MenuVM(IScanOrchestrator scanOrchestrator, ITrackerService trackerService)
     {
         _scanOrchestrator = scanOrchestrator ?? throw new ArgumentNullException(nameof(scanOrchestrator));
         _trackerService = trackerService ?? throw new ArgumentNullException(nameof(trackerService));
+        _placeholderScan = CreatePlaceholderScan();
         _scanOrchestrator.PropertyChanged += ModelPropertyChanged;
+    }
+
+    private static DefaultItemScan CreatePlaceholderScan() =>
+        new(
+            new Item
+            {
+                Id = "loading",
+                Name = "Loading...",
+                ShortName = "Loading...",
+                Width = 1,
+                Height = 1,
+            },
+            isSeed: true
+        );
+
+    /// <summary>
+    /// Quest/hideout/team classification for the current scan, computed once per
+    /// (scan, item, tracker snapshot, ShowNonFIRNeeds, task catalog, hideout catalog)
+    /// tuple and reused across property reads.
+    /// </summary>
+    internal DerivedScanState Derived
+    {
+        get
+        {
+            ItemScan scan = LastItemScan;
+            Item item = scan.Item;
+            bool showNonFirNeeds = RatConfig.Tracking.ShowNonFIRNeeds;
+            TrackerStateSnapshot trackerState = _trackerService.State;
+            TarkovDev.Task[] tasks = TarkovDevAPI.GetTasks();
+            HideoutStation[] hideoutStations = TarkovDevAPI.GetHideoutStations();
+            if (
+                !ReferenceEquals(_derivedSourceScan, scan)
+                || !ReferenceEquals(_derivedSourceItem, item)
+                || _derivedSourceShowNonFirNeeds != showNonFirNeeds
+                || !ReferenceEquals(_derivedSourceState, trackerState)
+                || !ReferenceEquals(_derivedSourceTasks, tasks)
+                || !ReferenceEquals(_derivedSourceHideoutStations, hideoutStations)
+            )
+            {
+                _derivedSourceScan = scan;
+                _derivedSourceItem = item;
+                _derivedSourceShowNonFirNeeds = showNonFirNeeds;
+                _derivedSourceState = trackerState;
+                _derivedSourceTasks = tasks;
+                _derivedSourceHideoutStations = hideoutStations;
+                _derivedState = ComputeDerivedState(item, trackerState);
+            }
+
+            return _derivedState!;
+        }
+    }
+
+    private static DerivedScanState ComputeDerivedState(Item item, TrackerStateSnapshot trackerState)
+    {
+        FetchModels.TarkovTracker.UserProgress currentUser = trackerState.CurrentUser;
+        (int taskCount, int kappaCount) = item.GetTaskRemaining(currentUser);
+        return new DerivedScanState
+        {
+            TaskRemaining = (taskCount, kappaCount),
+            HideoutRemaining = item.GetHideoutRemaining(currentUser),
+            TeamNeeds = ComputeTeamNeeds(item, trackerState),
+        };
+    }
+
+    private static List<KeyValuePair<string, KeyValuePair<int, int>>>? ComputeTeamNeeds(
+        Item item,
+        TrackerStateSnapshot trackerState
+    )
+    {
+        IReadOnlyList<FetchModels.TarkovTracker.UserProgress> progress = trackerState.Progress;
+        if (progress.Count == 0)
+            return null;
+        IEnumerable<FetchModels.TarkovTracker.UserProgress> teamProgress = progress.Where(x =>
+            x.UserId != trackerState.Self
+        );
+
+        List<KeyValuePair<string, KeyValuePair<int, int>>> needs = [];
+        HashSet<string> usedNames = [];
+        foreach (FetchModels.TarkovTracker.UserProgress memberProgress in teamProgress)
+        {
+            int task = item.GetTaskRemaining(memberProgress).count;
+            int hideout = item.GetHideoutRemaining(memberProgress);
+
+            if (task == 0 && hideout == 0)
+                continue;
+
+            KeyValuePair<int, int> need = new(task, hideout);
+
+            string baseName = memberProgress.DisplayName ?? "Unknown";
+            string name = baseName;
+            int suffix = 2;
+            while (usedNames.Contains(name))
+            {
+                name = $"{baseName} #{suffix}";
+                suffix++;
+            }
+            usedNames.Add(name);
+            needs.Add(new KeyValuePair<string, KeyValuePair<int, int>>(name, need));
+        }
+        return needs;
     }
 
     protected virtual void OnPropertyChanged(string? propertyName = null)
