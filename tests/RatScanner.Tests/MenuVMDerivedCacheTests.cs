@@ -156,6 +156,40 @@ public sealed class MenuVMDerivedCacheTests
     }
 
     [Fact]
+    public void Derived_state_is_recomputed_when_the_hideout_catalog_arrives()
+    {
+        FakeScanOrchestrator orchestrator = new();
+        FakeTrackerService tracker = new();
+        orchestrator.ItemScans.Enqueue(CreateScan("item-a"));
+        MenuVM viewModel = new(orchestrator, tracker);
+
+        // Cold/offline start: the catalog is empty while the fetch is still queued, so
+        // the item classifies as "not needed".
+        using (SeedTarkovDevCatalogWithoutHideoutNeed())
+        {
+            MenuVM.DerivedScanState empty = viewModel.Derived;
+            Assert.Equal(0, empty.HideoutRemaining);
+
+            // The catalog lands. Scan, item, tracker snapshot and ShowNonFIRNeeds are all
+            // unchanged, so only the catalog reference can invalidate the cache.
+            using (SeedTarkovDevCatalogWithHideoutNeed("item-a"))
+            {
+                MenuVM.DerivedScanState refreshed = viewModel.Derived;
+
+                Assert.NotSame(empty, refreshed);
+                Assert.Equal(3, refreshed.HideoutRemaining);
+            }
+        }
+    }
+
+    // Seeds empty task and hideout catalogs, mirroring a cold start where the fetch has
+    // not landed yet. Restores the previous cache entries on dispose.
+    private static IDisposable SeedTarkovDevCatalogWithoutHideoutNeed()
+    {
+        return SeedTarkovDevCatalog(Array.Empty<HideoutStation>());
+    }
+
+    [Fact]
     public void Team_needs_are_part_of_the_shared_derived_state()
     {
         using IDisposable seededCatalog = SeedTarkovDevCatalogWithHideoutNeed("item-a");
@@ -221,20 +255,7 @@ public sealed class MenuVMDerivedCacheTests
     // format.
     private static IDisposable SeedTarkovDevCatalogWithHideoutNeed(string itemId)
     {
-        ConcurrentDictionary<string, (long expire, object response)> cache = TarkovDevCache();
-        string locale = RatConfig.NameScan.Language.ToTarkovDevLocale();
-        string mode = RatConfig.GameMode.ToString();
-        string tasksKey = $"tasks_v2_{locale}_{mode}";
-        string hideoutKey = $"hideout_{locale}_{mode}";
-        long expire = DateTimeOffset.Now.ToUnixTimeSeconds() + RatConfig.LongTTL;
-
-        bool hadTasks = cache.TryGetValue(tasksKey, out (long expire, object response) previousTasks);
-        bool hadHideout = cache.TryGetValue(hideoutKey, out (long expire, object response) previousHideout);
-
-        // Empty task catalog keeps task needs at zero and avoids a fire-and-forget fetch.
-        cache[tasksKey] = (expire, Array.Empty<RatScanner.TarkovDev.Task>());
-        cache[hideoutKey] = (
-            expire,
+        return SeedTarkovDevCatalog(
             new HideoutStation[]
             {
                 new()
@@ -259,6 +280,23 @@ public sealed class MenuVMDerivedCacheTests
                 },
             }
         );
+    }
+
+    private static IDisposable SeedTarkovDevCatalog(HideoutStation[] hideoutStations)
+    {
+        ConcurrentDictionary<string, (long expire, object response)> cache = TarkovDevCache();
+        string locale = RatConfig.NameScan.Language.ToTarkovDevLocale();
+        string mode = RatConfig.GameMode.ToString();
+        string tasksKey = $"tasks_v2_{locale}_{mode}";
+        string hideoutKey = $"hideout_{locale}_{mode}";
+        long expire = DateTimeOffset.Now.ToUnixTimeSeconds() + RatConfig.LongTTL;
+
+        bool hadTasks = cache.TryGetValue(tasksKey, out (long expire, object response) previousTasks);
+        bool hadHideout = cache.TryGetValue(hideoutKey, out (long expire, object response) previousHideout);
+
+        // Empty task catalog keeps task needs at zero and avoids a fire-and-forget fetch.
+        cache[tasksKey] = (expire, Array.Empty<RatScanner.TarkovDev.Task>());
+        cache[hideoutKey] = (expire, hideoutStations);
 
         return new DisposeAction(() =>
         {
