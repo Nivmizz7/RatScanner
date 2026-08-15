@@ -2,10 +2,16 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace RatScanner.Scan;
 
+[SuppressMessage(
+    "Naming",
+    "CA1711:Identifiers should not have incorrect suffix",
+    Justification = "This type is the scanner's queue abstraction."
+)]
 public class ItemQueue : IEnumerable<ItemScan>
 {
     private readonly object enqueueSync = new();

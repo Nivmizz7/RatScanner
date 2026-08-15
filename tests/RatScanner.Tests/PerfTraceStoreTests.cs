@@ -80,7 +80,7 @@ public sealed class PerfTraceStoreTests : IDisposable
         PerfTraceStore.MarkScan(stale.Sequence, "wrong.mark");
         PerfTraceStore.NoteScan(current.Sequence, "item", "right");
 
-        PerfTraceSnapshot latest = PerfTraceStore.RecentScanSnapshots().Last();
+        PerfTraceSnapshot latest = PerfTraceStore.RecentScanSnapshots()[^1];
         Assert.Equal("right", latest.Notes["item"]);
         Assert.DoesNotContain(latest.Stages, stage => stage.Name == "wrong.mark");
     }
@@ -117,7 +117,7 @@ public sealed class PerfTraceStoreTests : IDisposable
 
         Assert.Equal(32, scans.Count);
         // Oldest entries are evicted, so the newest scan is always present.
-        Assert.Equal(60, scans.Last().Sequence);
+        Assert.Equal(60, scans[^1].Sequence);
     }
 
     [Fact]

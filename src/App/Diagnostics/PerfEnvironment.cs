@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -99,6 +100,11 @@ internal static class PerfEnvironment
         return Rectangle.FromLTRB(left, top, right, bottom);
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible",
+        Justification = "The read-only return contract prevents callers from depending on the mutable list implementation."
+    )]
     private static IReadOnlyList<PerfDisplayInfo> DescribeDisplays()
     {
         List<PerfDisplayInfo> displays = [];
@@ -130,6 +136,11 @@ internal static class PerfEnvironment
         return displays;
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible",
+        Justification = "The read-only return contract prevents callers from depending on the mutable list implementation."
+    )]
     private static IReadOnlyList<string> DescribeAdapters()
     {
         List<string> adapters = [];

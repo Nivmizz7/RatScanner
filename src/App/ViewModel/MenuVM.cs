@@ -35,11 +35,14 @@ internal class MenuVM : INotifyPropertyChanged
 
     public Item LastItem => LastItemScan.Item;
 
+    // WPF resolves these through the instance DataContext; making them static breaks bindings.
+#pragma warning disable CA1822
     /// <summary>Numeric product version from csproj.</summary>
     public string Version => RatConfig.Version;
 
     /// <summary>Sidebar/about display, e.g. <c>v4.0.0-beta.1</c>.</summary>
     public string VersionDisplay => RatConfig.VersionDisplay;
+#pragma warning restore CA1822
 
     public string Updated =>
         DateTime.TryParse(
@@ -82,6 +85,8 @@ internal class MenuVM : INotifyPropertyChanged
 
     public bool RecommendFlea => HasFleaOffer && (!HasTraderOffer || FleaPrice > TraderPrice);
 
+    // These localized labels are instance-bound and refreshed through INotifyPropertyChanged.
+#pragma warning disable CA1822
     public string FleaMarketLabel => PresentationText.T("FleaMarket", "Flea Market");
 
     public string PricePerSlotLabel => PresentationText.T("PricePerSlot", "Price per Slot");
@@ -91,6 +96,7 @@ internal class MenuVM : INotifyPropertyChanged
     public string NeededItemsLabel => PresentationText.T("NeededQuestHideout", "Needed Quest & Hideout");
 
     public string UpdatedTimestampLabel => PresentationText.T("UpdatedTimestamp", "Updated Timestamp");
+#pragma warning restore CA1822
 
     public string WikiLink => LastItem.GetWikiLink();
 

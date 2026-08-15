@@ -20,8 +20,7 @@ internal sealed class ScanThrottle
 
     internal ScanThrottle(long cooldownMs)
     {
-        if (cooldownMs < 0)
-            throw new ArgumentOutOfRangeException(nameof(cooldownMs));
+        ArgumentOutOfRangeException.ThrowIfNegative(cooldownMs);
         _cooldownMs = cooldownMs;
     }
 

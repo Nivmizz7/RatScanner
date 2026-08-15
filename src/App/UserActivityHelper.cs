@@ -520,7 +520,9 @@ public enum WM : uint
     KEYFIRST = 0x0100,
     KEYDOWN = 0x0100,
     KEYUP = 0x0101,
+#pragma warning disable CA1720 // Mirrors the Win32 WM_CHAR message name.
     CHAR = 0x0102,
+#pragma warning restore CA1720
     DEADCHAR = 0x0103,
     SYSKEYDOWN = 0x0104,
     SYSKEYUP = 0x0105,
@@ -673,7 +675,7 @@ public enum WM : uint
 
 internal class KeyUpEventArgs : EventArgs
 {
-    internal bool Handled = false;
+    internal bool Handled;
 
     internal int VKCode;
 
@@ -717,7 +719,7 @@ internal class KeyUpEventArgs : EventArgs
 
 internal class KeyDownEventArgs : EventArgs
 {
-    internal bool Handled = false;
+    internal bool Handled;
 
     internal int VKCode;
 

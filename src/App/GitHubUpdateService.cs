@@ -320,7 +320,7 @@ internal static class GitHubUpdateService
                 return false;
             }
 
-            WriteApplyScript(applyScript, installDir, payloadDir, Process.GetCurrentProcess().Id);
+            WriteApplyScript(applyScript, installDir, payloadDir, Environment.ProcessId);
             Logger.LogInfo("Launching update applicator...");
 
             ProcessStartInfo psi = new()

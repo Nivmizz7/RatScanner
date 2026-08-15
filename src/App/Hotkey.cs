@@ -11,16 +11,16 @@ public class Hotkey : INotifyPropertyChanged
     /// <summary>
     /// Keyboard key of the selected hotkey
     /// </summary>
-    public HashSet<Key> KeyboardKeys;
+    public HashSet<Key> KeyboardKeys { get; set; }
 
     /// <summary>
     /// Mouse buttons of the selected hotkey
     /// </summary>
-    public HashSet<MouseButton> MouseButtons;
+    public HashSet<MouseButton> MouseButtons { get; set; }
 
-    public bool RequiresKeyboard;
+    public bool RequiresKeyboard { get; set; }
 
-    public bool RequiresMouse;
+    public bool RequiresMouse { get; set; }
 
     public Hotkey(Hotkey hotkey)
     {

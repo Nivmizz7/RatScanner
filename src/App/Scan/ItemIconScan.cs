@@ -8,9 +8,11 @@ namespace RatScanner.Scan;
 
 public class ItemIconScan : ItemScan
 {
-    public bool Rotated;
-    public ItemExtraInfo ItemExtraInfo;
-    public Vector2 ItemSize;
+    public bool Rotated { get; set; }
+
+    public ItemExtraInfo ItemExtraInfo { get; set; }
+
+    public Vector2 ItemSize { get; set; }
 
     private Vector2 _toolTipPosition;
 

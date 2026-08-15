@@ -10,7 +10,7 @@ internal sealed class HotkeyManager : IDisposable
 {
     private readonly RatScannerMain _owner;
     private readonly object _registrationLock = new();
-    private long _last_mouse_click = 0;
+    private long _last_mouse_click;
     private bool _engineReady;
     private bool _disposed;
 

@@ -13,7 +13,7 @@ internal class ActiveHotkey : Hotkey, IDisposable
     /// <summary>
     /// <see langword="true"/> if the hotkey should not be forwarded down
     /// </summary>
-    internal bool SuppressHotkey = false;
+    internal bool SuppressHotkey;
 
     internal bool Enabled = true;
 

@@ -256,7 +256,7 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         _pendingDpiRefresh = WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
     }
 
-    private void UpdateElements() { }
+    private static void UpdateElements() { }
 
     private void HyperlinkRequestNavigate(object? sender, RequestNavigateEventArgs e)
     {

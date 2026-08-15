@@ -256,6 +256,11 @@ public partial class PageSwitcher : Window, IDisposable
         return true;
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible",
+        Justification = "The read-only return contract prevents callers from depending on the mutable list implementation."
+    )]
     private static IReadOnlyList<LogicalWorkingArea> GetLogicalWorkingAreas()
     {
         System.Windows.Forms.Screen[] screens = System.Windows.Forms.Screen.AllScreens;
@@ -459,7 +464,7 @@ public partial class PageSwitcher : Window, IDisposable
         );
     }
 
-    private void AddJumpList()
+    private static void AddJumpList()
     {
         JumpTask showUITask = new()
         {
@@ -1150,7 +1155,7 @@ public partial class PageSwitcher : Window, IDisposable
         MinimalUIIcon.Data = GetMinimalUIIconGeometry();
     }
 
-    private string GetProductVersionDisplay()
+    private static string GetProductVersionDisplay()
     {
         string version = RatConfig.VersionDisplay;
         int plus = version.IndexOf('+');

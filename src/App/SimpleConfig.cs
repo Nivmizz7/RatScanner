@@ -20,6 +20,8 @@ internal class SimpleConfig
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool WritePrivateProfileString(string section, string key, string? val, string filePath);
 
+    // GetPrivateProfileString writes a variable-length null-terminated value into this buffer.
+#pragma warning disable CA1838
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern uint GetPrivateProfileString(
         string section,
@@ -29,6 +31,7 @@ internal class SimpleConfig
         uint size,
         string filePath
     );
+#pragma warning restore CA1838
 
     internal SimpleConfig(string configPath, string section = "default")
     {
@@ -117,7 +120,7 @@ internal class SimpleConfig
         throw new InvalidDataException($"Configuration value '{Section}.{key}' is too long.");
     }
 
-    private T ReadOrDefault<T>(Func<T> read, T defaultValue)
+    private static T ReadOrDefault<T>(Func<T> read, T defaultValue)
     {
         try
         {

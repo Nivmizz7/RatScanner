@@ -15,7 +15,6 @@ namespace RatScanner;
 internal static class RatConfig
 {
     private static readonly object GameDisplayLock = new();
-    private static readonly WindowsGameDisplayService GameDisplayService = new();
     private static readonly TimeSpan GameDisplayRefreshInterval = TimeSpan.FromSeconds(5);
     private static DateTimeOffset _lastGameDisplayRefresh = DateTimeOffset.MinValue;
 
@@ -72,7 +71,7 @@ internal static class RatConfig
     internal static class NameScan
     {
         internal static bool Enable = true;
-        internal static bool EnableAuto = false;
+        internal static bool EnableAuto;
         internal static Language Language = Language.English;
         internal static float ConfWarnThreshold = 0.85f;
 
@@ -124,11 +123,11 @@ internal static class RatConfig
         internal static bool ShowAvgDayPrice = true;
         internal static bool ShowPricePerSlot = true;
         internal static bool ShowTraderPrice = true;
-        internal static bool ShowUpdated = false;
-        internal static bool ShowKappa = false;
+        internal static bool ShowUpdated;
+        internal static bool ShowKappa;
         internal static bool ShowQuestHideoutTracker = true;
-        internal static bool ShowQuestHideoutTeamTracker = false;
-        internal static int Opacity = 0;
+        internal static bool ShowQuestHideoutTeamTracker;
+        internal static int Opacity;
     }
 
     // Progress Tracking options
@@ -136,7 +135,7 @@ internal static class RatConfig
     {
         internal static bool ShowNonFIRNeeds = true;
 
-        internal static bool ShowKappaNeeds = false;
+        internal static bool ShowKappaNeeds;
 
         internal static class TarkovTracker
         {
@@ -185,10 +184,10 @@ internal static class RatConfig
         set { }
     }
 #else
-    internal static bool LogDebug = false;
+    internal static bool LogDebug;
 #endif
     internal static GameMode GameMode = GameMode.Regular;
-    internal static bool MinimizeToTray = false;
+    internal static bool MinimizeToTray;
     internal static bool AlwaysOnTop = true;
     internal static int SuperShortTTL = 30; // 30 seconds
     internal static int ShortTTL = 60 * 5; // 5 minutes
@@ -220,8 +219,8 @@ internal static class RatConfig
     internal static event Action? SettingsChanged;
     internal static int LastWindowPositionX = int.MinValue;
     internal static int LastWindowPositionY = int.MinValue;
-    internal static int LastWindowWidth = 0;
-    internal static int LastWindowHeight = 0;
+    internal static int LastWindowWidth;
+    internal static int LastWindowHeight;
     internal static WindowMode LastWindowMode = WindowMode.Normal;
 
     internal static float GameScale => RatScannerMain.Instance.RatEyeEngine.Config.ProcessingConfig.Scale;
@@ -393,7 +392,7 @@ internal static class RatConfig
         }
         else
         {
-            GameDisplayConfiguration automaticConfiguration = GameDisplayService.Detect(
+            GameDisplayConfiguration automaticConfiguration = WindowsGameDisplayService.Detect(
                 GameDisplayPreferences.Automatic
             );
             GameDisplayPreferences migratedPreferences = configFileExists
@@ -618,7 +617,7 @@ internal static class RatConfig
                 return false;
 
             GameDisplayConfiguration previous = GameDisplayConfiguration;
-            GameDisplayConfiguration detected = GameDisplayService.Detect(GetGameDisplayPreferences());
+            GameDisplayConfiguration detected = WindowsGameDisplayService.Detect(GetGameDisplayPreferences());
             viewportChanged =
                 previous.GameViewport != detected.GameViewport
                 || Math.Abs(previous.DisplayScale - detected.DisplayScale) > 0.001;
@@ -639,7 +638,7 @@ internal static class RatConfig
     }
 
     internal static GameDisplayConfiguration DetectGameDisplayConfiguration(GameDisplayPreferences preferences) =>
-        GameDisplayService.Detect(preferences);
+        WindowsGameDisplayService.Detect(preferences);
 
     internal static GameDisplayPreferences GetGameDisplayPreferences()
     {
