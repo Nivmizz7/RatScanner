@@ -51,11 +51,6 @@ public partial class MinimalMenu : UserControl, ISwitchable
         PageSwitcher.Instance.ShowUI();
     }
 
-    public void UtilizeState(object state)
-    {
-        throw new System.NotImplementedException();
-    }
-
     public void OnOpen()
     {
         if (DataContext is MenuVM menu)

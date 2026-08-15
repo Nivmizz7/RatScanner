@@ -285,7 +285,7 @@ public partial class PageSwitcher : Window, IDisposable
 
     internal readonly record struct LogicalWorkingArea(double Left, double Top, double Right, double Bottom);
 
-    internal void Navigate(UserControl nextControl, object? state = null)
+    internal void Navigate(UserControl nextControl)
     {
         if (!(nextControl is ISwitchable))
             throw new ArgumentException("NextPage is not ISwitchable! " + nextControl.Name);
@@ -300,9 +300,6 @@ public partial class PageSwitcher : Window, IDisposable
         activeControl = nextControl;
 
         ISwitchable nextControlSwitchable = (ISwitchable)nextControl;
-        if (state != null)
-            nextControlSwitchable.UtilizeState(state);
-
         nextControlSwitchable.OnOpen();
     }
 
