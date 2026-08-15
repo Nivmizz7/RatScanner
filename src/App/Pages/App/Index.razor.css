@@ -238,14 +238,22 @@
     position: relative;
     display: grid;
     place-items: center;
+    overflow: hidden;
     border: 1px solid var(--rs-border-subtle);
     border-radius: 8px;
     background: var(--rs-surface-2);
 }
 
 .item-art img {
-    max-width: calc(100% - 10px);
-    max-height: calc(100% - 10px);
+    /* Deterministic frame fill: percentage max-width/max-height on a grid item
+       can leave the grid area height indefinite in Chromium, so tall (and even
+       square) intrinsic icons paint outside the frame. Absolute positioning
+       resolves the percentages against this fixed-size box; object-fit: contain
+       letterboxes without cropping or stretching any aspect ratio. */
+    position: absolute;
+    inset: 5px;
+    width: calc(100% - 10px);
+    height: calc(100% - 10px);
     object-fit: contain;
 }
 

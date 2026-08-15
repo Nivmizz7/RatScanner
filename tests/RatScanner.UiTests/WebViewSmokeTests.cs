@@ -8,6 +8,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,101 +26,18 @@ public sealed class WebViewSmokeTests
     public async Task Main_shell_navigation_and_responsive_layout_work_in_WebView2()
     {
         CancellationToken testCancellation = TestContext.Current.CancellationToken;
-        string repositoryRoot = FindRepositoryRoot();
-        string configuration = GetConfiguration();
-        string appDirectory = Path.Combine(
-            repositoryRoot,
-            "src",
-            "App",
-            "bin",
-            configuration,
-            "net10.0-windows10.0.22621.0"
-        );
-        string appPath = Path.Combine(appDirectory, "RatScanner.exe");
-        Assert.True(File.Exists(appPath), $"Build the {configuration} app before running UI tests: {appPath}");
-
-        Process[] existingProcesses = Process.GetProcessesByName("RatScanner");
-        Assert.Empty(existingProcesses);
-
-        string artifactRoot =
-            Environment.GetEnvironmentVariable("RATSCANNER_UI_ARTIFACTS")
-            ?? Path.Combine(repositoryRoot, "artifacts", "ui-tests");
-        string runDirectory = Path.Combine(
-            artifactRoot,
-            $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid():N}"
-        );
-        Directory.CreateDirectory(runDirectory);
-
-        string profileDirectory = Path.Combine(Path.GetTempPath(), $"RatScanner-ui-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(profileDirectory);
-
-        Process? app = null;
-        Task<string>? stdoutTask = null;
-        Task<string>? stderrTask = null;
-        IPlaywright? playwright = null;
-        IBrowser? browser = null;
-        IBrowserContext? context = null;
-        IPage? page = null;
-        bool traceStarted = false;
-        bool failed = false;
-        Exception? testFailure = null;
-        ConcurrentQueue<string> runtimeFailures = new();
-
+        await using UiSession session = await UiSession.StartAsync(testCancellation);
         try
         {
-            ProcessStartInfo startInfo = new(appPath)
-            {
-                WorkingDirectory = appDirectory,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            };
-            startInfo.Environment["RATSCANNER_UI_TEST_CDP_PORT"] = "0";
-            startInfo.Environment["RATSCANNER_UI_TEST_PROFILE"] = profileDirectory;
-
-            app = Process.Start(startInfo);
-            Assert.NotNull(app);
-            stdoutTask = app.StandardOutput.ReadToEndAsync(testCancellation);
-            stderrTask = app.StandardError.ReadToEndAsync(testCancellation);
-
-            int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
-            File.WriteAllText(Path.Combine(runDirectory, "endpoint.txt"), $"http://127.0.0.1:{port}");
-
-            playwright = await Playwright.CreateAsync();
-            float slowMo = ParseSlowMo();
-            browser = await playwright.Chromium.ConnectOverCDPAsync(
-                $"http://127.0.0.1:{port}",
-                new BrowserTypeConnectOverCDPOptions
-                {
-                    ArtifactsDir = runDirectory,
-                    SlowMo = slowMo,
-                    Timeout = (float)StartupTimeout.TotalMilliseconds,
-                }
-            );
-            context = Assert.Single(browser.Contexts);
-            await context.Tracing.StartAsync(
-                new TracingStartOptions
-                {
-                    Screenshots = true,
-                    Snapshots = true,
-                    Sources = true,
-                }
-            );
-            traceStarted = true;
-
-            page = await WaitForAppPageAsync(context, app, StartupTimeout);
-            AttachRuntimeDiagnostics(page, runtimeFailures);
-
-            await ResizeAppWindowAsync(app, page, width: 1100, height: 850);
+            IPage page = session.Page;
 
             await page.Locator(".scan-page")
                 .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 120_000 });
             await AssertVisibleAsync(page.Locator(".rs-search-field input"));
             await AssertVisibleAsync(page.GetByRole(AriaRole.Navigation).First);
+            await session.ResizeAsync(width: 1100, height: 850);
             await AssertNoHorizontalOverflowAsync(page, "desktop scan page");
-            await page.ScreenshotAsync(
-                new PageScreenshotOptions { Path = Path.Combine(runDirectory, "desktop-scan.png"), FullPage = true }
-            );
+            await session.ScreenshotAsync("desktop-scan.png");
 
             ILocator settingsLink = page.Locator("a[href='/app/settings/general']");
             await settingsLink.FocusAsync();
@@ -163,15 +81,9 @@ public sealed class WebViewSmokeTests
             Assert.Equal(0, await page.Locator("a[href*='tarkovtracker.io' i]").CountAsync());
             await AssertNoHorizontalOverflowAsync(page, "desktop tracking settings");
             await seasonalTrackingHeading.ScrollIntoViewIfNeededAsync();
-            await page.ScreenshotAsync(
-                new PageScreenshotOptions
-                {
-                    Path = Path.Combine(runDirectory, "desktop-seasonal-tracking.png"),
-                    FullPage = false,
-                }
-            );
+            await session.ScreenshotAsync("desktop-seasonal-tracking.png", fullPage: false);
 
-            await ResizeAppWindowAsync(app, page, width: 600, height: 850);
+            await session.ResizeAsync(width: 600, height: 850);
             await page.Locator(".sidebar.overlay")
                 .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
             await page.WaitForFunctionAsync(
@@ -194,14 +106,8 @@ public sealed class WebViewSmokeTests
                 width: trackingViewportWidth,
                 surface: "narrow tracking settings"
             );
-            await page.ScreenshotAsync(
-                new PageScreenshotOptions
-                {
-                    Path = Path.Combine(runDirectory, "narrow-tracking-settings.png"),
-                    FullPage = false,
-                }
-            );
-            await ResizeAppWindowAsync(app, page, width: 1100, height: 850);
+            await session.ScreenshotAsync("narrow-tracking-settings.png", fullPage: false);
+            await session.ResizeAsync(width: 1100, height: 850);
 
             ILocator aboutLink = page.Locator("a[href='/app/credits']");
             await aboutLink.ClickAsync();
@@ -216,7 +122,7 @@ public sealed class WebViewSmokeTests
 
             await page.Locator("a[href='/app/settings/general']").ClickAsync();
             await page.WaitForURLAsync("**/app/settings/general");
-            await ResizeAppWindowAsync(app, page, width: 600, height: 850);
+            await session.ResizeAsync(width: 600, height: 850);
             await page.Locator(".sidebar.overlay")
                 .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Attached });
             await page.WaitForFunctionAsync(
@@ -244,230 +150,188 @@ public sealed class WebViewSmokeTests
                 width: viewportWidth,
                 surface: "narrow settings page"
             );
-            await page.ScreenshotAsync(
-                new PageScreenshotOptions
-                {
-                    Path = Path.Combine(runDirectory, "narrow-settings.png"),
-                    // Full-page capture includes the transformed-offscreen drawer in the image bounds.
-                    // Capture the real narrow viewport so the visual artifact matches what a user sees.
-                    FullPage = false,
-                }
+            await session.ScreenshotAsync(
+                "narrow-settings.png",
+                // Full-page capture includes the transformed-offscreen drawer in the image bounds.
+                // Capture the real narrow viewport so the visual artifact matches what a user sees.
+                fullPage: false
             );
 
             string ariaSnapshot = await page.Locator("body").AriaSnapshotAsync();
             await File.WriteAllTextAsync(
-                Path.Combine(runDirectory, "accessibility.yml"),
+                Path.Combine(session.RunDirectory, "accessibility.yml"),
                 ariaSnapshot,
                 testCancellation
             );
-            await File.WriteAllTextAsync(Path.Combine(runDirectory, "current-url.txt"), page.Url, testCancellation);
+            await File.WriteAllTextAsync(
+                Path.Combine(session.RunDirectory, "current-url.txt"),
+                page.Url,
+                testCancellation
+            );
 
-            Assert.Empty(runtimeFailures);
+            Assert.Empty(session.RuntimeFailures);
         }
         catch (Exception exception)
         {
-            failed = true;
-            testFailure = exception;
-            if (page is not null)
-            {
-                try
-                {
-                    File.WriteAllText(Path.Combine(runDirectory, "failure-url.txt"), page.Url);
-                    await CaptureFailureEvidenceAsync(page, runDirectory);
-                }
-                catch (Exception captureException)
-                {
-                    TryWriteDiagnostic(
-                        Path.Combine(runDirectory, "failure-capture-error.txt"),
-                        captureException.ToString()
-                    );
-                }
-            }
+            await session.MarkFailedAsync(exception);
+            throw;
         }
+    }
 
-        List<Exception> cleanupFailures = [];
-        await RecordCleanupFailureAsync(
-            cleanupFailures,
-            async () =>
-            {
-                if (!runtimeFailures.IsEmpty)
-                    await File.WriteAllLinesAsync(Path.Combine(runDirectory, "browser-runtime.log"), runtimeFailures);
-            }
-        );
-
-        if (traceStarted && context is not null)
-        {
-            await RecordCleanupFailureAsync(
-                cleanupFailures,
-                async () =>
-                {
-                    await context.Tracing.StopAsync(
-                        failed ? new TracingStopOptions { Path = Path.Combine(runDirectory, "trace.zip") } : null
-                    );
-                }
-            );
-            RecordCleanupFailure(
-                cleanupFailures,
-                () =>
-                {
-                    foreach (string transientTrace in Directory.EnumerateFiles(runDirectory, "*.trace"))
-                        File.Delete(transientTrace);
-                    foreach (string transientNetwork in Directory.EnumerateFiles(runDirectory, "*.network"))
-                        File.Delete(transientNetwork);
-                }
-            );
-        }
-
-        if (browser is not null)
-            await RecordCleanupFailureAsync(cleanupFailures, async () => await browser.DisposeAsync());
-        if (playwright is not null)
-            RecordCleanupFailure(cleanupFailures, playwright.Dispose);
-
-        if (app is not null)
-        {
-            await RecordCleanupFailureAsync(cleanupFailures, async () => await StopOwnedProcessAsync(app));
-            bool appExited = false;
-            RecordCleanupFailure(
-                cleanupFailures,
-                () =>
-                {
-                    app.Refresh();
-                    appExited = app.HasExited;
-                }
-            );
-            if (appExited)
-            {
-                if (stdoutTask is not null)
-                    await RecordCleanupFailureAsync(
-                        cleanupFailures,
-                        async () =>
-                            await File.WriteAllTextAsync(Path.Combine(runDirectory, "app-stdout.log"), await stdoutTask)
-                    );
-                if (stderrTask is not null)
-                    await RecordCleanupFailureAsync(
-                        cleanupFailures,
-                        async () =>
-                            await File.WriteAllTextAsync(Path.Combine(runDirectory, "app-stderr.log"), await stderrTask)
-                    );
-            }
-        }
-
-        string appLog = Path.Combine(appDirectory, "Log.txt");
-        if (File.Exists(appLog))
-            RecordCleanupFailure(
-                cleanupFailures,
-                () => File.Copy(appLog, Path.Combine(runDirectory, "RatScanner.log"), overwrite: true)
-            );
-
+    [Fact]
+    [Trait("Category", "UI")]
+    public async Task Scan_result_card_contains_non_square_icons_and_details_state_follows_user_actions()
+    {
+        // Seed a tiny offline catalog (Pevko 1x2 portrait, Makarov PM 2x1 landscape,
+        // M4A1 1x1 square, all with locally installed icons) plus empty tasks/hideout/
+        // crafts/barters/maps caches, so startup and the search-driven result card run
+        // hermetically — no network and no dependency on a developer cache. The run
+        // directory is created first so the seed's failure diagnostics land in the run's
+        // own artifact folder.
+        string runDirectory = UiSession.CreateRunDirectory();
+        using CatalogCacheSeed catalogSeed = new(runDirectory);
+        CancellationToken testCancellation = TestContext.Current.CancellationToken;
+        await using UiSession session = await UiSession.StartAsync(testCancellation, runDirectory);
         try
         {
-            Directory.Delete(profileDirectory, recursive: true);
-        }
-        catch (IOException exception)
-        {
-            TryWriteDiagnostic(Path.Combine(runDirectory, "profile-cleanup-error.txt"), exception.ToString());
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            TryWriteDiagnostic(Path.Combine(runDirectory, "profile-cleanup-error.txt"), exception.ToString());
-        }
+            IPage page = session.Page;
+            await page.Locator(".scan-page")
+                .WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 120_000 });
+            await session.ResizeAsync(width: 1100, height: 850);
 
-        if (cleanupFailures.Count > 0)
-            TryWriteDiagnostic(
-                Path.Combine(runDirectory, "cleanup-errors.log"),
-                string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
-            );
+            ILocator detailsToggle = page.Locator(".details-toggle");
 
-        if (testFailure is not null && cleanupFailures.Count > 0)
-            throw new AggregateException("UI smoke failed and cleanup also failed.", [testFailure, .. cleanupFailures]);
-        if (testFailure is not null)
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(testFailure).Throw();
-        if (cleanupFailures.Count > 0)
-            throw new AggregateException("UI smoke cleanup failed.", cleanupFailures);
+            // Portrait non-square item (1x2, 64x127 local icon) must stay inside the frame.
+            await SelectCatalogItemAsync(page, "Pevko");
+            await AssertVisibleAsync(page.Locator(".result-card"));
+            await WaitForArtImageLoadedAsync(page);
+            await AssertArtContainedAsync(page, "desktop portrait (Pevko)");
+            await session.ScreenshotAsync("result-card-pevko.png");
+            await WaitForDetailsStateAsync(page, expanded: false);
+
+            // Opening Details is a toggle, and a fresh scan-driven render must not close it.
+            await detailsToggle.ClickAsync();
+            await WaitForDetailsStateAsync(page, expanded: true);
+            await AssertVisibleAsync(page.Locator(".details"));
+            await session.ScreenshotAsync("result-card-details-open.png");
+
+            // Deliberately picking a different item from search is an explicit switch:
+            // it must close Details again, and the landscape icon must stay contained.
+            await SelectCatalogItemAsync(page, "PM");
+            await WaitForArtImageLoadedAsync(page);
+            await WaitForArtAltAsync(page, "Makarov PM 9x18PM pistol");
+            await WaitForDetailsStateAsync(page, expanded: false);
+            await AssertArtContainedAsync(page, "desktop landscape (PM)");
+            await session.ScreenshotAsync("result-card-pm.png");
+
+            // Clicking a recent scan is an explicit switch too: it closes Details.
+            await detailsToggle.ClickAsync();
+            await WaitForDetailsStateAsync(page, expanded: true);
+            ILocator recentThumb = page.Locator(".recent .thumb").First;
+            Assert.True(await recentThumb.CountAsync() > 0, "Recent scans should list the scanned items.");
+            await recentThumb.ClickAsync();
+            await WaitForDetailsStateAsync(page, expanded: false);
+
+            // Square icons must stay contained as well.
+            await SelectCatalogItemAsync(page, "M4A1");
+            await WaitForArtImageLoadedAsync(page);
+            await WaitForArtAltAsync(page, "Colt M4A1 5.56x45 assault rifle");
+            await AssertArtContainedAsync(page, "desktop square (M4A1)");
+
+            // Narrow breakpoint: portrait icon still contained inside the 72x54 frame.
+            await session.ResizeAsync(width: 600, height: 850);
+            await SelectCatalogItemAsync(page, "Pevko");
+            await WaitForArtImageLoadedAsync(page);
+            await WaitForArtAltAsync(page, "Bottle of Pevko Light beer");
+            await AssertArtContainedAsync(page, "narrow portrait (Pevko)");
+            await session.ScreenshotAsync("result-card-narrow.png");
+
+            Assert.Empty(session.RuntimeFailures);
+        }
+        catch (Exception exception)
+        {
+            await session.MarkFailedAsync(exception);
+            throw;
+        }
     }
 
-    private static async Task<int> WaitForDebugPortAsync(string profileDirectory, Process app, TimeSpan timeout)
+    private static async Task SelectCatalogItemAsync(IPage page, string query)
     {
-        DateTime deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            app.Refresh();
-            if (app.HasExited)
-                throw new InvalidOperationException($"RatScanner exited during startup with code {app.ExitCode}.");
-
-            try
-            {
-                string? portFile = Directory
-                    .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
-                    .FirstOrDefault();
-                if (portFile is not null)
+        ILocator searchInput = page.Locator(".rs-search-field input");
+        await searchInput.FillAsync(string.Empty);
+        await searchInput.FillAsync(query);
+        // MudAutocomplete renders one .mud-list-item per result whose ShortName sits in a
+        // <small>; match that exactly so a query like "PM" cannot land on another item
+        // whose Name merely contains the text (HasText is a substring match).
+        ILocator option = page.Locator(".mud-list-item")
+            .Filter(
+                new LocatorFilterOptions
                 {
-                    string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
-                    if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
-                        return port;
+                    Has = page.Locator(".search-result small")
+                        .GetByText(query, new LocatorGetByTextOptions { Exact = true }),
                 }
-            }
-            catch (IOException)
-            {
-                // Chromium can still be creating or replacing the readiness file; retry until the deadline.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // The profile tree can be transiently locked while WebView2 initializes; retry.
-            }
-
-            await Task.Delay(250);
-        }
-
-        throw new TimeoutException($"WebView2 did not publish DevToolsActivePort within {timeout}.");
+            )
+            .First;
+        await option.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 30_000 });
+        await option.ClickAsync();
     }
 
-    private static async Task<IPage> WaitForAppPageAsync(IBrowserContext context, Process app, TimeSpan timeout)
+    private static async Task WaitForArtImageLoadedAsync(IPage page)
     {
-        DateTime deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
-        {
-            app.Refresh();
-            if (app.HasExited)
-                throw new InvalidOperationException(
-                    $"RatScanner exited before the /app WebView loaded: {app.ExitCode}."
-                );
-
-            IPage? page = context.Pages.FirstOrDefault(candidate =>
-                Uri.TryCreate(candidate.Url, UriKind.Absolute, out Uri? uri) && uri.AbsolutePath == "/app"
-            );
-            if (page is not null)
-                return page;
-
-            await Task.Delay(250);
-        }
-
-        throw new TimeoutException("RatScanner's /app WebView target did not become ready.");
+        await page.WaitForFunctionAsync(
+            """
+            () => {
+                const img = document.querySelector('.item-art img');
+                return img !== null && img.complete && img.naturalWidth > 0;
+            }
+            """
+        );
     }
 
-    private static void AttachRuntimeDiagnostics(IPage page, ConcurrentQueue<string> failures)
+    private static async Task WaitForArtAltAsync(IPage page, string expectedAlt)
     {
-        page.Console += (_, message) =>
-        {
-            if (message.Type == "error")
-                failures.Enqueue($"console error: {message.Text}");
-        };
-        page.PageError += (_, error) => failures.Enqueue($"uncaught page error: {error}");
-        page.RequestFailed += (_, request) =>
-        {
-            if (IsAppResource(request.Url))
-                failures.Enqueue($"failed app request: {request.Method} {request.Url} ({request.Failure})");
-        };
-        page.Response += (_, response) =>
-        {
-            if (response.Status >= 500 && IsAppResource(response.Url))
-                failures.Enqueue($"app response {response.Status}: {response.Url}");
-        };
+        await page.WaitForFunctionAsync(
+            """
+            (expected) => {
+                const img = document.querySelector('.item-art img');
+                return img !== null && img.getAttribute('alt') === expected;
+            }
+            """,
+            expectedAlt
+        );
     }
 
-    private static bool IsAppResource(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
-        && (uri.Host is "0.0.0.1" or "local.data" || uri.Scheme == "file");
+    private static async Task WaitForDetailsStateAsync(IPage page, bool expanded)
+    {
+        string expected = expanded ? "true" : "false";
+        await page.WaitForFunctionAsync(
+            """
+            (expected) => {
+                const toggle = document.querySelector('.details-toggle');
+                return toggle !== null && toggle.getAttribute('aria-expanded') === expected;
+            }
+            """,
+            expected
+        );
+    }
+
+    private static async Task AssertArtContainedAsync(IPage page, string surface)
+    {
+        double[] box = await page.EvaluateAsync<double[]>(
+            """
+            () => {
+                const frame = document.querySelector('.item-art').getBoundingClientRect();
+                const img = document.querySelector('.item-art img').getBoundingClientRect();
+                return [frame.left, frame.top, frame.right, frame.bottom, img.left, img.top, img.right, img.bottom];
+            }
+            """
+        );
+        Assert.True(
+            box[4] >= box[0] - 0.5 && box[5] >= box[1] - 0.5 && box[6] <= box[2] + 0.5 && box[7] <= box[3] + 0.5,
+            $"{surface}: item art image overflows the frame (frame [{box[0]:0.##},{box[1]:0.##},{box[2]:0.##},{box[3]:0.##}] "
+                + $"vs img [{box[4]:0.##},{box[5]:0.##},{box[6]:0.##},{box[7]:0.##}])."
+        );
+    }
 
     private static async Task AssertNoHorizontalOverflowAsync(IPage page, string surface)
     {
@@ -505,166 +369,6 @@ public sealed class WebViewSmokeTests
         Assert.True(bounds.X + bounds.Width <= width, $"{surface} extends beyond the {width}px viewport.");
     }
 
-    private static async Task ResizeAppWindowAsync(Process app, IPage page, int width, int height)
-    {
-        DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-        nint window = 0;
-        while (DateTime.UtcNow < deadline)
-        {
-            app.Refresh();
-            window = FindLargestOwnedWindow(app.Id);
-            if (window != 0)
-                break;
-            if (app.HasExited)
-                break;
-            await Task.Delay(100);
-        }
-
-        if (window == 0)
-            throw new InvalidOperationException("RatScanner did not expose a main window handle.");
-        NativeMethods.ShowWindow(window, NativeMethods.RestoreWindow);
-        uint dpi = NativeMethods.GetDpiForWindow(window);
-        if (dpi == 0)
-            throw new InvalidOperationException(
-                $"Unable to determine RatScanner window DPI (Win32 error {Marshal.GetLastWin32Error()})."
-            );
-        int deviceWidth = checked((int)Math.Round(width * dpi / 96d, MidpointRounding.AwayFromZero));
-        int deviceHeight = checked((int)Math.Round(height * dpi / 96d, MidpointRounding.AwayFromZero));
-        int viewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
-        DateTime resizeDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-        while (DateTime.UtcNow < resizeDeadline)
-        {
-            if (!NativeMethods.SetWindowPos(window, 0, 0, 0, deviceWidth, deviceHeight, NativeMethods.ResizeOnlyFlags))
-                throw new InvalidOperationException(
-                    $"Unable to resize RatScanner for UI validation (Win32 error {Marshal.GetLastWin32Error()})."
-                );
-
-            viewportWidth = await page.EvaluateAsync<int>("window.innerWidth");
-            bool expectedBreakpoint = width <= 680 ? viewportWidth <= 680 : viewportWidth > 680;
-            if (expectedBreakpoint)
-                return;
-            await Task.Delay(100);
-        }
-
-        throw new InvalidOperationException(
-            $"RatScanner did not reach the requested {width}px responsive viewport; actual width was {viewportWidth}px."
-        );
-    }
-
-    private static async Task RecordCleanupFailureAsync(List<Exception> failures, Func<Task> cleanup)
-    {
-        try
-        {
-            await cleanup();
-        }
-        catch (Exception exception)
-        {
-            failures.Add(exception);
-        }
-    }
-
-    private static void RecordCleanupFailure(List<Exception> failures, Action cleanup)
-    {
-        try
-        {
-            cleanup();
-        }
-        catch (Exception exception)
-        {
-            failures.Add(exception);
-        }
-    }
-
-    private static void TryWriteDiagnostic(string path, string contents)
-    {
-        try
-        {
-            File.WriteAllText(path, contents);
-        }
-        catch (Exception)
-        {
-            // Diagnostics are best effort and must not replace the original test or cleanup failure.
-        }
-    }
-
-    private static nint FindLargestOwnedWindow(int expectedProcessId)
-    {
-        nint selected = 0;
-        long largestArea = 0;
-        for (
-            nint candidate = NativeMethods.GetTopWindow(0);
-            candidate != 0;
-            candidate = NativeMethods.GetWindow(candidate, 2)
-        )
-        {
-            uint threadId = NativeMethods.GetWindowThreadProcessId(candidate, out uint processId);
-            if (threadId == 0 || processId != expectedProcessId || !NativeMethods.IsWindowVisible(candidate))
-                continue;
-            if (GetWindowTitle(candidate).Contains("Overlay", StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (!NativeMethods.GetWindowRect(candidate, out NativeMethods.WindowRect bounds))
-                continue;
-
-            long area = Math.Max(0, bounds.Right - bounds.Left) * (long)Math.Max(0, bounds.Bottom - bounds.Top);
-            if (area > largestArea)
-            {
-                largestArea = area;
-                selected = candidate;
-            }
-        }
-        return selected;
-    }
-
-    private static string GetWindowTitle(nint window)
-    {
-        int length = NativeMethods.GetWindowTextLength(window);
-        if (length == 0)
-            return string.Empty;
-        StringBuilder title = new(length + 1);
-        return NativeMethods.GetWindowText(window, title, title.Capacity) == 0 ? string.Empty : title.ToString();
-    }
-
-    private static async Task CaptureFailureEvidenceAsync(IPage page, string runDirectory)
-    {
-        try
-        {
-            await page.ScreenshotAsync(
-                new PageScreenshotOptions { Path = Path.Combine(runDirectory, "failure.png"), FullPage = true }
-            );
-            await File.WriteAllTextAsync(Path.Combine(runDirectory, "failure-dom.html"), await page.ContentAsync());
-            await File.WriteAllTextAsync(
-                Path.Combine(runDirectory, "failure-accessibility.yml"),
-                await page.Locator("body").AriaSnapshotAsync()
-            );
-        }
-        catch (PlaywrightException exception)
-        {
-            await File.WriteAllTextAsync(Path.Combine(runDirectory, "failure-capture-error.txt"), exception.ToString());
-        }
-    }
-
-    private static async Task StopOwnedProcessAsync(Process process)
-    {
-        process.Refresh();
-        if (process.HasExited)
-            return;
-
-        process.CloseMainWindow();
-        using CancellationTokenSource gracefulTimeout = new(TimeSpan.FromSeconds(5));
-        try
-        {
-            await process.WaitForExitAsync(gracefulTimeout.Token);
-            return;
-        }
-        catch (OperationCanceledException)
-        {
-            // Fall through to a scoped process-tree kill for the app launched by this test.
-        }
-
-        process.Kill(entireProcessTree: true);
-        await process.WaitForExitAsync();
-    }
-
     private static float ParseSlowMo() =>
         float.TryParse(
             Environment.GetEnvironmentVariable("RATSCANNER_UI_SLOWMO_MS"),
@@ -693,6 +397,923 @@ public sealed class WebViewSmokeTests
         }
 
         throw new DirectoryNotFoundException("Could not locate the repository root.");
+    }
+
+    private static void TryWriteDiagnostic(string path, string contents)
+    {
+        try
+        {
+            File.WriteAllText(path, contents);
+        }
+        catch (Exception)
+        {
+            // Diagnostics are best effort and must not replace the original test or cleanup failure.
+        }
+    }
+
+    private static async Task RecordCleanupFailureAsync(List<Exception> failures, Func<Task> cleanup)
+    {
+        try
+        {
+            await cleanup();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+    }
+
+    private static void RecordCleanupFailure(List<Exception> failures, Action cleanup)
+    {
+        try
+        {
+            cleanup();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+    }
+
+    /// <summary>
+    /// Owns a launched RatScanner process (isolated WebView2 profile), the CDP
+    /// connection used to drive it, and every artifact/cleanup responsibility of a
+    /// UI run. The single-instance rule is enforced at startup: the test must never
+    /// attach to or stop an unrelated RatScanner instance.
+    /// </summary>
+    private sealed class UiSession : IAsyncDisposable
+    {
+        private readonly Process _app;
+        private readonly Task<string> _stdoutTask;
+        private readonly Task<string> _stderrTask;
+        private readonly IPlaywright _playwright;
+        private readonly IBrowser _browser;
+        private readonly IBrowserContext _context;
+        private readonly string _profileDirectory;
+        private readonly string _appLogPath;
+        private readonly ConcurrentQueue<string> _runtimeFailures;
+        private readonly CancellationToken _cancellationToken;
+        private bool _traceStarted;
+        private bool _failed;
+        private bool _disposed;
+
+        internal IPage Page { get; }
+
+        internal string RunDirectory { get; }
+
+        internal ConcurrentQueue<string> RuntimeFailures => _runtimeFailures;
+
+        private UiSession(
+            Process app,
+            Task<string> stdoutTask,
+            Task<string> stderrTask,
+            IPlaywright playwright,
+            IBrowser browser,
+            IBrowserContext context,
+            IPage page,
+            string runDirectory,
+            string profileDirectory,
+            string appLogPath,
+            ConcurrentQueue<string> runtimeFailures,
+            bool traceStarted,
+            CancellationToken cancellationToken
+        )
+        {
+            _app = app;
+            _stdoutTask = stdoutTask;
+            _stderrTask = stderrTask;
+            _playwright = playwright;
+            _browser = browser;
+            _context = context;
+            Page = page;
+            RunDirectory = runDirectory;
+            _profileDirectory = profileDirectory;
+            _appLogPath = appLogPath;
+            _runtimeFailures = runtimeFailures;
+            _cancellationToken = cancellationToken;
+            _traceStarted = traceStarted;
+        }
+
+        internal static async Task<UiSession> StartAsync(
+            CancellationToken cancellationToken,
+            string? runDirectory = null
+        )
+        {
+            string repositoryRoot = FindRepositoryRoot();
+            string configuration = GetConfiguration();
+            string appDirectory = Path.Combine(
+                repositoryRoot,
+                "src",
+                "App",
+                "bin",
+                configuration,
+                "net10.0-windows10.0.22621.0"
+            );
+            string appPath = Path.Combine(appDirectory, "RatScanner.exe");
+            Assert.True(File.Exists(appPath), $"Build the {configuration} app before running UI tests: {appPath}");
+
+            Process[] existingProcesses = Process.GetProcessesByName("RatScanner");
+            Assert.Empty(existingProcesses);
+
+            runDirectory ??= CreateRunDirectory();
+
+            string profileDirectory = Path.Combine(Path.GetTempPath(), $"RatScanner-ui-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(profileDirectory);
+
+            ProcessStartInfo startInfo = new(appPath)
+            {
+                WorkingDirectory = appDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            startInfo.Environment["RATSCANNER_UI_TEST_CDP_PORT"] = "0";
+            startInfo.Environment["RATSCANNER_UI_TEST_PROFILE"] = profileDirectory;
+
+            Process? startedApp = Process.Start(startInfo);
+            Assert.NotNull(startedApp);
+            Process app = startedApp;
+            Task<string> stdoutTask = app.StandardOutput.ReadToEndAsync(cancellationToken);
+            Task<string> stderrTask = app.StandardError.ReadToEndAsync(cancellationToken);
+
+            IPlaywright? playwright = null;
+            IBrowser? browser = null;
+            try
+            {
+                int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
+                await File.WriteAllTextAsync(
+                    Path.Combine(runDirectory, "endpoint.txt"),
+                    $"http://127.0.0.1:{port}",
+                    cancellationToken
+                );
+
+                playwright = await Playwright.CreateAsync();
+                float slowMo = ParseSlowMo();
+                browser = await playwright.Chromium.ConnectOverCDPAsync(
+                    $"http://127.0.0.1:{port}",
+                    new BrowserTypeConnectOverCDPOptions
+                    {
+                        ArtifactsDir = runDirectory,
+                        SlowMo = slowMo,
+                        Timeout = (float)StartupTimeout.TotalMilliseconds,
+                    }
+                );
+                IBrowserContext context = Assert.Single(browser.Contexts);
+                await context.Tracing.StartAsync(
+                    new TracingStartOptions
+                    {
+                        Screenshots = true,
+                        Snapshots = true,
+                        Sources = true,
+                    }
+                );
+
+                IPage page = await WaitForAppPageAsync(context, app, StartupTimeout);
+
+                return new UiSession(
+                    app,
+                    stdoutTask,
+                    stderrTask,
+                    playwright,
+                    browser,
+                    context,
+                    page,
+                    runDirectory,
+                    profileDirectory,
+                    Path.Combine(appDirectory, "Log.txt"),
+                    AttachRuntimeDiagnostics(page),
+                    traceStarted: true,
+                    cancellationToken
+                );
+            }
+            catch
+            {
+                // One failure path for the whole post-start sequence: stop the owned process,
+                // release any Playwright/browser resources created so far, and remove the
+                // temporary profile directory. Cleanup is best effort so the original startup
+                // failure stays the exception the caller sees.
+                try
+                {
+                    await StopOwnedProcessAsync(app);
+                }
+                catch
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+
+                if (browser is not null)
+                {
+                    try
+                    {
+                        await browser.DisposeAsync();
+                    }
+                    catch
+                    {
+                        // Best effort; the startup failure is the reportable one.
+                    }
+                }
+
+                if (playwright is not null)
+                {
+                    try
+                    {
+                        playwright.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort; the startup failure is the reportable one.
+                    }
+                }
+
+                try
+                {
+                    Directory.Delete(profileDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+
+                throw;
+            }
+        }
+
+        /// <summary>Creates the run's artifact directory under <c>artifacts/ui-tests</c> (or the
+        /// <c>RATSCANNER_UI_ARTIFACTS</c> override).</summary>
+        internal static string CreateRunDirectory()
+        {
+            string artifactRoot =
+                Environment.GetEnvironmentVariable("RATSCANNER_UI_ARTIFACTS")
+                ?? Path.Combine(FindRepositoryRoot(), "artifacts", "ui-tests");
+            string runDirectory = Path.Combine(
+                artifactRoot,
+                $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid():N}"
+            );
+            Directory.CreateDirectory(runDirectory);
+            return runDirectory;
+        }
+
+        internal async Task ResizeAsync(int width, int height)
+        {
+            DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            nint window = 0;
+            while (DateTime.UtcNow < deadline)
+            {
+                _app.Refresh();
+                window = FindLargestOwnedWindow(_app.Id);
+                if (window != 0)
+                    break;
+                if (_app.HasExited)
+                    break;
+                await Task.Delay(100, _cancellationToken);
+            }
+
+            if (window == 0)
+                throw new InvalidOperationException("RatScanner did not expose a main window handle.");
+            NativeMethods.ShowWindow(window, NativeMethods.RestoreWindow);
+            uint dpi = NativeMethods.GetDpiForWindow(window);
+            if (dpi == 0)
+                throw new InvalidOperationException(
+                    $"Unable to determine RatScanner window DPI (Win32 error {Marshal.GetLastWin32Error()})."
+                );
+            int deviceWidth = checked((int)Math.Round(width * dpi / 96d, MidpointRounding.AwayFromZero));
+            int deviceHeight = checked((int)Math.Round(height * dpi / 96d, MidpointRounding.AwayFromZero));
+            int viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth").WaitAsync(_cancellationToken);
+            DateTime resizeDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (DateTime.UtcNow < resizeDeadline)
+            {
+                if (
+                    !NativeMethods.SetWindowPos(
+                        window,
+                        0,
+                        0,
+                        0,
+                        deviceWidth,
+                        deviceHeight,
+                        NativeMethods.ResizeOnlyFlags
+                    )
+                )
+                    throw new InvalidOperationException(
+                        $"Unable to resize RatScanner for UI validation (Win32 error {Marshal.GetLastWin32Error()})."
+                    );
+
+                viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth").WaitAsync(_cancellationToken);
+                bool expectedBreakpoint = width <= 680 ? viewportWidth <= 680 : viewportWidth > 680;
+                if (expectedBreakpoint)
+                    return;
+                await Task.Delay(100, _cancellationToken);
+            }
+
+            throw new InvalidOperationException(
+                $"RatScanner did not reach the requested {width}px responsive viewport; actual width was {viewportWidth}px."
+            );
+        }
+
+        internal async Task ScreenshotAsync(string fileName, bool fullPage = true)
+        {
+            await Page.ScreenshotAsync(
+                new PageScreenshotOptions { Path = Path.Combine(RunDirectory, fileName), FullPage = fullPage }
+            );
+        }
+
+        /// <summary>Captures failure evidence; the session keeps the trace for diagnosis.</summary>
+        internal async Task MarkFailedAsync(Exception exception)
+        {
+            _failed = true;
+            try
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(RunDirectory, "failure-url.txt"),
+                    Page.Url,
+                    _cancellationToken
+                );
+                await File.WriteAllTextAsync(
+                    Path.Combine(RunDirectory, "failure-page-state.txt"),
+                    await Page.EvaluateAsync<string>(
+                        """
+                        () => {
+                            const toggle = document.querySelector('.details-toggle');
+                            const card = document.querySelector('.result-card');
+                            return JSON.stringify({
+                                hidden: document.hidden,
+                                visibilityState: document.visibilityState,
+                                title: document.title,
+                                innerWidth: window.innerWidth,
+                                innerHeight: window.innerHeight,
+                                toggleExists: toggle !== null,
+                                ariaExpanded: toggle ? toggle.getAttribute('aria-expanded') : null,
+                                detailsVisible: !!document.querySelector('.details'),
+                                resultCard: card !== null,
+                                artAlt: document.querySelector('.item-art img')?.getAttribute('alt') ?? null,
+                            });
+                        }
+                        """
+                    )
+                );
+                await CaptureFailureEvidenceAsync(Page, RunDirectory);
+            }
+            catch (Exception captureException)
+            {
+                TryWriteDiagnostic(
+                    Path.Combine(RunDirectory, "failure-capture-error.txt"),
+                    captureException.ToString()
+                );
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+
+            List<Exception> cleanupFailures = [];
+            await RecordCleanupFailureAsync(
+                cleanupFailures,
+                async () =>
+                {
+                    if (!RuntimeFailures.IsEmpty)
+                        await File.WriteAllLinesAsync(
+                            Path.Combine(RunDirectory, "browser-runtime.log"),
+                            RuntimeFailures
+                        );
+                }
+            );
+
+            if (_traceStarted)
+            {
+                await RecordCleanupFailureAsync(
+                    cleanupFailures,
+                    async () =>
+                    {
+                        await _context.Tracing.StopAsync(
+                            _failed ? new TracingStopOptions { Path = Path.Combine(RunDirectory, "trace.zip") } : null
+                        );
+                    }
+                );
+                RecordCleanupFailure(
+                    cleanupFailures,
+                    () =>
+                    {
+                        foreach (string transientTrace in Directory.EnumerateFiles(RunDirectory, "*.trace"))
+                            File.Delete(transientTrace);
+                        foreach (string transientNetwork in Directory.EnumerateFiles(RunDirectory, "*.network"))
+                            File.Delete(transientNetwork);
+                    }
+                );
+            }
+
+            await RecordCleanupFailureAsync(cleanupFailures, async () => await _browser.DisposeAsync());
+            RecordCleanupFailure(cleanupFailures, _playwright.Dispose);
+
+            await RecordCleanupFailureAsync(cleanupFailures, async () => await StopOwnedProcessAsync(_app));
+            bool appExited = false;
+            RecordCleanupFailure(
+                cleanupFailures,
+                () =>
+                {
+                    _app.Refresh();
+                    appExited = _app.HasExited;
+                }
+            );
+            if (appExited)
+            {
+                await RecordCleanupFailureAsync(
+                    cleanupFailures,
+                    async () =>
+                        await File.WriteAllTextAsync(Path.Combine(RunDirectory, "app-stdout.log"), await _stdoutTask)
+                );
+                await RecordCleanupFailureAsync(
+                    cleanupFailures,
+                    async () =>
+                        await File.WriteAllTextAsync(Path.Combine(RunDirectory, "app-stderr.log"), await _stderrTask)
+                );
+            }
+
+            if (File.Exists(_appLogPath))
+            {
+                RecordCleanupFailure(
+                    cleanupFailures,
+                    () => File.Copy(_appLogPath, Path.Combine(RunDirectory, "RatScanner.log"), overwrite: true)
+                );
+            }
+
+            try
+            {
+                Directory.Delete(_profileDirectory, recursive: true);
+            }
+            catch (IOException exception)
+            {
+                TryWriteDiagnostic(Path.Combine(RunDirectory, "profile-cleanup-error.txt"), exception.ToString());
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                TryWriteDiagnostic(Path.Combine(RunDirectory, "profile-cleanup-error.txt"), exception.ToString());
+            }
+
+            if (cleanupFailures.Count > 0)
+            {
+                TryWriteDiagnostic(
+                    Path.Combine(RunDirectory, "cleanup-errors.log"),
+                    string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
+                );
+            }
+        }
+
+        private static async Task<int> WaitForDebugPortAsync(string profileDirectory, Process app, TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                app.Refresh();
+                if (app.HasExited)
+                    throw new InvalidOperationException($"RatScanner exited during startup with code {app.ExitCode}.");
+
+                try
+                {
+                    string? portFile = Directory
+                        .EnumerateFiles(profileDirectory, "DevToolsActivePort", SearchOption.AllDirectories)
+                        .FirstOrDefault();
+                    if (portFile is not null)
+                    {
+                        string? firstLine = (await File.ReadAllLinesAsync(portFile)).FirstOrDefault();
+                        if (int.TryParse(firstLine, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
+                            return port;
+                    }
+                }
+                catch (IOException)
+                {
+                    // Chromium can still be creating or replacing the readiness file; retry until the deadline.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // The profile tree can be transiently locked while WebView2 initializes; retry.
+                }
+
+                await Task.Delay(250);
+            }
+
+            throw new TimeoutException($"WebView2 did not publish DevToolsActivePort within {timeout}.");
+        }
+
+        private static async Task<IPage> WaitForAppPageAsync(IBrowserContext context, Process app, TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                app.Refresh();
+                if (app.HasExited)
+                    throw new InvalidOperationException(
+                        $"RatScanner exited before the /app WebView loaded: {app.ExitCode}."
+                    );
+
+                IPage? page = context.Pages.FirstOrDefault(candidate =>
+                    Uri.TryCreate(candidate.Url, UriKind.Absolute, out Uri? uri) && uri.AbsolutePath == "/app"
+                );
+                if (page is not null)
+                    return page;
+
+                await Task.Delay(250);
+            }
+
+            throw new TimeoutException("RatScanner's /app WebView target did not become ready.");
+        }
+
+        private static ConcurrentQueue<string> AttachRuntimeDiagnostics(IPage page)
+        {
+            ConcurrentQueue<string> failures = new();
+            page.Console += (_, message) =>
+            {
+                if (message.Type == "error")
+                    failures.Enqueue($"console error: {message.Text}");
+            };
+            page.PageError += (_, error) => failures.Enqueue($"uncaught page error: {error}");
+            page.RequestFailed += (_, request) =>
+            {
+                if (IsAppResource(request.Url))
+                    failures.Enqueue($"failed app request: {request.Method} {request.Url} ({request.Failure})");
+            };
+            page.Response += (_, response) =>
+            {
+                if (response.Status >= 500 && IsAppResource(response.Url))
+                    failures.Enqueue($"app response {response.Status}: {response.Url}");
+            };
+            return failures;
+        }
+
+        private static bool IsAppResource(string url) =>
+            Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
+            && (uri.Host is "0.0.0.1" or "local.data" || uri.Scheme == "file");
+
+        private static async Task CaptureFailureEvidenceAsync(IPage page, string runDirectory)
+        {
+            try
+            {
+                await page.ScreenshotAsync(
+                    new PageScreenshotOptions { Path = Path.Combine(runDirectory, "failure.png"), FullPage = true }
+                );
+                await File.WriteAllTextAsync(Path.Combine(runDirectory, "failure-dom.html"), await page.ContentAsync());
+                await File.WriteAllTextAsync(
+                    Path.Combine(runDirectory, "failure-accessibility.yml"),
+                    await page.Locator("body").AriaSnapshotAsync()
+                );
+            }
+            catch (PlaywrightException exception)
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(runDirectory, "failure-capture-error.txt"),
+                    exception.ToString()
+                );
+            }
+        }
+
+        private static async Task StopOwnedProcessAsync(Process process)
+        {
+            process.Refresh();
+            if (process.HasExited)
+                return;
+
+            process.CloseMainWindow();
+            using CancellationTokenSource gracefulTimeout = new(TimeSpan.FromSeconds(5));
+            try
+            {
+                await process.WaitForExitAsync(gracefulTimeout.Token);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                // Fall through to a scoped process-tree kill for the app launched by this test.
+            }
+
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+
+        private static nint FindLargestOwnedWindow(int expectedProcessId)
+        {
+            nint selected = 0;
+            long largestArea = 0;
+            for (
+                nint candidate = NativeMethods.GetTopWindow(0);
+                candidate != 0;
+                candidate = NativeMethods.GetWindow(candidate, 2)
+            )
+            {
+                uint threadId = NativeMethods.GetWindowThreadProcessId(candidate, out uint processId);
+                if (threadId == 0 || processId != expectedProcessId || !NativeMethods.IsWindowVisible(candidate))
+                    continue;
+                if (GetWindowTitle(candidate).Contains("Overlay", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (!NativeMethods.GetWindowRect(candidate, out NativeMethods.WindowRect bounds))
+                    continue;
+
+                long area = Math.Max(0, bounds.Right - bounds.Left) * (long)Math.Max(0, bounds.Bottom - bounds.Top);
+                if (area > largestArea)
+                {
+                    largestArea = area;
+                    selected = candidate;
+                }
+            }
+            return selected;
+        }
+
+        private static string GetWindowTitle(nint window)
+        {
+            int length = NativeMethods.GetWindowTextLength(window);
+            if (length == 0)
+                return string.Empty;
+            StringBuilder title = new(length + 1);
+            return NativeMethods.GetWindowText(window, title, title.Capacity) == 0 ? string.Empty : title.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Writes the tiny fixture catalog into the app's offline cache location
+    /// (<c>%TEMP%\RatScanner\Cache</c>) for every locale/game-mode key the app can ask
+    /// for, so the launched app serves the search from cache without touching the
+    /// network or depending on a developer's cache. All startup-refreshed families are
+    /// seeded — items with the three fixture items, and tasks/hideout/crafts/barters/maps
+    /// with empty arrays — so the app's cold-start cache refresh stays fully offline.
+    /// Pre-existing cache files are backed up and restored on dispose; only this
+    /// fixture's files are removed. Dispose never throws: cleanup problems are reported
+    /// to the run's diagnostics file so they cannot mask the test's real failure.
+    /// </summary>
+    private sealed class CatalogCacheSeed : IDisposable
+    {
+        // Mirrors TarkovDevAPI key formats (items_{locale}_{gameMode}, tasks_v2_{locale}_{gameMode},
+        // hideout_{locale}_{gameMode}, crafts_{gameMode}, barters_{gameMode}, maps_{locale}_{gameMode})
+        // and RatConfig.GetCachePath (SHA-256 of the key, hex, .data). The app's
+        // Newtonsoft deserialization matches property names case-insensitively.
+        private static readonly string[] Locales =
+        [
+            "zh",
+            "cs",
+            "en",
+            "es",
+            "fr",
+            "de",
+            "hu",
+            "it",
+            "ja",
+            "ko",
+            "pl",
+            "pt",
+            "ru",
+            "sk",
+            "tr",
+        ];
+
+        private static readonly string[] GameModes = ["Regular", "Pve", "Seasonal"];
+
+        private readonly string _cacheDirectory;
+        private readonly string _diagnosticsPath;
+        private readonly Dictionary<string, string> _backups = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _written = new(StringComparer.OrdinalIgnoreCase);
+
+        internal CatalogCacheSeed(string runDirectory)
+        {
+            _cacheDirectory = Path.Combine(Path.GetTempPath(), "RatScanner", "Cache");
+            _diagnosticsPath = Path.Combine(runDirectory, "catalog-seed-cleanup-errors.log");
+            Assert.Empty(Process.GetProcessesByName("RatScanner"));
+
+            try
+            {
+                SeedCache();
+            }
+            catch
+            {
+                // A partially seeded cache must not leave the developer's files renamed or
+                // replaced. Roll back only what this constructor actually owns, then surface
+                // the seeding failure; rollback is best effort and cannot mask the rethrow.
+                RollbackSeeding();
+                throw;
+            }
+        }
+
+        private void SeedCache()
+        {
+            foreach (string key in CacheKeys())
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                if (File.Exists(path))
+                {
+                    string backup = path + "." + Guid.NewGuid().ToString("N") + ".bak";
+                    File.Move(path, backup);
+                    _backups[path] = backup;
+                }
+            }
+
+            Directory.CreateDirectory(_cacheDirectory);
+            foreach (string key in CacheKeys())
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                // Record before writing: a partially written file is still owned by the
+                // seed and must be removed by rollback if the write fails midway.
+                _written.Add(path);
+                File.WriteAllText(path, FixtureJson(key));
+            }
+        }
+
+        private void RollbackSeeding()
+        {
+            // Only touch files this seed owns: restore every backup it moved aside and
+            // delete only paths it wrote. Files it never touched (for example a backup
+            // move that failed, leaving the developer's file in place) stay untouched.
+            // Failures are reported to the run's diagnostics file — best effort and
+            // non-throwing, so a stranded backup never goes silent.
+            List<Exception> rollbackFailures = [];
+            foreach (string key in CacheKeys())
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                if (_backups.TryGetValue(path, out string? backup))
+                {
+                    try
+                    {
+                        File.Move(backup, path, overwrite: true);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        rollbackFailures.Add(exception);
+                    }
+                }
+                else if (_written.Contains(path))
+                {
+                    try
+                    {
+                        File.Delete(path);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        rollbackFailures.Add(exception);
+                    }
+                }
+            }
+
+            _backups.Clear();
+            _written.Clear();
+
+            if (rollbackFailures.Count > 0)
+            {
+                TryWriteDiagnostic(
+                    _diagnosticsPath,
+                    $"{rollbackFailures.Count} catalog cache rollback operation(s) failed after a partial seed; "
+                        + "a developer cache file may be stranded in a .bak."
+                        + Environment.NewLine
+                        + Environment.NewLine
+                        + string.Join(Environment.NewLine + Environment.NewLine, rollbackFailures)
+                );
+            }
+        }
+
+        public void Dispose()
+        {
+            // The app process is stopped before this runs, but WebView2 child processes can
+            // linger and hold cache files briefly; retry so transient locks do not fail the
+            // run. Persistent failures are reported to the run's diagnostics file — throwing
+            // here would replace the test's real failure while the using scope unwinds.
+            List<Exception> cleanupFailures = [];
+            foreach (string key in CacheKeys())
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                try
+                {
+                    DeleteWithRetries(path);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    cleanupFailures.Add(exception);
+                }
+            }
+
+            foreach ((string path, string backup) in _backups)
+            {
+                try
+                {
+                    File.Move(backup, path, overwrite: true);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    cleanupFailures.Add(exception);
+                }
+            }
+
+            if (cleanupFailures.Count > 0)
+            {
+                TryWriteDiagnostic(
+                    _diagnosticsPath,
+                    $"{cleanupFailures.Count} catalog cache cleanup operation(s) failed; "
+                        + "a later run may back up and restore stale fixture files."
+                        + Environment.NewLine
+                        + Environment.NewLine
+                        + string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
+                );
+            }
+        }
+
+        private static IEnumerable<string> CacheKeys()
+        {
+            foreach (string locale in Locales)
+            {
+                foreach (string gameMode in GameModes)
+                {
+                    yield return $"items_{locale}_{gameMode}";
+                    yield return $"tasks_v2_{locale}_{gameMode}";
+                    yield return $"hideout_{locale}_{gameMode}";
+                    yield return $"maps_{locale}_{gameMode}";
+                }
+            }
+
+            foreach (string gameMode in GameModes)
+            {
+                yield return $"crafts_{gameMode}";
+                yield return $"barters_{gameMode}";
+            }
+        }
+
+        private static string CacheFileName(string key)
+        {
+            byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
+            return Convert.ToHexString(hash) + ".data";
+        }
+
+        private static string FixtureJson(string key) =>
+            key.StartsWith("items_", StringComparison.Ordinal) ? FixtureItemsJson : "[]";
+
+        private static void DeleteWithRetries(string path)
+        {
+            const int attempts = 3;
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    File.Delete(path);
+                    return;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    if (attempt + 1 >= attempts)
+                        throw;
+                    Thread.Sleep(150);
+                }
+            }
+        }
+
+        // Item ids, names and icons match the repository's installed Data/icons so the
+        // result card resolves the local icons (64x127 portrait, 127x64 landscape, 64x64
+        // square) instead of a remote asset.
+        private const string FixtureItemsJson = """
+            [
+              {
+                "Id": "62a09f32621468534a797acb",
+                "Name": "Bottle of Pevko Light beer",
+                "ShortName": "Pevko",
+                "Updated": "2026-08-08T04:56:48.000Z",
+                "Width": 1,
+                "Height": 2,
+                "WikiLink": "https://escapefromtarkov.fandom.com/wiki/Bottle_of_Pevko_Light_beer",
+                "Link": "https://tarkov.dev/item/bottle-of-pevko-light-beer",
+                "IconLink": "https://assets.tarkov.dev/62a09f32621468534a797acb-icon.webp",
+                "BaseImageLink": "https://assets.tarkov.dev/62a09f32621468534a797acb-base-image.webp",
+                "Avg24HPrice": 5200,
+                "BackgroundColor": "green",
+                "Types": ["other"]
+              },
+              {
+                "Id": "5448bd6b4bdc2dfc2f8b4569",
+                "Name": "Makarov PM 9x18PM pistol",
+                "ShortName": "PM",
+                "Updated": "2026-08-08T04:51:41.000Z",
+                "Width": 2,
+                "Height": 1,
+                "WikiLink": "https://escapefromtarkov.fandom.com/wiki/Makarov_PM_9x18PM_pistol",
+                "Link": "https://tarkov.dev/item/makarov-pm-9x18pm-pistol",
+                "IconLink": "https://assets.tarkov.dev/5448bd6b4bdc2dfc2f8b4569-icon.webp",
+                "BaseImageLink": "https://assets.tarkov.dev/5448bd6b4bdc2dfc2f8b4569-base-image.webp",
+                "Avg24HPrice": 4800,
+                "BackgroundColor": "yellow",
+                "Types": ["gun", "wearable"]
+              },
+              {
+                "Id": "5447a9cd4bdc2dbd208b4567",
+                "Name": "Colt M4A1 5.56x45 assault rifle",
+                "ShortName": "M4A1",
+                "Updated": "2026-08-08T04:51:41.000Z",
+                "Width": 1,
+                "Height": 1,
+                "WikiLink": "https://escapefromtarkov.fandom.com/wiki/Colt_M4A1_5.56x45_assault_rifle",
+                "Link": "https://tarkov.dev/item/colt-m4a1-556x45-assault-rifle",
+                "IconLink": "https://assets.tarkov.dev/5447a9cd4bdc2dbd208b4567-icon.webp",
+                "BaseImageLink": "https://assets.tarkov.dev/5447a9cd4bdc2dbd208b4567-base-image.webp",
+                "Avg24HPrice": 38500,
+                "BackgroundColor": "yellow",
+                "Types": ["gun"]
+              }
+            ]
+            """;
     }
 
     private static class NativeMethods
