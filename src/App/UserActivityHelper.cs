@@ -285,10 +285,15 @@ internal static class UserActivityHelper
         // VK_CONTROL=0x11, VK_LCONTROL=0xA2, VK_RCONTROL=0xA3, VK_MENU=0x12, VK_LMENU=0xA4, VK_RMENU=0xA5)
         // These are the modifier keys used by scan hotkeys; tracking their up/down state is
         // critical for understanding why IsPressed returns false during mouse button-up events.
-        uint vk = keyboardHookStruct.vkCode;
-        if (vk is 0x10 or 0xA0 or 0xA1 or 0x11 or 0xA2 or 0xA3 or 0x12 or 0xA4 or 0xA5)
+        // Gate the interpolation: this runs inside the low-level hook callback for every
+        // keypress, where Release builds must not pay for debug strings they never write.
+        if (RatConfig.LogDebug)
         {
-            Logger.LogDebug($"KeyboardHook: WM={((WM)wParam)} VK=0x{vk:X2} flags={keyboardHookStruct.flags}");
+            uint vk = keyboardHookStruct.vkCode;
+            if (vk is 0x10 or 0xA0 or 0xA1 or 0x11 or 0xA2 or 0xA3 or 0x12 or 0xA4 or 0xA5)
+            {
+                Logger.LogDebug($"KeyboardHook: WM={((WM)wParam)} VK=0x{vk:X2} flags={keyboardHookStruct.flags}");
+            }
         }
 
         // Raise OnKeyboardKeyUp or OnKeyboardKeyDown event
@@ -374,9 +379,14 @@ internal static class UserActivityHelper
         // Debug: log every button up/down event with its WM code and keycode so
         // we can trace whether LBUTTONUP is reaching the hook and whether it is
         // being swallowed (handled=true → return 1) or passed through.
-        Logger.LogDebug(
-            $"MouseHook: WM={((WM)wParam)} VK=0x{virtualKeycode:X2} up={up} upSubs={(OnMouseButtonUp?.GetInvocationList().Length ?? 0)} downSubs={(OnMouseButtonDown?.GetInvocationList().Length ?? 0)}"
-        );
+        // Gate the interpolation: this runs inside the low-level hook callback for
+        // every click, where Release builds must not pay for debug strings they never write.
+        if (RatConfig.LogDebug)
+        {
+            Logger.LogDebug(
+                $"MouseHook: WM={((WM)wParam)} VK=0x{virtualKeycode:X2} up={up} upSubs={(OnMouseButtonUp?.GetInvocationList().Length ?? 0)} downSubs={(OnMouseButtonDown?.GetInvocationList().Length ?? 0)}"
+            );
+        }
 
         if (up && OnMouseButtonUp != null)
         {
@@ -391,7 +401,7 @@ internal static class UserActivityHelper
             }
             handled |= eventArgs.Handled;
 
-            if (eventArgs.Handled)
+            if (eventArgs.Handled && RatConfig.LogDebug)
                 Logger.LogDebug($"MouseHook: LBUTTON UP was SWALLOWED (Handled=true) for VK=0x{virtualKeycode:X2}");
         }
         else if (!up && OnMouseButtonDown != null)
@@ -407,13 +417,13 @@ internal static class UserActivityHelper
             }
             handled |= eventArgs.Handled;
 
-            if (eventArgs.Handled)
+            if (eventArgs.Handled && RatConfig.LogDebug)
                 Logger.LogDebug($"MouseHook: LBUTTON DOWN was SWALLOWED (Handled=true) for VK=0x{virtualKeycode:X2}");
         }
 
         // If event is marked as handled, do not forward to other listeners
         nint result = handled ? 1 : CallNextHookEx(hMouseHook, nCode, wParam, lParam);
-        if (up)
+        if (up && RatConfig.LogDebug)
             Logger.LogDebug($"MouseHook: {((WM)wParam)} → {(handled ? "SWALLOWED(1)" : "PASSTHROUGH")}");
         return result;
     }

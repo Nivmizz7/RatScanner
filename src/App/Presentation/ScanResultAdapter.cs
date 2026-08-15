@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using RatScanner.Scan;
 using RatScanner.TarkovDev;
@@ -57,7 +58,16 @@ internal static class ScanResultAdapter
                 _ => PresentationText.T("RecognitionLow", "Low"),
             };
 
-        DateTimeOffset? updatedAt = DateTimeOffset.TryParse(item.Updated, out DateTimeOffset updated) ? updated : null;
+        // Updated is an ISO-8601 timestamp from tarkov.dev; parse it the same
+        // invariant way MenuVM does so locale settings can never change the result.
+        DateTimeOffset? updatedAt = DateTimeOffset.TryParse(
+            item.Updated,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out DateTimeOffset updated
+        )
+            ? updated
+            : null;
         bool bannedOnFlea = item.IsBannedOnFlea;
         int? fleaPrice =
             bannedOnFlea ? null

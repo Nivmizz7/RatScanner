@@ -77,30 +77,45 @@ internal class ActiveHotkey : Hotkey, IDisposable
     {
         if (!Enabled)
         {
-            Logger.LogDebug(
-                $"ActiveHotkey.OnKeyUp: SKIPPED (disabled) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
-            );
+            if (RatConfig.LogDebug)
+            {
+                Logger.LogDebug(
+                    $"ActiveHotkey.OnKeyUp: SKIPPED (disabled) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
+                );
+            }
             return;
         }
         if (_canHandle != null && !_canHandle(e))
         {
-            Logger.LogDebug(
-                $"ActiveHotkey.OnKeyUp: canHandle=false (rejected) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
-            );
+            if (RatConfig.LogDebug)
+            {
+                Logger.LogDebug(
+                    $"ActiveHotkey.OnKeyUp: canHandle=false (rejected) hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2}"
+                );
+            }
             return;
         }
         bool pressed = IsPressed(e);
-        Logger.LogDebug(
-            $"ActiveHotkey.OnKeyUp: hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2} IsPressed={pressed} SuppressHotkey={SuppressHotkey}"
-        );
+        if (RatConfig.LogDebug)
+        {
+            Logger.LogDebug(
+                $"ActiveHotkey.OnKeyUp: hotkey={ToString()} device={e.Device} vk=0x{e.VKCode:X2} IsPressed={pressed} SuppressHotkey={SuppressHotkey}"
+            );
+        }
         if (pressed && HotkeyPressedEventHandler != null)
         {
-            Logger.LogDebug("Pressed: " + ToString());
+            if (RatConfig.LogDebug)
+            {
+                Logger.LogDebug("Pressed: " + ToString());
+            }
             e.Handled |= SuppressHotkey;
-            Logger.LogDebug($"ActiveHotkey.OnKeyUp: firing handler via Task.Run, Handled={e.Handled}");
+            if (RatConfig.LogDebug)
+            {
+                Logger.LogDebug($"ActiveHotkey.OnKeyUp: firing handler via Task.Run, Handled={e.Handled}");
+            }
             Task.Run(() => HotkeyPressedEventHandler(sender, e));
         }
-        else
+        else if (RatConfig.LogDebug)
         {
             Logger.LogDebug(
                 $"ActiveHotkey.OnKeyUp: NOT firing (pressed={pressed} hasHandler={HotkeyPressedEventHandler != null})"
@@ -122,7 +137,8 @@ internal class ActiveHotkey : Hotkey, IDisposable
                 bool isDown = UserActivityHelper.IsKeyDown(keyboardKey);
                 if (!isDown)
                 {
-                    Logger.LogDebug($"IsPressed: keyboard key {keyboardKey} is NOT down → returning false");
+                    if (RatConfig.LogDebug)
+                        Logger.LogDebug($"IsPressed: keyboard key {keyboardKey} is NOT down → returning false");
                     return false;
                 }
                 if (e.Device == Device.Keyboard)
@@ -137,7 +153,8 @@ internal class ActiveHotkey : Hotkey, IDisposable
                 bool isDown = UserActivityHelper.IsMouseButtonDown(mouseButton);
                 if (!isDown)
                 {
-                    Logger.LogDebug($"IsPressed: mouse button {mouseButton} is NOT down → returning false");
+                    if (RatConfig.LogDebug)
+                        Logger.LogDebug($"IsPressed: mouse button {mouseButton} is NOT down → returning false");
                     return false;
                 }
                 if (e.Device == Device.Mouse)
@@ -145,9 +162,12 @@ internal class ActiveHotkey : Hotkey, IDisposable
             }
         }
 
-        Logger.LogDebug(
-            $"IsPressed: returning {keyInHotkey} (RequiresKeyboard={RequiresKeyboard} RequiresMouse={RequiresMouse} device={e.Device})"
-        );
+        if (RatConfig.LogDebug)
+        {
+            Logger.LogDebug(
+                $"IsPressed: returning {keyInHotkey} (RequiresKeyboard={RequiresKeyboard} RequiresMouse={RequiresMouse} device={e.Device})"
+            );
+        }
         return keyInHotkey;
     }
 

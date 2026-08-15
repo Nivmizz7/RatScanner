@@ -337,6 +337,9 @@ internal static class GitHubUpdateService
             psi.ArgumentList.Add("Hidden");
             psi.ArgumentList.Add("-File");
             psi.ArgumentList.Add(applyScript);
+            // UseShellExecute is false, so Process.Start either succeeds or throws
+            // Win32Exception; the catch below removes the staging directory and
+            // reports the failure to the caller.
             Process.Start(psi);
             return true;
         }
