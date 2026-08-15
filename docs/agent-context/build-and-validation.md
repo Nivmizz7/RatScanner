@@ -75,6 +75,7 @@ The current high-signal smoke covers:
 - main scan shell, semantic navigation, and the search control;
 - keyboard activation/focus through Settings and a click-driven About route;
 - desktop and 600px narrow settings rendering, responsive control swap, bounds, and horizontal overflow;
+- result-card item art containment (portrait, landscape, square icons) and the Details user-action contract;
 - an ARIA snapshot of the important narrow settings structure;
 - uncaught page exceptions, browser console errors, failed app-resource requests, and app-resource HTTP 5xx responses.
 
