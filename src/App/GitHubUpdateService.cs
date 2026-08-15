@@ -337,15 +337,10 @@ internal static class GitHubUpdateService
             psi.ArgumentList.Add("Hidden");
             psi.ArgumentList.Add("-File");
             psi.ArgumentList.Add(applyScript);
-            Process? applicator = Process.Start(psi);
-            if (applicator is null)
-            {
-                // PowerShell could not be spawned; report failure so the caller keeps
-                // running instead of exiting the app with no update applied.
-                Logger.LogWarning("The update applicator could not be started.");
-                TryDeleteDirectory(stagingRoot);
-                return false;
-            }
+            // UseShellExecute is false, so Process.Start either succeeds or throws
+            // Win32Exception; the catch below removes the staging directory and
+            // reports the failure to the caller.
+            Process.Start(psi);
             return true;
         }
         catch (Exception e)
