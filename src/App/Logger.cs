@@ -35,7 +35,7 @@ internal static class Logger
 
     internal static void LogError(Exception e)
     {
-        Exception message = e.GetBaseException().GetBaseException();
+        Exception message = e.GetBaseException();
         LogError(message.Message, e);
     }
 

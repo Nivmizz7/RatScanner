@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using static RatScanner.RatConfig;
 
@@ -173,8 +174,9 @@ internal sealed class HotkeyManager : IDisposable
             if (previous + 500 < now && NameScan.EnableAuto)
             {
                 Logger.LogDebug("OnNameScanHotkey: auto-scan window open, sleeping 200ms then NameScanScreen");
-                Thread.Sleep(200); // wait for double click and ui
-                _owner.NameScanScreen();
+                // Wait for the double click and the game UI without blocking a thread
+                // pool thread; NameScanScreen itself guards _disposed.
+                _ = Task.Delay(200).ContinueWith(_ => _owner.NameScanScreen(), TaskScheduler.Default);
             }
             Logger.LogDebug("OnNameScanHotkey: EXIT");
         });

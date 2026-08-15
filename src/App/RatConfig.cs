@@ -341,7 +341,7 @@ internal static class RatConfig
             nameof(MinimalUi.ShowQuestHideoutTeamTracker),
             MinimalUi.ShowQuestHideoutTeamTracker
         );
-        MinimalUi.Opacity = config.ReadInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity);
+        MinimalUi.Opacity = Math.Clamp(config.ReadInt(nameof(MinimalUi.Opacity), MinimalUi.Opacity), 0, 100);
 
         config.Section = nameof(Tracking);
         Tracking.ShowNonFIRNeeds = config.ReadBool(nameof(Tracking.ShowNonFIRNeeds), Tracking.ShowNonFIRNeeds);
