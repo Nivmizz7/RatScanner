@@ -256,20 +256,11 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         _pendingDpiRefresh = WebView2DpiWorkaround.RefreshAfterDpiChange(_initializedWebView);
     }
 
-    private static void UpdateElements() { }
-
     private void HyperlinkRequestNavigate(object? sender, RequestNavigateEventArgs e)
     {
         ExternalLinkLauncher.Open(e.Uri.ToString());
         e.Handled = true;
     }
-
-    public void UtilizeState(object state)
-    {
-        throw new NotImplementedException();
-    }
-
-    protected override void OnPreviewKeyDown(KeyEventArgs e) { }
 
     private void OnPreviewMouseDown(object? sender, MouseButtonEventArgs e)
     {
@@ -286,7 +277,6 @@ public sealed partial class BlazorUI : UserControl, ISwitchable, IDisposable
         // control out. Queueing here guarantees the passive tooltip overlay still
         // boots even when BlazorUI never reaches Loaded in that startup path.
         QueueOverlayInitialization();
-        UpdateElements();
         WebView2PowerSaver.Resume(_initializedWebView);
     }
 

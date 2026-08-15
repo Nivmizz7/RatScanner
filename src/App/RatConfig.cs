@@ -190,7 +190,6 @@ internal static class RatConfig
     internal static bool MinimizeToTray;
     internal static bool AlwaysOnTop = true;
     internal static int SuperShortTTL = 30; // 30 seconds
-    internal static int ShortTTL = 60 * 5; // 5 minutes
     internal static int MediumTTL = 60 * 60 * 1; // 1 hour
     internal static int LongTTL = 60 * 60 * 12; // 12 hours
     private static int ConfigVersion => 4;

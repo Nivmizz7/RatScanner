@@ -6,6 +6,16 @@ Items are grouped by impact. The top group contains concrete correctness/reliabi
 
 ---
 
+## 2026-08-15 codebase review — tracked as GitHub issues
+
+| Issue | Title | PR |
+| --- | --- | --- |
+| [#56](https://github.com/tarkovtracker-org/RatScanner/issues/56) | Remove dead 'Hotkeys' settings page and dead code | (branch `fix/dead-hotkeys-page-cleanup`) |
+| [#54](https://github.com/tarkovtracker-org/RatScanner/issues/54) | Input-path logging overhead + robustness fixes | (branch `fix/input-path-and-robustness`) |
+| [#55](https://github.com/tarkovtracker-org/RatScanner/issues/55) | MenuVM recomputes quest/hideout classification on every property read | (branch `perf/menuvm-derived-cache`) |
+
+---
+
 ## P0 — Correctness issues (fix before merge)
 
 ### Settings page reports `Connected` before activation is verified

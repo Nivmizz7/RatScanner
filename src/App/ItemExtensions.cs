@@ -282,15 +282,4 @@ public static class ItemExtensions
         // gamepedia.com no longer redirects reliably; fandom hosts the live wiki.
         return $"https://escapefromtarkov.fandom.com/wiki/{Uri.EscapeDataString(pageName)}";
     }
-
-    public static IEnumerable<Item> GetAmmoOfSameCaliber(this Item item)
-    {
-        if (item.Properties is not { IsAmmo: true } ammo || string.IsNullOrEmpty(ammo.Caliber))
-            return Enumerable.Empty<Item>();
-        return TarkovDevAPI
-            .GetItems()
-            .Where(i =>
-                i.Properties is { IsAmmo: true } a && string.Equals(ammo.Caliber, a.Caliber, StringComparison.Ordinal)
-            );
-    }
 }
