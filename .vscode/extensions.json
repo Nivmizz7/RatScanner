@@ -1,6 +1,7 @@
 {
-  "recommendations": [
-    "davidanson.vscode-markdownlint",
-    "csharpier.csharpier-vscode"
-  ]
+	"recommendations": [
+		"davidanson.vscode-markdownlint",
+		"csharpier.csharpier-vscode",
+		"ms-dotnettools.csdevkit"
+	]
 }

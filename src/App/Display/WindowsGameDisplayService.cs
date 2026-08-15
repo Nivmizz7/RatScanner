@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -12,11 +13,11 @@ using Newtonsoft.Json.Linq;
 
 namespace RatScanner.Display;
 
-internal sealed class WindowsGameDisplayService
+internal static class WindowsGameDisplayService
 {
     private static readonly string[] TarkovProcessNames = ["EscapeFromTarkov", "EscapeFromTarkov_BE"];
 
-    internal GameDisplayConfiguration Detect(GameDisplayPreferences preferences)
+    internal static GameDisplayConfiguration Detect(GameDisplayPreferences preferences)
     {
         IReadOnlyList<GameDisplayInfo> displays = EnumerateDisplays();
         Rectangle? gameClientBounds = TryGetTarkovClientBounds();
@@ -24,6 +25,11 @@ internal sealed class WindowsGameDisplayService
         return GameDisplayConfigurationBuilder.Build(displays, gameClientBounds, graphicsViewport, preferences);
     }
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible",
+        Justification = "The read-only return contract prevents callers from depending on the concrete collection implementation."
+    )]
     private static IReadOnlyList<GameDisplayInfo> EnumerateDisplays()
     {
         try

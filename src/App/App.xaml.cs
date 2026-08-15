@@ -184,7 +184,7 @@ public partial class App : Application, ISingleInstance
     // site out, so IDE0051 reports this Release-only crash handler as unused
     // (false positive under Debug analysis). Do not "fix" by deleting it.
 #pragma warning disable IDE0051
-    private void SetupExceptionHandling()
+    private static void SetupExceptionHandling()
     {
 #pragma warning disable IDE0053 // Use expression body for lambda expression
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -207,7 +207,7 @@ public partial class App : Application, ISingleInstance
     }
 #pragma warning restore IDE0051
 
-    private void LogUnhandledException(Exception exception, string source)
+    private static void LogUnhandledException(Exception exception, string source)
     {
         // Use the indexer instead of Add so a second handler receiving the same exception
         // instance does not throw ArgumentException for a duplicate "Source" key.

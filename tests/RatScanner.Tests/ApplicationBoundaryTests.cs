@@ -14,8 +14,11 @@ using GameMode = RatScanner.TarkovDev.GameMode;
 
 namespace RatScanner.Tests;
 
+// CA1711: xUnit convention names collection-definition classes "*Collection".
+#pragma warning disable CA1711
 [CollectionDefinition(nameof(ApplicationBoundaryTests), DisableParallelization = true)]
 public sealed class ApplicationBoundaryTestCollection;
+#pragma warning restore CA1711
 
 [Collection(nameof(ApplicationBoundaryTests))]
 public sealed class ApplicationBoundaryTests

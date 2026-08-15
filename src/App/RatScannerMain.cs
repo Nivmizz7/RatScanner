@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Globalization;
 using System.Linq;
@@ -102,7 +103,7 @@ public sealed class RatScannerMain
     private readonly RebuildCoordinator _rebuildCoordinator;
     private readonly EngineLifecycleGate<RatEyeEngine> _engineLifecycle = new();
 
-    public TarkovTrackerDB TarkovTrackerDB;
+    public TarkovTrackerDB TarkovTrackerDB { get; set; } = null!;
 
     internal RatEyeEngine RatEyeEngine = null!;
 
@@ -920,6 +921,11 @@ public sealed class RatScannerMain
 
     void IHotkeyRegistrar.RegisterHotkeys() => HotkeyManager.RegisterHotkeys();
 
+    [SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible",
+        Justification = "The interface accepts any caller-provided mutable dictionary without exposing an implementation requirement."
+    )]
     private static void AddTimings(
         IDictionary<string, double> destination,
         IReadOnlyDictionary<string, double> source,

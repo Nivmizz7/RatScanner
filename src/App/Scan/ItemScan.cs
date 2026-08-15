@@ -7,11 +7,11 @@ public abstract class ItemScan
 {
     public TarkovDev.Item Item { get; set; } = new TarkovDev.Item();
 
-    public float Confidence { get; set; } = 0;
+    public float Confidence { get; set; }
 
     public string IconPath { get; set; } = null!;
 
-    public long DissapearAt { get; set; } = 0;
+    public long DissapearAt { get; set; }
 
     public bool IsSeed { get; init; }
 

@@ -154,7 +154,7 @@ public static class TarkovDevAPI
     }
 
     private static string TrimBody(string responseBody) =>
-        responseBody.Length > 512 ? responseBody.Substring(0, 512) + "..." : responseBody;
+        responseBody.Length > 512 ? string.Concat(responseBody.AsSpan(0, 512), "...") : responseBody;
 
     private static TimeSpan? GetRetryAfter(HttpResponseMessage response)
     {
