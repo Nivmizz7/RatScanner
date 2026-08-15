@@ -13,6 +13,16 @@ using Xunit;
 
 namespace RatScanner.Tests;
 
+// CA1711: xUnit convention names collection-definition classes "*Collection".
+#pragma warning disable CA1711
+[CollectionDefinition(nameof(MenuVMDerivedCacheTests), DisableParallelization = true)]
+public sealed class MenuVMDerivedCacheTestCollection;
+#pragma warning restore CA1711
+
+// Seeding TarkovDevAPI.Cache and reading RatConfig are global static state: run this
+// class exclusively so no parallel test can change the locale/game mode or the shared
+// cache between the seed and the classification read.
+[Collection(nameof(MenuVMDerivedCacheTests))]
 public sealed class MenuVMDerivedCacheTests
 {
     private static DefaultItemScan CreateScan(string itemId)
