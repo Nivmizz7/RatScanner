@@ -19,12 +19,17 @@ internal class MenuVM : INotifyPropertyChanged
     // Derived-value cache: quest/hideout classification iterates the whole catalog
     // (tasks + hideout stations) and used to re-run on every property read — several
     // times per Blazor render across main page, overlay, and minimal menu bindings.
-    // Compute once per (scan, tracker snapshot) pair. TarkovTrackerDB.GetSnapshot
-    // returns the same TrackerStateSnapshot instance until tracker data mutates, so
-    // reference equality is a reliable "tracker data changed" signal without an
-    // explicit version.
+    // Compute once per (scan, item, tracker snapshot, ShowNonFIRNeeds) tuple.
+    // TarkovTrackerDB.GetSnapshot returns the same TrackerStateSnapshot instance until
+    // tracker data mutates, so reference equality is a reliable "tracker data changed"
+    // signal without an explicit version. The Item reference and ShowNonFIRNeeds are
+    // part of the key because RefreshItemsForGameMode replaces Item in place on
+    // already-enqueued scans (game-mode/language switch) and the setting toggle must
+    // not serve classification computed under the previous preference.
     private ItemScan? _derivedSourceScan;
+    private Item? _derivedSourceItem;
     private TrackerStateSnapshot? _derivedSourceState;
+    private bool _derivedSourceShowNonFirNeeds;
     private DerivedScanState? _derivedState;
 
     internal sealed class DerivedScanState
@@ -163,28 +168,36 @@ internal class MenuVM : INotifyPropertyChanged
 
     /// <summary>
     /// Quest/hideout/team classification for the current scan, computed once per
-    /// (scan, tracker snapshot) pair and reused across property reads.
+    /// (scan, item, tracker snapshot) tuple and reused across property reads.
     /// </summary>
     internal DerivedScanState Derived
     {
         get
         {
             ItemScan scan = LastItemScan;
+            Item item = scan.Item;
+            bool showNonFirNeeds = RatConfig.Tracking.ShowNonFIRNeeds;
             TrackerStateSnapshot trackerState = _trackerService.State;
-            if (!ReferenceEquals(_derivedSourceScan, scan) || !ReferenceEquals(_derivedSourceState, trackerState))
+            if (
+                !ReferenceEquals(_derivedSourceScan, scan)
+                || !ReferenceEquals(_derivedSourceItem, item)
+                || _derivedSourceShowNonFirNeeds != showNonFirNeeds
+                || !ReferenceEquals(_derivedSourceState, trackerState)
+            )
             {
                 _derivedSourceScan = scan;
+                _derivedSourceItem = item;
+                _derivedSourceShowNonFirNeeds = showNonFirNeeds;
                 _derivedSourceState = trackerState;
-                _derivedState = ComputeDerivedState(scan, trackerState);
+                _derivedState = ComputeDerivedState(item, trackerState);
             }
 
             return _derivedState!;
         }
     }
 
-    private static DerivedScanState ComputeDerivedState(ItemScan scan, TrackerStateSnapshot trackerState)
+    private static DerivedScanState ComputeDerivedState(Item item, TrackerStateSnapshot trackerState)
     {
-        Item item = scan.Item;
         FetchModels.TarkovTracker.UserProgress currentUser = trackerState.CurrentUser;
         (int taskCount, int kappaCount) = item.GetTaskRemaining(currentUser);
         return new DerivedScanState

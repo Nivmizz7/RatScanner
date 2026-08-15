@@ -111,6 +111,51 @@ public sealed class MenuVMDerivedCacheTests
     }
 
     [Fact]
+    public void Derived_state_is_recomputed_when_the_scan_item_is_swapped_in_place()
+    {
+        using IDisposable seededCatalog = SeedTarkovDevCatalogWithHideoutNeed("item-a");
+        FakeScanOrchestrator orchestrator = new();
+        FakeTrackerService tracker = new();
+        DefaultItemScan scan = CreateScan("item-a");
+        orchestrator.ItemScans.Enqueue(scan);
+        MenuVM viewModel = new(orchestrator, tracker);
+
+        MenuVM.DerivedScanState first = viewModel.Derived;
+
+        // RefreshItemsForGameMode replaces Item on already-enqueued scans (same id,
+        // fresh catalog instance); the cache must not keep serving classification
+        // computed against the previous catalog.
+        scan.Item = CreateScan("item-a").Item;
+
+        Assert.NotSame(first, viewModel.Derived);
+    }
+
+    [Fact]
+    public void Derived_state_is_recomputed_when_show_non_fir_needs_changes()
+    {
+        using IDisposable seededCatalog = SeedTarkovDevCatalogWithHideoutNeed("item-a");
+        FakeScanOrchestrator orchestrator = new();
+        FakeTrackerService tracker = new();
+        orchestrator.ItemScans.Enqueue(CreateScan("item-a"));
+        MenuVM viewModel = new(orchestrator, tracker);
+
+        bool original = RatConfig.Tracking.ShowNonFIRNeeds;
+        try
+        {
+            MenuVM.DerivedScanState first = viewModel.Derived;
+            RatConfig.Tracking.ShowNonFIRNeeds = !original;
+
+            // The classifier reads this preference, so a toggle must invalidate the
+            // cached classification even when scan and tracker snapshot are unchanged.
+            Assert.NotSame(first, viewModel.Derived);
+        }
+        finally
+        {
+            RatConfig.Tracking.ShowNonFIRNeeds = original;
+        }
+    }
+
+    [Fact]
     public void Team_needs_are_part_of_the_shared_derived_state()
     {
         using IDisposable seededCatalog = SeedTarkovDevCatalogWithHideoutNeed("item-a");
