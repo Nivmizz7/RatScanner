@@ -279,14 +279,14 @@
                 </div>
                 <button type="button"
                         class="details-toggle"
-                        aria-expanded="@_detailsOpen"
+                        aria-expanded="@(_uiState.DetailsOpen ? "true" : "false")"
                         @onclick="ToggleDetails">
-                    @(_detailsOpen ? Localizer["HideDetails"] : Localizer["ShowDetails"])
-                    <MudIcon Icon="@(_detailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                    @(_uiState.DetailsOpen ? Localizer["HideDetails"] : Localizer["ShowDetails"])
+                    <MudIcon Icon="@(_uiState.DetailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
                 </button>
             </div>
 
-            @if (_detailsOpen)
+            @if (_uiState.DetailsOpen)
             {
                 <section class="details" aria-label="@Localizer["ScanDetails"]">
                     <div class="details-group">
@@ -324,7 +324,7 @@
                                                 class="copy-btn"
                                                 title="@Localizer["CopyItemId"]"
                                                 @onclick="CopyItemId">
-                                            @(_copiedId ? Localizer["Copied"] : Localizer["Copy"])
+                                            @(_uiState.CopiedId ? Localizer["Copied"] : Localizer["Copy"])
                                         </button>
                                     }
                                 </div>
@@ -359,8 +359,7 @@
     private string? _itemsLocale;
     private TarkovDev.GameMode? _itemsGameMode;
     private MudAutocomplete<Item>? _search;
-    private bool _detailsOpen;
-    private bool _copiedId;
+    private readonly ResultCardUiState _uiState = new();
 
     // Perf sequence of the scan this render is showing, plus when its notification
     // arrived. Consumed after the next paint so the scan timeline records how long
@@ -524,8 +523,9 @@
     private void RefreshResult()
     {
         _result = MenuVM.LastItemScan.IsSeed ? null : ScanResultAdapter.Map(MenuVM);
-        _detailsOpen = false;
-        _copiedId = false;
+        // Scan-driven refreshes must not collapse a Details section the user opened;
+        // only explicit user actions (ToggleDetails, SelectRecent, SelectItem) change it.
+        _uiState.OnResultRefreshed();
     }
 
     private async void OnResultChanged(object? sender, PropertyChangedEventArgs e) =>
@@ -559,8 +559,7 @@
     private void SelectRecent(ScanResultViewModel scan)
     {
         _result = scan;
-        _detailsOpen = false;
-        _copiedId = false;
+        _uiState.OnItemSelected();
     }
 
     private System.Threading.Tasks.Task<IEnumerable<Item>> SearchItems(string value, CancellationToken cancellationToken)
@@ -599,14 +598,17 @@
     private void SelectItem(Item? item)
     {
         if (item is not null)
+        {
+            // Deliberate item switch: collapse any open Details section, matching
+            // SelectRecent. Scan-driven refreshes alone must not close it.
+            _uiState.OnItemSelected();
             MenuVM.ItemScans.Enqueue(new DefaultItemScan(item));
+        }
     }
 
     private void ToggleDetails()
     {
-        _detailsOpen = !_detailsOpen;
-        if (!_detailsOpen)
-            _copiedId = false;
+        _uiState.ToggleDetails();
     }
 
     private async System.Threading.Tasks.Task FocusSearch()
@@ -623,12 +625,12 @@
         try
         {
             System.Windows.Clipboard.SetText(_result.Item.Id);
-            _copiedId = true;
+            _uiState.MarkCopied();
         }
         catch
         {
             // Clipboard access can fail if the host window is not focused.
-            _copiedId = false;
+            _uiState.MarkCopyFailed();
         }
     }
 
