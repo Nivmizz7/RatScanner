@@ -1123,6 +1123,9 @@ public sealed class WebViewSmokeTests
             // Only touch files this seed owns: restore every backup it moved aside and
             // delete only paths it wrote. Files it never touched (for example a backup
             // move that failed, leaving the developer's file in place) stay untouched.
+            // Failures are reported to the run's diagnostics file — best effort and
+            // non-throwing, so a stranded backup never goes silent.
+            List<Exception> rollbackFailures = [];
             foreach (string key in CacheKeys())
             {
                 string path = Path.Combine(_cacheDirectory, CacheFileName(key));
@@ -1132,8 +1135,10 @@ public sealed class WebViewSmokeTests
                     {
                         File.Move(backup, path, overwrite: true);
                     }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        rollbackFailures.Add(exception);
+                    }
                 }
                 else if (_written.Contains(path))
                 {
@@ -1141,13 +1146,27 @@ public sealed class WebViewSmokeTests
                     {
                         File.Delete(path);
                     }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        rollbackFailures.Add(exception);
+                    }
                 }
             }
 
             _backups.Clear();
             _written.Clear();
+
+            if (rollbackFailures.Count > 0)
+            {
+                TryWriteDiagnostic(
+                    _diagnosticsPath,
+                    $"{rollbackFailures.Count} catalog cache rollback operation(s) failed after a partial seed; "
+                        + "a developer cache file may be stranded in a .bak."
+                        + Environment.NewLine
+                        + Environment.NewLine
+                        + string.Join(Environment.NewLine + Environment.NewLine, rollbackFailures)
+                );
+            }
         }
 
         public void Dispose()
