@@ -168,7 +168,8 @@ internal class MenuVM : INotifyPropertyChanged
 
     /// <summary>
     /// Quest/hideout/team classification for the current scan, computed once per
-    /// (scan, item, tracker snapshot) tuple and reused across property reads.
+    /// (scan, item, tracker snapshot, ShowNonFIRNeeds) tuple and reused across
+    /// property reads.
     /// </summary>
     internal DerivedScanState Derived
     {
