@@ -183,11 +183,15 @@ public sealed class WebViewSmokeTests
     public async Task Scan_result_card_contains_non_square_icons_and_details_state_follows_user_actions()
     {
         // Seed a tiny offline catalog (Pevko 1x2 portrait, Makarov PM 2x1 landscape,
-        // M4A1 1x1 square) so the search-driven result card renders hermetically with
-        // locally installed icons — no network and no dependency on a developer cache.
-        using CatalogCacheSeed catalogSeed = new();
+        // M4A1 1x1 square, all with locally installed icons) plus empty tasks/hideout/
+        // crafts/barters/maps caches, so startup and the search-driven result card run
+        // hermetically — no network and no dependency on a developer cache. The run
+        // directory is created first so the seed's failure diagnostics land in the run's
+        // own artifact folder.
+        string runDirectory = UiSession.CreateRunDirectory();
+        using CatalogCacheSeed catalogSeed = new(runDirectory);
         CancellationToken testCancellation = TestContext.Current.CancellationToken;
-        await using UiSession session = await UiSession.StartAsync(testCancellation);
+        await using UiSession session = await UiSession.StartAsync(testCancellation, runDirectory);
         try
         {
             IPage page = session.Page;
@@ -490,7 +494,10 @@ public sealed class WebViewSmokeTests
             _traceStarted = traceStarted;
         }
 
-        internal static async Task<UiSession> StartAsync(CancellationToken cancellationToken)
+        internal static async Task<UiSession> StartAsync(
+            CancellationToken cancellationToken,
+            string? runDirectory = null
+        )
         {
             string repositoryRoot = FindRepositoryRoot();
             string configuration = GetConfiguration();
@@ -508,14 +515,7 @@ public sealed class WebViewSmokeTests
             Process[] existingProcesses = Process.GetProcessesByName("RatScanner");
             Assert.Empty(existingProcesses);
 
-            string artifactRoot =
-                Environment.GetEnvironmentVariable("RATSCANNER_UI_ARTIFACTS")
-                ?? Path.Combine(repositoryRoot, "artifacts", "ui-tests");
-            string runDirectory = Path.Combine(
-                artifactRoot,
-                $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid():N}"
-            );
-            Directory.CreateDirectory(runDirectory);
+            runDirectory ??= CreateRunDirectory();
 
             string profileDirectory = Path.Combine(Path.GetTempPath(), $"RatScanner-ui-{Guid.NewGuid():N}");
             Directory.CreateDirectory(profileDirectory);
@@ -640,6 +640,21 @@ public sealed class WebViewSmokeTests
 
                 throw;
             }
+        }
+
+        /// <summary>Creates the run's artifact directory under <c>artifacts/ui-tests</c> (or the
+        /// <c>RATSCANNER_UI_ARTIFACTS</c> override).</summary>
+        internal static string CreateRunDirectory()
+        {
+            string artifactRoot =
+                Environment.GetEnvironmentVariable("RATSCANNER_UI_ARTIFACTS")
+                ?? Path.Combine(FindRepositoryRoot(), "artifacts", "ui-tests");
+            string runDirectory = Path.Combine(
+                artifactRoot,
+                $"{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid():N}"
+            );
+            Directory.CreateDirectory(runDirectory);
+            return runDirectory;
         }
 
         internal async Task ResizeAsync(int width, int height)
@@ -1018,14 +1033,19 @@ public sealed class WebViewSmokeTests
 
     /// <summary>
     /// Writes the tiny fixture catalog into the app's offline cache location
-    /// (<c>%TEMP%\RatScanner\Cache</c>) for every locale/game-mode key the app can
-    /// ask for, so the launched app serves the search from cache without touching
-    /// the network or depending on a developer's cache. Pre-existing cache files
-    /// are backed up and restored on dispose; only this fixture's files are removed.
+    /// (<c>%TEMP%\RatScanner\Cache</c>) for every locale/game-mode key the app can ask
+    /// for, so the launched app serves the search from cache without touching the
+    /// network or depending on a developer's cache. All startup-refreshed families are
+    /// seeded — items with the three fixture items, and tasks/hideout/crafts/barters/maps
+    /// with empty arrays — so the app's cold-start cache refresh stays fully offline.
+    /// Pre-existing cache files are backed up and restored on dispose; only this
+    /// fixture's files are removed. Dispose never throws: cleanup problems are reported
+    /// to the run's diagnostics file so they cannot mask the test's real failure.
     /// </summary>
     private sealed class CatalogCacheSeed : IDisposable
     {
-        // Mirrors TarkovDevAPI.ItemsQueryKey(locale, gameMode) => $"items_{locale}_{gameMode}"
+        // Mirrors TarkovDevAPI key formats (items_{locale}_{gameMode}, tasks_v2_{locale}_{gameMode},
+        // hideout_{locale}_{gameMode}, crafts_{gameMode}, barters_{gameMode}, maps_{locale}_{gameMode})
         // and RatConfig.GetCachePath (SHA-256 of the key, hex, .data). The app's
         // Newtonsoft deserialization matches property names case-insensitively.
         private static readonly string[] Locales =
@@ -1050,13 +1070,31 @@ public sealed class WebViewSmokeTests
         private static readonly string[] GameModes = ["Regular", "Pve", "Seasonal"];
 
         private readonly string _cacheDirectory;
+        private readonly string _diagnosticsPath;
         private readonly Dictionary<string, string> _backups = new(StringComparer.OrdinalIgnoreCase);
 
-        internal CatalogCacheSeed()
+        internal CatalogCacheSeed(string runDirectory)
         {
             _cacheDirectory = Path.Combine(Path.GetTempPath(), "RatScanner", "Cache");
+            _diagnosticsPath = Path.Combine(runDirectory, "catalog-seed-cleanup-errors.log");
             Assert.Empty(Process.GetProcessesByName("RatScanner"));
 
+            try
+            {
+                SeedCache();
+            }
+            catch
+            {
+                // A partially seeded cache must not leave the developer's files renamed or
+                // replaced. Roll back what this constructor did; Dispose is non-throwing
+                // by contract, so it cannot mask the seeding failure being rethrown here.
+                Dispose();
+                throw;
+            }
+        }
+
+        private void SeedCache()
+        {
             foreach (string key in CacheKeys())
             {
                 string path = Path.Combine(_cacheDirectory, CacheFileName(key));
@@ -1070,14 +1108,15 @@ public sealed class WebViewSmokeTests
 
             Directory.CreateDirectory(_cacheDirectory);
             foreach (string key in CacheKeys())
-                File.WriteAllText(Path.Combine(_cacheDirectory, CacheFileName(key)), FixtureItemsJson);
+                File.WriteAllText(Path.Combine(_cacheDirectory, CacheFileName(key)), FixtureJson(key));
         }
 
         public void Dispose()
         {
             // The app process is stopped before this runs, but WebView2 child processes can
             // linger and hold cache files briefly; retry so transient locks do not fail the
-            // run. Any persistent failure is reported so the test run artifacts show it.
+            // run. Persistent failures are reported to the run's diagnostics file — throwing
+            // here would replace the test's real failure while the using scope unwinds.
             List<Exception> cleanupFailures = [];
             foreach (string key in CacheKeys())
             {
@@ -1106,10 +1145,13 @@ public sealed class WebViewSmokeTests
 
             if (cleanupFailures.Count > 0)
             {
-                throw new AggregateException(
+                TryWriteDiagnostic(
+                    _diagnosticsPath,
                     $"{cleanupFailures.Count} catalog cache cleanup operation(s) failed; "
-                        + "a later run may back up and restore stale fixture files.",
-                    cleanupFailures
+                        + "a later run may back up and restore stale fixture files."
+                        + Environment.NewLine
+                        + Environment.NewLine
+                        + string.Join(Environment.NewLine + Environment.NewLine, cleanupFailures)
                 );
             }
         }
@@ -1119,7 +1161,18 @@ public sealed class WebViewSmokeTests
             foreach (string locale in Locales)
             {
                 foreach (string gameMode in GameModes)
+                {
                     yield return $"items_{locale}_{gameMode}";
+                    yield return $"tasks_v2_{locale}_{gameMode}";
+                    yield return $"hideout_{locale}_{gameMode}";
+                    yield return $"maps_{locale}_{gameMode}";
+                }
+            }
+
+            foreach (string gameMode in GameModes)
+            {
+                yield return $"crafts_{gameMode}";
+                yield return $"barters_{gameMode}";
             }
         }
 
@@ -1128,6 +1181,9 @@ public sealed class WebViewSmokeTests
             byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
             return Convert.ToHexString(hash) + ".data";
         }
+
+        private static string FixtureJson(string key) =>
+            key.StartsWith("items_", StringComparison.Ordinal) ? FixtureItemsJson : "[]";
 
         private static void DeleteWithRetries(string path)
         {
