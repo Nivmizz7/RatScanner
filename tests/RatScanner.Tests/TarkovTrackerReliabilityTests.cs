@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using RatScanner.FetchModels.TarkovTracker;
+using RatScanner.Runtime;
 using Xunit;
 using GameMode = RatScanner.TarkovDev.GameMode;
 
@@ -161,6 +162,37 @@ public class TarkovTrackerDatabaseReliabilityTests
         Exception? secondDispose = Record.Exception(database.Dispose);
 
         Assert.Null(secondDispose);
+    }
+
+    [Fact]
+    public void GetSnapshot_returns_a_stable_instance_until_connection_state_changes()
+    {
+        using TarkovTrackerDB database = new((_, _, _) => Task.FromResult(string.Empty));
+        TrackerStateSnapshot first = database.GetSnapshot();
+
+        Assert.Same(first, database.GetSnapshot());
+
+        database.MarkConnectionState(TrackerConnectionState.Testing);
+        TrackerStateSnapshot afterStateChange = database.GetSnapshot();
+
+        Assert.NotSame(first, afterStateChange);
+        Assert.Equal(TrackerConnectionState.Testing, afterStateChange.ConnectionState);
+        Assert.Same(afterStateChange, database.GetSnapshot());
+    }
+
+    [Fact]
+    public void GetSnapshot_rebuilds_after_configuration_changes()
+    {
+        using TarkovTrackerDB database = new((_, _, _) => Task.FromResult(string.Empty));
+        TrackerStateSnapshot initial = database.GetSnapshot();
+
+        database.Configure("PVP_abc", "https://api.example", GameMode.Regular);
+        TrackerStateSnapshot configured = database.GetSnapshot();
+
+        Assert.NotSame(initial, configured);
+        Assert.Equal("PVP_abc", configured.Token);
+        Assert.Equal(TrackerConnectionState.Untested, configured.ConnectionState);
+        Assert.Same(configured, database.GetSnapshot());
     }
 
     [Fact]

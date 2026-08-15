@@ -19,9 +19,10 @@ internal class MenuVM : INotifyPropertyChanged
     // Derived-value cache: quest/hideout classification iterates the whole catalog
     // (tasks + hideout stations) and used to re-run on every property read — several
     // times per Blazor render across main page, overlay, and minimal menu bindings.
-    // Compute once per (scan, tracker snapshot) pair. ITrackerService.State returns a
-    // fresh TrackerStateSnapshot record per read, so reference equality is a reliable
-    // "tracker data changed" signal without an explicit version.
+    // Compute once per (scan, tracker snapshot) pair. TarkovTrackerDB.GetSnapshot
+    // returns the same TrackerStateSnapshot instance until tracker data mutates, so
+    // reference equality is a reliable "tracker data changed" signal without an
+    // explicit version.
     private ItemScan? _derivedSourceScan;
     private TrackerStateSnapshot? _derivedSourceState;
     private DerivedScanState? _derivedState;
@@ -207,6 +208,7 @@ internal class MenuVM : INotifyPropertyChanged
         );
 
         List<KeyValuePair<string, KeyValuePair<int, int>>> needs = [];
+        HashSet<string> usedNames = [];
         foreach (FetchModels.TarkovTracker.UserProgress memberProgress in teamProgress)
         {
             int task = item.GetTaskRemaining(memberProgress).count;
@@ -219,12 +221,13 @@ internal class MenuVM : INotifyPropertyChanged
 
             string baseName = memberProgress.DisplayName ?? "Unknown";
             string name = baseName;
-            for (int i = 2; i < 99; i++)
+            int suffix = 2;
+            while (usedNames.Contains(name))
             {
-                if (needs.All(n => n.Key != name))
-                    break;
-                name = $"{baseName} #{i}";
+                name = $"{baseName} #{suffix}";
+                suffix++;
             }
+            usedNames.Add(name);
             needs.Add(new KeyValuePair<string, KeyValuePair<int, int>>(name, need));
         }
         return needs;

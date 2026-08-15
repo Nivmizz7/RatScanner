@@ -80,6 +80,7 @@ public class TarkovTrackerDB : IDisposable
     private List<UserProgress> _progress = new();
     private string _self = "";
     private TrackerConnectionState _connectionState = TrackerConnectionState.NotConfigured;
+    private TrackerStateSnapshot? _cachedSnapshot;
     private DateTimeOffset? _lastSuccessfulValidationUtc;
     private bool _disposed;
 
@@ -135,7 +136,10 @@ public class TarkovTrackerDB : IDisposable
     internal void MarkConnectionState(TrackerConnectionState state)
     {
         lock (_stateLock)
+        {
             _connectionState = state;
+            InvalidateSnapshotLocked();
+        }
     }
 
     internal DateTimeOffset? LastSuccessfulValidationUtc
@@ -147,10 +151,22 @@ public class TarkovTrackerDB : IDisposable
         }
     }
 
+    /// <summary>
+    /// Returns a stable snapshot instance until the underlying tracker state mutates,
+    /// so callers can use reference equality to detect "tracker data changed". The
+    /// instance is rebuilt lazily on the next read after any mutation.
+    /// </summary>
     internal TrackerStateSnapshot GetSnapshot()
     {
         lock (_stateLock)
-            return new TrackerStateSnapshot(_progress.ToArray(), _self, _configuredToken, _connectionState);
+        {
+            return _cachedSnapshot ??= new TrackerStateSnapshot(
+                _progress.ToArray(),
+                _self,
+                _configuredToken,
+                _connectionState
+            );
+        }
     }
 
     public TarkovTrackerDB()
@@ -186,6 +202,7 @@ public class TarkovTrackerDB : IDisposable
             _connectionState = string.IsNullOrWhiteSpace(token)
                 ? TrackerConnectionState.NotConfigured
                 : TrackerConnectionState.Untested;
+            InvalidateSnapshotLocked();
             if (string.IsNullOrWhiteSpace(token))
                 ClearProgressStateLocked();
             else
@@ -293,6 +310,7 @@ public class TarkovTrackerDB : IDisposable
             if (!IsCurrentLocked(configuration))
                 return new TrackerValidationResult(false, TrackerValidationFailure.Network, Array.Empty<string>());
             _connectionState = TrackerConnectionState.Testing;
+            InvalidateSnapshotLocked();
         }
 
         TrackerValidationResult result = await ValidateCandidateCoreAsync(
@@ -311,6 +329,7 @@ public class TarkovTrackerDB : IDisposable
             _connectionState = ConnectionStateFor(result);
             if (result.Succeeded)
                 _lastSuccessfulValidationUtc = DateTimeOffset.UtcNow;
+            InvalidateSnapshotLocked();
         }
         return result;
     }
@@ -495,6 +514,7 @@ public class TarkovTrackerDB : IDisposable
                     _token = null;
                     _connectionState = TrackerConnectionState.InvalidKey;
                     ClearProgressStateLocked();
+                    InvalidateSnapshotLocked();
                 }
             }
             Logger.LogWarning("TarkovTracker rejected a progression request.", exception);
@@ -504,7 +524,10 @@ public class TarkovTrackerDB : IDisposable
             lock (_stateLock)
             {
                 if (IsCurrentLocked(configuration))
+                {
                     _connectionState = TrackerConnectionState.MissingPermissions;
+                    InvalidateSnapshotLocked();
+                }
             }
             Logger.LogWarning("TarkovTracker progression is missing a required permission.", exception);
         }
@@ -635,6 +658,7 @@ public class TarkovTrackerDB : IDisposable
                 return;
             _self = self;
             _progress = progress;
+            InvalidateSnapshotLocked();
             ProgressCacheKey cacheKey = CreateProgressCacheKey(
                 configuration.Mode,
                 configuration.Endpoint,
@@ -654,6 +678,7 @@ public class TarkovTrackerDB : IDisposable
             _token = null;
             _connectionState = TrackerConnectionState.NotConfigured;
             ClearProgressStateLocked();
+            InvalidateSnapshotLocked();
         }
     }
 
@@ -666,6 +691,7 @@ public class TarkovTrackerDB : IDisposable
             _cachedProgress[cacheKey] = cached;
             _self = cached.Self;
             _progress = cached.Progress.ToList();
+            InvalidateSnapshotLocked();
         }
         else
         {
@@ -694,7 +720,10 @@ public class TarkovTrackerDB : IDisposable
     {
         _self = "";
         _progress = new List<UserProgress>();
+        InvalidateSnapshotLocked();
     }
+
+    private void InvalidateSnapshotLocked() => _cachedSnapshot = null;
 
     private static bool MatchesGameMode(string? apiMode, string token, GameMode expected)
     {
