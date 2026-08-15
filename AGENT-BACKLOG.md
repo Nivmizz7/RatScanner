@@ -10,9 +10,9 @@ Items are grouped by impact. The top group contains concrete correctness/reliabi
 
 | Issue | Title | PR |
 | --- | --- | --- |
-| [#56](https://github.com/tarkovtracker-org/RatScanner/issues/56) | Remove dead 'Hotkeys' settings page and dead code | (branch `fix/dead-hotkeys-page-cleanup`) |
-| [#54](https://github.com/tarkovtracker-org/RatScanner/issues/54) | Input-path logging overhead + robustness fixes | (branch `fix/input-path-and-robustness`) |
-| [#55](https://github.com/tarkovtracker-org/RatScanner/issues/55) | MenuVM recomputes quest/hideout classification on every property read | (branch `perf/menuvm-derived-cache`) |
+| [#56](https://github.com/tarkovtracker-org/RatScanner/issues/56) | Remove dead 'Hotkeys' settings page and dead code | [#58](https://github.com/tarkovtracker-org/RatScanner/pull/58) |
+| [#54](https://github.com/tarkovtracker-org/RatScanner/issues/54) | Input-path logging overhead + robustness fixes | [#57](https://github.com/tarkovtracker-org/RatScanner/pull/57) |
+| [#55](https://github.com/tarkovtracker-org/RatScanner/issues/55) | MenuVM recomputes quest/hideout classification on every property read | [#59](https://github.com/tarkovtracker-org/RatScanner/pull/59) |
 
 ---
 
