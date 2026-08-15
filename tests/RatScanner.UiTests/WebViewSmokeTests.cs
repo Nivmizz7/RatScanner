@@ -1072,6 +1072,7 @@ public sealed class WebViewSmokeTests
         private readonly string _cacheDirectory;
         private readonly string _diagnosticsPath;
         private readonly Dictionary<string, string> _backups = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _written = new(StringComparer.OrdinalIgnoreCase);
 
         internal CatalogCacheSeed(string runDirectory)
         {
@@ -1086,9 +1087,9 @@ public sealed class WebViewSmokeTests
             catch
             {
                 // A partially seeded cache must not leave the developer's files renamed or
-                // replaced. Roll back what this constructor did; Dispose is non-throwing
-                // by contract, so it cannot mask the seeding failure being rethrown here.
-                Dispose();
+                // replaced. Roll back only what this constructor actually owns, then surface
+                // the seeding failure; rollback is best effort and cannot mask the rethrow.
+                RollbackSeeding();
                 throw;
             }
         }
@@ -1108,7 +1109,45 @@ public sealed class WebViewSmokeTests
 
             Directory.CreateDirectory(_cacheDirectory);
             foreach (string key in CacheKeys())
-                File.WriteAllText(Path.Combine(_cacheDirectory, CacheFileName(key)), FixtureJson(key));
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                // Record before writing: a partially written file is still owned by the
+                // seed and must be removed by rollback if the write fails midway.
+                _written.Add(path);
+                File.WriteAllText(path, FixtureJson(key));
+            }
+        }
+
+        private void RollbackSeeding()
+        {
+            // Only touch files this seed owns: restore every backup it moved aside and
+            // delete only paths it wrote. Files it never touched (for example a backup
+            // move that failed, leaving the developer's file in place) stay untouched.
+            foreach (string key in CacheKeys())
+            {
+                string path = Path.Combine(_cacheDirectory, CacheFileName(key));
+                if (_backups.TryGetValue(path, out string? backup))
+                {
+                    try
+                    {
+                        File.Move(backup, path, overwrite: true);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+                else if (_written.Contains(path))
+                {
+                    try
+                    {
+                        File.Delete(path);
+                    }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+
+            _backups.Clear();
+            _written.Clear();
         }
 
         public void Dispose()
