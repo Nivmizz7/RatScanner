@@ -173,7 +173,7 @@ public sealed class WebViewSmokeTests
         }
         catch (Exception exception)
         {
-            await session.MarkFailed(exception);
+            await session.MarkFailedAsync(exception);
             throw;
         }
     }
@@ -238,6 +238,7 @@ public sealed class WebViewSmokeTests
             await session.ResizeAsync(width: 600, height: 850);
             await SelectCatalogItemAsync(page, "Pevko");
             await WaitForArtImageLoadedAsync(page);
+            await WaitForArtAltAsync(page, "Bottle of Pevko Light beer");
             await AssertArtContainedAsync(page, "narrow portrait (Pevko)");
             await session.ScreenshotAsync("result-card-narrow.png");
 
@@ -245,7 +246,7 @@ public sealed class WebViewSmokeTests
         }
         catch (Exception exception)
         {
-            await session.MarkFailed(exception);
+            await session.MarkFailedAsync(exception);
             throw;
         }
     }
@@ -255,7 +256,18 @@ public sealed class WebViewSmokeTests
         ILocator searchInput = page.Locator(".rs-search-field input");
         await searchInput.FillAsync(string.Empty);
         await searchInput.FillAsync(query);
-        ILocator option = page.Locator(".mud-list-item").Filter(new LocatorFilterOptions { HasText = query }).First;
+        // MudAutocomplete renders one .mud-list-item per result whose ShortName sits in a
+        // <small>; match that exactly so a query like "PM" cannot land on another item
+        // whose Name merely contains the text (HasText is a substring match).
+        ILocator option = page.Locator(".mud-list-item")
+            .Filter(
+                new LocatorFilterOptions
+                {
+                    Has = page.Locator(".search-result small")
+                        .GetByText(query, new LocatorGetByTextOptions { Exact = true }),
+                }
+            )
+            .First;
         await option.WaitForAsync(new LocatorWaitForOptions { State = WaitForSelectorState.Visible, Timeout = 30_000 });
         await option.ClickAsync();
     }
@@ -436,6 +448,7 @@ public sealed class WebViewSmokeTests
         private readonly string _profileDirectory;
         private readonly string _appLogPath;
         private readonly ConcurrentQueue<string> _runtimeFailures;
+        private readonly CancellationToken _cancellationToken;
         private bool _traceStarted;
         private bool _failed;
         private bool _disposed;
@@ -458,7 +471,8 @@ public sealed class WebViewSmokeTests
             string profileDirectory,
             string appLogPath,
             ConcurrentQueue<string> runtimeFailures,
-            bool traceStarted
+            bool traceStarted,
+            CancellationToken cancellationToken
         )
         {
             _app = app;
@@ -472,6 +486,7 @@ public sealed class WebViewSmokeTests
             _profileDirectory = profileDirectory;
             _appLogPath = appLogPath;
             _runtimeFailures = runtimeFailures;
+            _cancellationToken = cancellationToken;
             _traceStarted = traceStarted;
         }
 
@@ -521,59 +536,110 @@ public sealed class WebViewSmokeTests
             Task<string> stdoutTask = app.StandardOutput.ReadToEndAsync(cancellationToken);
             Task<string> stderrTask = app.StandardError.ReadToEndAsync(cancellationToken);
 
-            int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
-            await File.WriteAllTextAsync(
-                Path.Combine(runDirectory, "endpoint.txt"),
-                $"http://127.0.0.1:{port}",
-                cancellationToken
-            );
-
-            IPlaywright playwright = await Playwright.CreateAsync();
-            float slowMo = ParseSlowMo();
-            IBrowser browser = await playwright.Chromium.ConnectOverCDPAsync(
-                $"http://127.0.0.1:{port}",
-                new BrowserTypeConnectOverCDPOptions
-                {
-                    ArtifactsDir = runDirectory,
-                    SlowMo = slowMo,
-                    Timeout = (float)StartupTimeout.TotalMilliseconds,
-                }
-            );
-            IBrowserContext context = Assert.Single(browser.Contexts);
-            await context.Tracing.StartAsync(
-                new TracingStartOptions
-                {
-                    Screenshots = true,
-                    Snapshots = true,
-                    Sources = true,
-                }
-            );
-
-            IPage page;
+            IPlaywright? playwright = null;
+            IBrowser? browser = null;
             try
             {
-                page = await WaitForAppPageAsync(context, app, StartupTimeout);
+                int port = await WaitForDebugPortAsync(profileDirectory, app, StartupTimeout);
+                await File.WriteAllTextAsync(
+                    Path.Combine(runDirectory, "endpoint.txt"),
+                    $"http://127.0.0.1:{port}",
+                    cancellationToken
+                );
+
+                playwright = await Playwright.CreateAsync();
+                float slowMo = ParseSlowMo();
+                browser = await playwright.Chromium.ConnectOverCDPAsync(
+                    $"http://127.0.0.1:{port}",
+                    new BrowserTypeConnectOverCDPOptions
+                    {
+                        ArtifactsDir = runDirectory,
+                        SlowMo = slowMo,
+                        Timeout = (float)StartupTimeout.TotalMilliseconds,
+                    }
+                );
+                IBrowserContext context = Assert.Single(browser.Contexts);
+                await context.Tracing.StartAsync(
+                    new TracingStartOptions
+                    {
+                        Screenshots = true,
+                        Snapshots = true,
+                        Sources = true,
+                    }
+                );
+
+                IPage page = await WaitForAppPageAsync(context, app, StartupTimeout);
+
+                return new UiSession(
+                    app,
+                    stdoutTask,
+                    stderrTask,
+                    playwright,
+                    browser,
+                    context,
+                    page,
+                    runDirectory,
+                    profileDirectory,
+                    Path.Combine(appDirectory, "Log.txt"),
+                    AttachRuntimeDiagnostics(page),
+                    traceStarted: true,
+                    cancellationToken
+                );
             }
             catch
             {
-                await StopOwnedProcessAsync(app);
+                // One failure path for the whole post-start sequence: stop the owned process,
+                // release any Playwright/browser resources created so far, and remove the
+                // temporary profile directory. Cleanup is best effort so the original startup
+                // failure stays the exception the caller sees.
+                try
+                {
+                    await StopOwnedProcessAsync(app);
+                }
+                catch
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+
+                if (browser is not null)
+                {
+                    try
+                    {
+                        await browser.DisposeAsync();
+                    }
+                    catch
+                    {
+                        // Best effort; the startup failure is the reportable one.
+                    }
+                }
+
+                if (playwright is not null)
+                {
+                    try
+                    {
+                        playwright.Dispose();
+                    }
+                    catch
+                    {
+                        // Best effort; the startup failure is the reportable one.
+                    }
+                }
+
+                try
+                {
+                    Directory.Delete(profileDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Best effort; the startup failure is the reportable one.
+                }
+
                 throw;
             }
-
-            return new UiSession(
-                app,
-                stdoutTask,
-                stderrTask,
-                playwright,
-                browser,
-                context,
-                page,
-                runDirectory,
-                profileDirectory,
-                Path.Combine(appDirectory, "Log.txt"),
-                AttachRuntimeDiagnostics(page),
-                traceStarted: true
-            );
         }
 
         internal async Task ResizeAsync(int width, int height)
@@ -588,7 +654,7 @@ public sealed class WebViewSmokeTests
                     break;
                 if (_app.HasExited)
                     break;
-                await Task.Delay(100);
+                await Task.Delay(100, _cancellationToken);
             }
 
             if (window == 0)
@@ -601,7 +667,7 @@ public sealed class WebViewSmokeTests
                 );
             int deviceWidth = checked((int)Math.Round(width * dpi / 96d, MidpointRounding.AwayFromZero));
             int deviceHeight = checked((int)Math.Round(height * dpi / 96d, MidpointRounding.AwayFromZero));
-            int viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth");
+            int viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth").WaitAsync(_cancellationToken);
             DateTime resizeDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
             while (DateTime.UtcNow < resizeDeadline)
             {
@@ -620,11 +686,11 @@ public sealed class WebViewSmokeTests
                         $"Unable to resize RatScanner for UI validation (Win32 error {Marshal.GetLastWin32Error()})."
                     );
 
-                viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth");
+                viewportWidth = await Page.EvaluateAsync<int>("window.innerWidth").WaitAsync(_cancellationToken);
                 bool expectedBreakpoint = width <= 680 ? viewportWidth <= 680 : viewportWidth > 680;
                 if (expectedBreakpoint)
                     return;
-                await Task.Delay(100);
+                await Task.Delay(100, _cancellationToken);
             }
 
             throw new InvalidOperationException(
@@ -640,12 +706,16 @@ public sealed class WebViewSmokeTests
         }
 
         /// <summary>Captures failure evidence; the session keeps the trace for diagnosis.</summary>
-        internal async Task MarkFailed(Exception exception)
+        internal async Task MarkFailedAsync(Exception exception)
         {
             _failed = true;
             try
             {
-                await File.WriteAllTextAsync(Path.Combine(RunDirectory, "failure-url.txt"), Page.Url);
+                await File.WriteAllTextAsync(
+                    Path.Combine(RunDirectory, "failure-url.txt"),
+                    Page.Url,
+                    _cancellationToken
+                );
                 await File.WriteAllTextAsync(
                     Path.Combine(RunDirectory, "failure-page-state.txt"),
                     await Page.EvaluateAsync<string>(
@@ -1005,10 +1075,21 @@ public sealed class WebViewSmokeTests
 
         public void Dispose()
         {
+            // The app process is stopped before this runs, but WebView2 child processes can
+            // linger and hold cache files briefly; retry so transient locks do not fail the
+            // run. Any persistent failure is reported so the test run artifacts show it.
+            List<Exception> cleanupFailures = [];
             foreach (string key in CacheKeys())
             {
                 string path = Path.Combine(_cacheDirectory, CacheFileName(key));
-                TryDelete(path);
+                try
+                {
+                    DeleteWithRetries(path);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    cleanupFailures.Add(exception);
+                }
             }
 
             foreach ((string path, string backup) in _backups)
@@ -1017,8 +1098,19 @@ public sealed class WebViewSmokeTests
                 {
                     File.Move(backup, path, overwrite: true);
                 }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    cleanupFailures.Add(exception);
+                }
+            }
+
+            if (cleanupFailures.Count > 0)
+            {
+                throw new AggregateException(
+                    $"{cleanupFailures.Count} catalog cache cleanup operation(s) failed; "
+                        + "a later run may back up and restore stale fixture files.",
+                    cleanupFailures
+                );
             }
         }
 
@@ -1037,14 +1129,23 @@ public sealed class WebViewSmokeTests
             return Convert.ToHexString(hash) + ".data";
         }
 
-        private static void TryDelete(string path)
+        private static void DeleteWithRetries(string path)
         {
-            try
+            const int attempts = 3;
+            for (int attempt = 0; ; attempt++)
             {
-                File.Delete(path);
+                try
+                {
+                    File.Delete(path);
+                    return;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    if (attempt + 1 >= attempts)
+                        throw;
+                    Thread.Sleep(150);
+                }
             }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
         }
 
         // Item ids, names and icons match the repository's installed Data/icons so the
