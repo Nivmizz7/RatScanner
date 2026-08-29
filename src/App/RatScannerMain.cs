@@ -938,10 +938,9 @@ public sealed class RatScannerMain
     }
 
     /// <summary>
-    /// Returns the ruff screenshot. When the captured region overlaps a display that is in
-    /// HDR (advanced color) mode, GDI capture reads a clipped SDR view of the FP16 scRGB
-    /// composition, so the DXGI Desktop Duplication path is used instead and tone-mapped
-    /// back to SDR. SDR desktops and any capture failure keep the legacy GDI path exactly.
+    /// Returns the raw GDI (<c>Graphics.CopyFromScreen</c>) screenshot of the given
+    /// virtual-desktop region. HDR routing is handled by <see cref="CaptureRegionHdrAware"/>
+    /// and <see cref="ScreenshotFor"/>, which fall back to this method unchanged.
     /// </summary>
     private static Bitmap GetScreenshot(Vector2 vector2, Size size)
     {
@@ -963,8 +962,8 @@ public sealed class RatScannerMain
     /// <summary>
     /// HDR-aware capture for <see cref="GetScreenshot"/> callers. Returns a screenshot of the
     /// given virtual-desktop region using DXGI Desktop Duplication when the region overlaps an
-    /// HDR display (with BT.2390 tone mapping back to SDR), or <see langword="null"/> so the
-    /// caller keeps the legacy GDI path.
+    /// HDR display (tone-mapped back to SDR), or <see langword="null"/> so the caller keeps
+    /// the legacy GDI path.
     /// </summary>
     private static Bitmap? CaptureRegionHdrAware(Vector2 vector2, Size size)
     {
@@ -1119,6 +1118,12 @@ public sealed class RatScannerMain
             }
 
             ItemScans.Changed -= OnItemScansChanged;
+
+            // Release the static per-output duplication sessions and their D3D11 resources
+            // deterministically instead of at process teardown. No-op when HDR capture was
+            // never used (empty session list).
+            HdrScreenCapture.ResetSessions();
+
             HotkeyManager.Dispose();
             TarkovTrackerDB.Dispose();
             _scanDiagnostics.Dispose();

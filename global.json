@@ -1,9 +1,5 @@
 {
   "sdk": {
-    // Patch floor for the 10.0.3xx feature band. CI installs exactly this version from
-    // this file; local machines roll forward to the newest installed 3xx patch so SDK
-    // servicing updates (which can remove the floor patch) never break the repo again.
-    // Compiler and bundled-analyzer behavior is fixed by the feature band, not the patch.
     "version": "10.0.303",
     "rollForward": "latestPatch"
   }

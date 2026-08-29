@@ -56,20 +56,26 @@ Do not modify config objects after they are passed into an engine instance (engi
 
 When a scanned region overlaps a display running in HDR mode, item content can exceed SDR
 white and GDI `CopyFromScreen` clips it. The App ships an experimental DXGI Desktop
-Duplication path (`Display/HdrScreenCapture` + `Display/HdrToneMapper`, BT.2390-4 EETF):
+Duplication path (`Display/HdrScreenCapture` + `Display/HdrToneMapper`, identity-anchored
+tone curve over SDR reference white):
 
 - Detection: `Display/HdrScreenCapture.IsHdrCaptureRequired` reads each output's
   `IDXGIOutput6::GetDesc1` color space (HDR10/HLG signal = HDR); per-output states are
   cached for 2 s (per display, so mixed HDR/SDR rigs route each region correctly). The
   DISPLAYCONFIG advanced-color state supplements detection and supplies the display's SDR
-  reference white level for tone mapping.
-- Capture when enabled and HDR: DXGI Desktop Duplication on the intersecting output
-  (`DuplicateOutput`), one D3D11 device per output session so a duplication failure on one
-  display never affects the others; FP16 scRGB frame, region staging via
-  `CopySubresourceRegion`, then BT.2390-4 EETF tone mapping (`Display/HdrToneMapper`) back
-  to an SDR 8-bit BGR bitmap.
+  reference white level for tone mapping (the interop structs mirror the native
+  `DISPLAYCONFIG_PATH_TARGET_INFO`/`DISPLAYCONFIG_MODE_INFO` records from `wingdi.h`).
+- Capture when enabled and HDR: DXGI Desktop Duplication on every intersecting output
+  (`IDXGIOutput5::DuplicateOutput1` requesting FP16 scRGB, with 8-bit BGRA fallback), one
+  D3D11 device per output session so a duplication failure on one display never affects
+  the others; FP16 scRGB frame, region staging via `CopySubresourceRegion`, then tone
+  mapping (`Display/HdrToneMapper`) back to an SDR 8-bit BGR bitmap. SDR reference white
+  maps 1:1 (the scan pipeline matches SDR reference templates); luminance above white
+  saturates at display white.
   Output is `Format24bppRgb`, identical to the GDI path. Any failure returns null and the
-  legacy GDI path runs byte-for-byte unchanged.
+  legacy GDI path runs byte-for-byte unchanged. A region spanning an output without a
+  session (rotated monitor, failed duplication setup) also returns null — coverage is
+  all-or-nothing, never a partially black bitmap.
 - **Off by default** (`RatConfig.HdrCapture.Enable`, config-file only). Local measurements
   on an HDR display show the duplication surface delivers SDR content (e.g. a 128-grey
   window reads 150-255) with a boosted, unestablished transfer, while GDI is correct for

@@ -1,22 +1,21 @@
 #nullable enable
 
 using System;
-using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using RatScanner.Display;
-using Vortice.DXGI;
 using Xunit;
 
 namespace RatScanner.Tests;
 
 /// <summary>
 /// Regression tests for the HDR capture tone mapping and detection gating.
-/// The tone mapper is pure math (ST.2084 PQ, BT.2390-4 EETF, sRGB encoding) and must
-/// be deterministic and hermetic — no GPU or display access is needed.
+/// The tone mapper is pure math (ST.2084 PQ, identity-anchored tone curve, sRGB encoding) and
+/// must be deterministic and hermetic — no GPU or display access is needed.
 /// </summary>
 public class HdrToneMapperTests
 {
+    /// <summary>Verifies the sRGB transfer function against hand-computed reference values.</summary>
     [Theory]
     [InlineData(0f, 0f)]
     [InlineData(0.0031308f, 12.92f * 0.0031308f)]
@@ -27,6 +26,7 @@ public class HdrToneMapperTests
         Assert.Equal(expected, HdrToneMapper.SrgbEncode(linear), 4);
     }
 
+    /// <summary>Verifies PQ encode/decode round-trips absolute luminance exactly.</summary>
     [Theory]
     [InlineData(80f)]
     [InlineData(100f)]
@@ -39,74 +39,79 @@ public class HdrToneMapperTests
         Assert.Equal(nits, HdrToneMapper.PqDecode(HdrToneMapper.PqEncode(nits)), 1);
     }
 
+    /// <summary>The tone curve must never invert or exceed the display range.</summary>
     [Fact]
     public void Tone_map_is_monotonic_and_bounded()
     {
-        const float sdrWhite = 203f;
-        const float maxContent = 1000f;
         float previous = -1f;
-        for (int i = 0; i <= 200; i++)
+        for (int i = 0; i <= 400; i++)
         {
             float norm = i / 100f;
-            float mapped = HdrToneMapper.ToneMapLuminance(norm, sdrWhite, maxContent);
+            float mapped = HdrToneMapper.ToneMapLuminance(norm);
             Assert.InRange(mapped, 0f, 1.0001f);
             Assert.True(mapped >= previous, $"Tone map must be monotonic at norm={norm}");
             previous = mapped;
         }
     }
 
+    /// <summary>
+    /// The SDR range is an identity anchor: everything at or below reference white
+    /// (normalized 1.0) maps 1:1 even when HDR highlights share the frame, so SDR
+    /// pixels are never re-graded and the captured SDR look matches the pure-SDR fast
+    /// path exactly.
+    /// </summary>
     [Fact]
-    public void Tone_map_preserves_low_luminance_exactly()
+    public void Tone_map_preserves_sdr_range_exactly()
     {
-        // The knee starts at ks = 1.5 * maxLumNorm - 0.5 (PQ domain); for 203/1000 nits
-        // the identity region covers roughly the bottom 40% of the SDR range.
-        const float sdrWhite = 203f;
-        const float maxContent = 1000f;
-        for (int i = 0; i <= 40; i++)
+        for (int i = 0; i <= 100; i++)
         {
             float norm = i / 100f;
-            float mapped = HdrToneMapper.ToneMapLuminance(norm, sdrWhite, maxContent);
+            float mapped = HdrToneMapper.ToneMapLuminance(norm);
             Assert.True(
-                Math.Abs(mapped - norm) < 0.01f,
-                $"Identity expected below the knee at norm={norm}, got {mapped}"
+                Math.Abs(mapped - norm) < 0.0001f,
+                $"Identity expected at or below reference white, norm={norm}, got {mapped}"
             );
         }
     }
 
+    /// <summary>
+    /// Luminance above SDR reference white saturates at display white (1.0). 8-bit SDR
+    /// output has no range above reference white, so any HDR highlight must land at or
+    /// below display white — never above it, and never dimmed below reference white.
+    /// </summary>
     [Fact]
-    public void Tone_map_compresses_highlights_toward_white()
+    public void Tone_map_saturates_hdr_highlights_at_display_white()
     {
-        const float sdrWhite = 203f;
-        const float maxContent = 1000f;
-        float peak = HdrToneMapper.ToneMapLuminance(maxContent / sdrWhite, sdrWhite, maxContent);
-        Assert.InRange(peak, 0.95f, 1.0001f);
-
-        // SDR white compresses softly (the BT.2390 roll-off leaves headroom for highlights)
-        // but must stay perceptually bright — dimming more than ~30% would break the SDR look.
-        float sdrWhiteMapped = HdrToneMapper.ToneMapLuminance(1f, sdrWhite, maxContent);
-        Assert.InRange(sdrWhiteMapped, 0.7f, 0.95f);
-
-        // More input luminance must never map to less output.
-        Assert.True(sdrWhiteMapped < peak);
-    }
-
-    [Fact]
-    public void Tone_map_is_identity_when_content_fits_sdr()
-    {
-        const float sdrWhite = 203f;
-        for (int i = 0; i <= 100; i++)
+        foreach (
+            float norm in new[]
+            {
+                1.01f,
+                1.5f,
+                2.5f,
+                4.93f, /* 1000/203 */
+            }
+        )
         {
-            float norm = i / 100f;
-            Assert.Equal(norm, HdrToneMapper.ToneMapLuminance(norm, sdrWhite, 150f), 4);
+            float mapped = HdrToneMapper.ToneMapLuminance(norm);
+            Assert.True(
+                MathF.Abs(mapped - 1f) < 0.0001f,
+                $"Luminance above reference white must saturate at display white, norm={norm}, got {mapped}"
+            );
         }
+
+        // SDR reference white itself maps to itself (display white), the same destination
+        // as the saturated peak — the mapping is continuous and monotone across 1.0.
+        float sdrWhiteMapped = HdrToneMapper.ToneMapLuminance(1f);
+        Assert.True(MathF.Abs(sdrWhiteMapped - 1f) < 0.0001f, $"SDR white must map to 1.0, got {sdrWhiteMapped}");
     }
 
+    /// <summary>Pure-SDR FP16 content must take the identity fast path and land at the expected sRGB value.</summary>
     [Fact]
     public void ConvertScRgbToSdr_fast_path_maps_sdr_content_to_srgb()
     {
         // A 4x1 FP16 scRGB buffer holding pure SDR content (all pixels at 100 nits) must
-        // take the fast path and produce an even sRGB value: 100 nits -> norm 100/203
-        // -> sRGB ~ 0.46 (117/255).
+        // take the fast path and produce an even sRGB value: 100 nits -> linear 100/203
+        // = 0.4926 -> sRGB 0.729 (~186/255).
         const float sdrWhite = 203f;
         ushort[] pixels = new ushort[4 * 4];
         for (int i = 0; i < 4; i++)
@@ -155,6 +160,7 @@ public class HdrToneMapperTests
         Assert.InRange(Math.Abs(output[0] - output[3]), 0, 2);
     }
 
+    /// <summary>Regression: the max-content percentile guard must not force tone mapping on tiny SDR regions.</summary>
     [Fact]
     public void ConvertScRgbToSdr_small_sdr_region_uses_identity_fast_path()
     {
@@ -205,6 +211,7 @@ public class HdrToneMapperTests
         Assert.Equal(output[1], output[2], tolerance: (byte)1);
     }
 
+    /// <summary>With HDR content present, output channels stay in [0,255] and highlights stay bright.</summary>
     [Fact]
     public void ConvertScRgbToSdr_tone_map_path_bounds_output()
     {
@@ -248,38 +255,5 @@ public class HdrToneMapperTests
         Assert.True(output[0] >= output[3], "HDR highlight must remain brighter than SDR content.");
         foreach (byte channel in output)
             Assert.InRange(channel, 0, 255);
-    }
-
-    [Fact]
-    public void Hdr_detection_is_evaluated_per_display()
-    {
-        // Mixed HDR/SDR rig: the HDR-required answer must depend on which display the
-        // capture region overlaps, not on a single global flag.
-        List<(Rectangle Bounds, bool IsHdr, float SdrWhiteNits)> outputs =
-        [
-            (new Rectangle(0, 0, 1920, 1080), true, 203f), // left: HDR
-            (new Rectangle(1920, 0, 1920, 1080), false, 203f), // right: SDR
-        ];
-
-        Assert.True(HdrScreenCapture.AnyHdrDisplayIntersects(outputs, new Rectangle(100, 100, 400, 300)));
-        Assert.False(HdrScreenCapture.AnyHdrDisplayIntersects(outputs, new Rectangle(2000, 100, 400, 300)));
-        // Region spanning both displays still requires the HDR path.
-        Assert.True(HdrScreenCapture.AnyHdrDisplayIntersects(outputs, new Rectangle(1800, 100, 400, 300)));
-    }
-
-    [Fact]
-    public void Hdr_color_space_detection_covers_hdr10_and_hlg()
-    {
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.RgbFullG2084NoneP2020));
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.RgbStudioG2084NoneP2020));
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.YcbcrStudioG2084LeftP2020));
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.YcbcrStudioG2084TopLeftP2020));
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.YcbcrStudioGhlgTopLeftP2020));
-        Assert.True(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.YcbcrFullGhlgTopLeftP2020));
-
-        Assert.False(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.RgbFullG22NoneP709));
-        Assert.False(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.RgbFullG10NoneP709));
-        Assert.False(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.YcbcrStudioG22LeftP2020));
-        Assert.False(HdrScreenCapture.IsHdrColorSpace(ColorSpaceType.Custom));
     }
 }

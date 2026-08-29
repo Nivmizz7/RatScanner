@@ -11,9 +11,12 @@ namespace RatScanner.Display;
 /// Design goals (mirroring the approach proven in the ShareX HDR ecosystem):
 /// - SDR content (UI, text) composed at the display's SDR reference white maps 1:1 and
 ///   stays untouched, so the scan pipeline sees exactly the SDR look it was built for.
-/// - HDR highlights above reference white are rolled off with the BT.2390-4 EETF
-///   evaluated in the PQ (ST.2084) domain, so highlight detail compresses smoothly
-///   instead of clipping to white.
+///   This holds even when HDR highlights share the frame: dimming reference white to buy
+///   highlight headroom would shift every SDR pixel whenever any HDR pixel is present.
+/// - Luminance above SDR reference white saturates at display white: 8-bit SDR output
+///   has no range above reference white (white == 255), and the scan pipeline matches
+///   against SDR reference templates, so the mapping above white degenerates to exactly
+///   that saturation. PQ (ST.2084) helpers remain for the luminance basis conversions.
 /// - Hue is preserved by tone mapping luminance and rescaling RGB; out-of-gamut colors
 ///   are softly desaturated toward the tone-mapped luminance instead of per-channel
 ///   clipping.
@@ -46,6 +49,7 @@ internal static unsafe class HdrToneMapper
     // 8x8 Bayer matrix, normalized to [-0.5, 0.5) in 8-bit quantization steps.
     private static readonly float[] Bayer8 = BuildBayerMatrix();
 
+    /// <summary>Builds the linear-to-8-bit sRGB lookup used by <see cref="EncodeChannel"/>.</summary>
     private static float[] BuildEncodeLut()
     {
         float[] lut = new float[EncodeLutSize];
@@ -54,6 +58,7 @@ internal static unsafe class HdrToneMapper
         return lut;
     }
 
+    /// <summary>Builds the half-bit-pattern to float table (NaN sanitized to zero).</summary>
     private static float[] BuildHalfLut()
     {
         float[] lut = new float[65536];
@@ -65,6 +70,7 @@ internal static unsafe class HdrToneMapper
         return lut;
     }
 
+    /// <summary>Builds the 8x8 ordered-dither matrix in 8-bit quantization steps.</summary>
     private static float[] BuildBayerMatrix()
     {
         int[] bayer =
@@ -141,6 +147,7 @@ internal static unsafe class HdrToneMapper
         return matrix;
     }
 
+    /// <summary>Encodes linear light to sRGB (IEC 61966-2-1) in [0, 1].</summary>
     internal static float SrgbEncode(float linear)
     {
         if (linear <= 0.0031308f)
@@ -148,6 +155,7 @@ internal static unsafe class HdrToneMapper
         return 1.055f * MathF.Pow(linear, 1f / 2.4f) - 0.055f;
     }
 
+    /// <summary>Encodes absolute luminance (nits) to PQ / ST.2084 in [0, 1].</summary>
     internal static float PqEncode(float nits)
     {
         float y = MathF.Max(nits, 0f) / 10000f;
@@ -155,6 +163,7 @@ internal static unsafe class HdrToneMapper
         return MathF.Pow((PqC1 + PqC2 * ym) / (1f + PqC3 * ym), PqM2);
     }
 
+    /// <summary>Decodes a PQ / ST.2084 value in [0, 1] back to absolute nits.</summary>
     internal static float PqDecode(float pq)
     {
         float e = MathF.Pow(MathF.Max(pq, 0f), 1f / PqM2);
@@ -164,45 +173,36 @@ internal static unsafe class HdrToneMapper
     }
 
     /// <summary>
-    /// Maps a normalized scene luminance (1.0 == SDR reference white) to a tone-mapped
-    /// normalized display luminance in [0, 1], using the BT.2390-4 EETF hermite spline
-    /// roll-off evaluated in the PQ domain.
+    /// Maps a normalized scene luminance (1.0 == SDR reference white) to the normalized
+    /// display luminance in [0, 1] for the 8-bit SDR output.
+    ///
+    /// Normalized 1.0 is an identity anchor: SDR content (UI, text, icons) at or below
+    /// reference white maps 1:1 even when HDR highlights share the frame. The scan
+    /// pipeline matches captured pixels against SDR reference templates, so the SDR range
+    /// must stay stable frame-to-frame and identical to the pure-SDR fast path — dimming
+    /// reference white to buy highlight headroom (what a BT.2390 EETF with an SDR target
+    /// peak does: <c>ToneMapLuminance(1, 203, 1000) ≈ 0.78</c>) would shift every SDR
+    /// pixel whenever any HDR pixel is present.
+    ///
+    /// Luminance above reference white saturates at display white: 8-bit SDR output has
+    /// no range above reference white (white == 255), so the roll-off segment above white
+    /// degenerates to exactly that saturation. The display anchors (<c>sdrWhiteNits</c>,
+    /// <c>maxContentNits</c>) still drive the caller: <see cref="BuildToneMapLut"/> uses
+    /// them for the LUT input domain and <see cref="ConvertScRgbToSdr"/> for the
+    /// fast-path decision; the curve itself is anchor-independent.
+    /// Hue is preserved by the caller, which rescales RGB by the mapped luminance instead
+    /// of clipping channels.
     /// </summary>
-    internal static float ToneMapLuminance(float normalizedLuminance, float sdrWhiteNits, float maxContentNits)
+    internal static float ToneMapLuminance(float normalizedLuminance)
     {
-        float maxInputNorm = MathF.Max(maxContentNits / sdrWhiteNits, 1f);
-        if (normalizedLuminance >= maxInputNorm)
-            normalizedLuminance = maxInputNorm;
+        if (float.IsNaN(normalizedLuminance))
+            return 0f;
 
-        float pqSourceMax = PqEncode(maxContentNits);
-        float pqTargetMax = PqEncode(sdrWhiteNits);
-
-        if (pqSourceMax <= pqTargetMax + 1e-6f)
-            return MathF.Min(normalizedLuminance, 1f);
-
-        float maxLumNorm = pqTargetMax / pqSourceMax;
-        float ks = 1.5f * maxLumNorm - 0.5f;
-
-        float nits = normalizedLuminance * sdrWhiteNits;
-        float e1 = PqEncode(nits) / pqSourceMax;
-
-        float e2;
-        if (e1 < ks)
-        {
-            e2 = e1;
-        }
-        else
-        {
-            float t = (e1 - ks) / (1f - ks);
-            float t2 = t * t;
-            float t3 = t2 * t;
-            e2 = (2f * t3 - 3f * t2 + 1f) * ks + (t3 - 2f * t2 + t) * (1f - ks) + (-2f * t3 + 3f * t2) * maxLumNorm;
-        }
-
-        float mappedNits = PqDecode(e2 * pqSourceMax);
-        return MathF.Min(mappedNits / sdrWhiteNits, 1f);
+        // Identity below reference white; saturate at display white above it.
+        return Math.Clamp(normalizedLuminance, 0f, 1f);
     }
 
+    /// <summary>Precomputes the luminance tone curve for one (white, peak) parameter pair.</summary>
     private static float[] BuildToneMapLut(float sdrWhiteNits, float maxContentNits)
     {
         float[] lut = new float[ToneMapLutSize];
@@ -210,7 +210,7 @@ internal static unsafe class HdrToneMapper
         for (int i = 0; i < ToneMapLutSize; i++)
         {
             float t = i / (float)(ToneMapLutSize - 1);
-            lut[i] = ToneMapLuminance(t * t * maxInputNorm, sdrWhiteNits, maxContentNits);
+            lut[i] = ToneMapLuminance(t * t * maxInputNorm);
         }
         return lut;
     }
@@ -332,6 +332,10 @@ internal static unsafe class HdrToneMapper
         );
     }
 
+    /// <summary>
+    /// Identity conversion for frames whose content never exceeds SDR reference white:
+    /// scale scRGB to the reference-white basis, clamp, and sRGB-encode with dithering.
+    /// </summary>
     private static void ConvertSdrFastPath(
         IntPtr source,
         int sourceRowPitch,
@@ -383,6 +387,7 @@ internal static unsafe class HdrToneMapper
         );
     }
 
+    /// <summary>Writes one pixel as BGR (or BGRA), sRGB-encoding and dithering each channel.</summary>
     private static void WritePixel(byte* dstRow, float r, float g, float b, float dither, int bytesPerPixel)
     {
         dstRow[0] = EncodeChannel(b, dither);
@@ -392,6 +397,7 @@ internal static unsafe class HdrToneMapper
             dstRow[3] = 255;
     }
 
+    /// <summary>sRGB-encodes one channel via the LUT, applies dither, and quantizes to 8 bits.</summary>
     private static byte EncodeChannel(float linear, float dither)
     {
         // Interpolate the continuous sRGB value, dither, then quantize; dithering after

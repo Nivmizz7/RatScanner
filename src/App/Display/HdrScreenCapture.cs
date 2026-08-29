@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using SharpGen.Runtime;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
@@ -20,7 +21,8 @@ namespace RatScanner.Display;
 /// scRGB, which legacy GDI capture cannot represent: it silently clips and mis-encodes
 /// the frame, producing the classic washed-out / overbright screenshots (and failing icon
 /// template matching). This backend captures the desktop duplication stream in
-/// <see cref="Format.R16G16B16A16_Float"/> and tone maps it to SDR with
+/// <see cref="Format.R16G16B16A16_Float"/> (requested via <c>IDXGIOutput5.DuplicateOutput1</c>,
+/// with an 8-bit BGRA fallback) and tone maps it to SDR with
 /// <see cref="HdrToneMapper"/> using the display's actual SDR reference white level.
 ///
 /// Duplication sessions are cached per output so repeated scans only pay for a GPU copy +
@@ -30,7 +32,14 @@ namespace RatScanner.Display;
 /// </summary>
 internal static class HdrScreenCapture
 {
-    private const int AcquireFrameTimeoutMs = 200;
+    // Per-attempt AcquireNextFrame wait. Kept short so one attempt cannot consume the
+    // whole first-frame budget below.
+    private const int AcquireFrameTimeoutMs = 32;
+
+    // Total wall-clock budget for the first frame after (re)creating a duplication
+    // session. The wait runs while the caller holds the scan lock, so it must stay well
+    // below perceived scan latency; a static desktop may never present a frame at all.
+    private const int FirstFrameBudgetMs = 150;
 
     // Display states are stable at display-session granularity; cache the enumeration
     // briefly so SDR scans (the hot path) do not pay DXGI enumeration on every hotkey
@@ -38,9 +47,12 @@ internal static class HdrScreenCapture
     // multi-monitor setups route each capture region correctly.
     private static readonly TimeSpan DetectionTtl = TimeSpan.FromSeconds(2);
     private static readonly object DetectionLock = new();
-    private static DateTimeOffset _detectionCheckedAt = DateTimeOffset.MinValue;
+
+    // UTC ticks, read/written atomically: the unlocked TTL check must never observe a
+    // torn multi-field DateTimeOffset while another thread refreshes the cache.
+    private static long _detectionCheckedAtTicks = DateTimeOffset.MinValue.UtcTicks;
     private static List<(Rectangle Bounds, bool IsHdr, float SdrWhiteNits)> _cachedOutputs = [];
-    private static bool _detectionFailed;
+    private static volatile bool _detectionFailed;
 
     private static readonly object SyncLock = new();
     private static IDXGIFactory1? _factory;
@@ -60,6 +72,7 @@ internal static class HdrScreenCapture
         public float MaxLuminanceNits;
         public bool HasFrame;
 
+        /// <summary>Releases all GPU and DXGI resources held by this session.</summary>
         public void Dispose()
         {
             StagingTexture?.Dispose();
@@ -84,23 +97,26 @@ internal static class HdrScreenCapture
         if (rect.Width <= 0 || rect.Height <= 0)
             return false;
 
-        List<(Rectangle Bounds, bool IsHdr, float SdrWhiteNits)> outputs = _cachedOutputs;
-        if (DateTimeOffset.UtcNow - _detectionCheckedAt >= DetectionTtl)
+        List<(Rectangle Bounds, bool IsHdr, float SdrWhiteNits)> outputs = Volatile.Read(ref _cachedOutputs);
+        if (DateTimeOffset.UtcNow.UtcTicks - Interlocked.Read(ref _detectionCheckedAtTicks) >= DetectionTtl.Ticks)
         {
             lock (DetectionLock)
             {
-                if (DateTimeOffset.UtcNow - _detectionCheckedAt >= DetectionTtl)
+                if (
+                    DateTimeOffset.UtcNow.UtcTicks - Interlocked.Read(ref _detectionCheckedAtTicks)
+                    >= DetectionTtl.Ticks
+                )
                 {
-                    _detectionCheckedAt = DateTimeOffset.UtcNow;
+                    Interlocked.Exchange(ref _detectionCheckedAtTicks, DateTimeOffset.UtcNow.UtcTicks);
                     try
                     {
-                        _cachedOutputs = QueryHdrOutputs();
+                        Volatile.Write(ref _cachedOutputs, QueryHdrOutputs());
                         _detectionFailed = false;
                     }
                     catch (Exception e)
                     {
                         Logger.LogWarning("HDR display state query failed; assuming SDR capture path.", e);
-                        _cachedOutputs = [];
+                        Volatile.Write(ref _cachedOutputs, []);
                         _detectionFailed = true;
                     }
                 }
@@ -145,6 +161,19 @@ internal static class HdrScreenCapture
                 if (intersecting.Count == 0)
                     return null;
 
+                // All-or-nothing coverage: when the rectangle spans several displays and any
+                // intersecting output has no session (rotated monitor, duplication setup
+                // failure), the missing portion would be left black. Return null so the caller
+                // falls back to GDI for the whole region instead.
+                if (!CoversRectangle(intersecting.Select(s => s.DesktopBounds).ToList(), rect))
+                {
+                    LastCaptureError = null;
+                    Logger.LogDebug(
+                        "HDR capture skipped: no duplication session covers every display intersecting the region."
+                    );
+                    return null;
+                }
+
                 Bitmap bmp = new(rect.Width, rect.Height, PixelFormat.Format24bppRgb);
                 try
                 {
@@ -162,6 +191,7 @@ internal static class HdrScreenCapture
                     {
                         bmp.UnlockBits(bmpData);
                     }
+                    LastCaptureError = null;
                     return bmp;
                 }
                 catch
@@ -182,7 +212,44 @@ internal static class HdrScreenCapture
         }
     }
 
-    /// <summary>Forces session teardown; used by diagnostics and tests.</summary>
+    /// <summary>
+    /// True when the union of <paramref name="outputBounds"/> fully covers
+    /// <paramref name="rect"/>. Outputs attached to the desktop but skipped during session
+    /// creation (rotated monitors, duplication setup failures) leave holes that must be
+    /// captured by the GDI fallback instead.
+    /// </summary>
+    internal static bool CoversRectangle(List<Rectangle> outputBounds, Rectangle rect)
+    {
+        if (outputBounds.Count == 0)
+            return false;
+
+        // Horizontal band sweep per row is O(rows * outputs); scan regions are small
+        // (hundreds of pixels) and rows are usually covered by a single output.
+        for (int y = rect.Top; y < rect.Bottom; y++)
+        {
+            int x = rect.Left;
+            while (x < rect.Right)
+            {
+                Rectangle covering = default;
+                bool found = false;
+                foreach (Rectangle bounds in outputBounds)
+                {
+                    if (bounds.Contains(x, y))
+                    {
+                        covering = bounds;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    return false;
+                x = covering.Right;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Forces session teardown; used by diagnostics, shutdown, and tests.</summary>
     internal static void ResetSessions()
     {
         lock (SyncLock)
@@ -195,6 +262,10 @@ internal static class HdrScreenCapture
         }
     }
 
+    /// <summary>
+    /// Enumerates desktop-attached outputs with their HDR state and SDR reference white,
+    /// combining the signal color space with the DISPLAYCONFIG advanced-color state.
+    /// </summary>
     private static List<(Rectangle Bounds, bool IsHdr, float SdrWhiteNits)> QueryHdrOutputs()
     {
         List<(Rectangle, bool, float)> outputs = [];
@@ -259,6 +330,10 @@ internal static class HdrScreenCapture
                 or ColorSpaceType.YcbcrStudioGhlgTopLeftP2020
                 or ColorSpaceType.YcbcrFullGhlgTopLeftP2020;
 
+    /// <summary>
+    /// Rebuilds the duplication sessions when the DXGI factory is stale, no sessions exist,
+    /// or the display topology changed. Safe to call on every capture.
+    /// </summary>
     private static void EnsureSessions()
     {
         if (_factory is null || !_factory.IsCurrent || Sessions.Count == 0)
@@ -268,6 +343,11 @@ internal static class HdrScreenCapture
         }
     }
 
+    /// <summary>
+    /// Enumerates attached outputs and creates one <see cref="OutputSession"/> per output
+    /// (one D3D11 device each, so a failure on one display never poisons its siblings).
+    /// Rotated outputs are skipped: GDI capture covers them.
+    /// </summary>
     private static void CreateSessions()
     {
         _factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
@@ -341,7 +421,27 @@ internal static class HdrScreenCapture
                                 )
                                 .CheckError();
                             session.Context = session.Device!.ImmediateContext;
-                            session.Duplication = output6.DuplicateOutput(session.Device);
+
+                            // DuplicateOutput always hands back an 8-bit BGRA surface for
+                            // fullscreen exclusive content, which discards the HDR range
+                            // before tone mapping ever sees it. DuplicateOutput1 lets us
+                            // request the FP16 scRGB desktop format (with BGRA as fallback
+                            // for older drivers/OS combinations).
+                            IDXGIOutput5? output5 = output.QueryInterfaceOrNull<IDXGIOutput5>();
+                            if (output5 is not null)
+                            {
+                                using (output5)
+                                {
+                                    session.Duplication = output5.DuplicateOutput1(
+                                        session.Device,
+                                        [Format.R16G16B16A16_Float, Format.B8G8R8A8_UNorm]
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                session.Duplication = output6.DuplicateOutput(session.Device);
+                            }
                         }
                         catch (Exception e)
                         {
@@ -361,6 +461,11 @@ internal static class HdrScreenCapture
         }
     }
 
+    /// <summary>
+    /// Stages and reads back the intersection of <paramref name="rect"/> with one output's
+    /// latest duplicated frame, tone-mapping FP16 scRGB (or copying 8-bit BGRA) into the
+    /// caller's locked bitmap.
+    /// </summary>
     private static unsafe void CaptureOutputRegion(OutputSession session, Rectangle rect, BitmapData bmpData)
     {
         UpdateLastFrame(session);
@@ -448,6 +553,7 @@ internal static class HdrScreenCapture
         }
     }
 
+    /// <summary>Copies an 8-bit BGRA staging region into 3-or-4-byte-per-pixel output, forcing opaque alpha.</summary>
     private static unsafe void CopyBgra(
         IntPtr source,
         int sourceRowPitch,
@@ -474,21 +580,34 @@ internal static class HdrScreenCapture
         }
     }
 
+    /// <summary>
+    /// Refreshes <paramref name="session"/>'s cached frame copy, waiting at most
+    /// <see cref="FirstFrameBudgetMs"/> for the first frame after session creation.
+    /// </summary>
     private static void UpdateLastFrame(OutputSession session)
     {
         // The first frame after starting duplication can take a few vsyncs to arrive,
-        // especially on a static desktop, so retry before giving up.
-        int attempts = session.HasFrame ? 1 : 10;
-        for (int attempt = 0; attempt < attempts; attempt++)
+        // especially on a static desktop, so retry within a bounded wall-clock budget
+        // instead of a fixed attempt count: the wait runs while the caller holds the scan
+        // lock, so an unbounded retry here stalls the whole scan before GDI fallback.
+        double deadlineMs =
+            RatScanner.Diagnostics.PerfTrace.MonotonicMs() + (session.HasFrame ? 0 : FirstFrameBudgetMs);
+        do
         {
             if (TryAcquireFrame(session) || session.HasFrame)
                 return;
-        }
+        } while (RatScanner.Diagnostics.PerfTrace.MonotonicMs() < deadlineMs);
 
         if (!session.HasFrame)
             throw new InvalidOperationException($"Desktop duplication produced no frame for {session.DeviceName}.");
     }
 
+    /// <summary>
+    /// Attempts one <see cref="IDXGIOutputDuplication.AcquireNextFrame"/> call and, on
+    /// success, copies the surface into <paramref name="session"/>'s private texture.
+    /// Returns false on timeout or when the surface carries no real desktop image yet.
+    /// Throws on access loss so the caller can unwind before sessions are reset.
+    /// </summary>
     private static bool TryAcquireFrame(OutputSession session)
     {
         Result result = session.Duplication!.AcquireNextFrame(
@@ -556,9 +675,14 @@ internal static class HdrScreenCapture
 
         if (result == AccessLost)
         {
-            // Output is being reconfigured (mode switch, HDR toggle); sessions must be rebuilt.
+            // Output is being reconfigured (mode switch, HDR toggle). Sessions must be
+            // rebuilt, but not from here: this runs while CaptureRectangle iterates the
+            // session list and the retry loop still uses this session. Abort so the outer
+            // catch performs the reset after the loop unwinds.
             Logger.LogDebug("Desktop duplication access lost; sessions will be rebuilt on the next capture.");
-            ResetSessions();
+            throw new InvalidOperationException(
+                $"Desktop duplication access lost for {session.DeviceName}; sessions will be rebuilt."
+            );
         }
 
         return false;
@@ -579,6 +703,16 @@ internal static class DisplayColorInfo
     private const int DisplayConfigDeviceInfoGetSourceName = 1;
     private const int DisplayConfigDeviceInfoGetAdvancedColorInfo = 9;
     private const int DisplayConfigDeviceInfoGetSdrWhiteLevel = 11;
+
+    // Native record sizes from wingdi.h (x64): DISPLAYCONFIG_PATH_INFO and
+    // DISPLAYCONFIG_MODE_INFO. Exposed for the interop layout regression test.
+    internal const int NativeDisplayConfigPathInfoSize = 72;
+    internal const int NativeDisplayConfigModeInfoSize = 64;
+
+    // The structures below mirror the native DISPLAYCONFIG_* records from wingdi.h
+    // exactly (field order, unions, and padding). QueryDisplayConfig writes native-sized
+    // records into these arrays, so any drift corrupts target identifiers and breaks the
+    // advanced-color and SDR-white queries that follow.
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Luid
@@ -609,7 +743,11 @@ internal static class DisplayColorInfo
         public DisplayConfigRational VSyncFreq;
         public DisplayConfig2DRegion ActiveSize;
         public DisplayConfig2DRegion TotalSize;
+
+        // Union of AdditionalSignalInfo bitfield struct and videoStandard; the raw value
+        // is all this code needs.
         public uint VideoStandard;
+
         public uint ScanLineOrdering;
     }
 
@@ -618,20 +756,38 @@ internal static class DisplayColorInfo
     {
         public Luid AdapterId;
         public uint Id;
+
+        // Union of modeInfoIdx and the virtual-mode (desktopModeInfoIdx, targetModeInfoIdx)
+        // bitfield pair; the raw value is all this code needs.
         public uint ModeInfoIdx;
+
         public uint StatusFlags;
     }
 
+    /// <summary>
+    /// Native <c>DISPLAYCONFIG_PATH_TARGET_INFO</c> (wingdi.h, 48 bytes): the target fields
+    /// are output technology / rotation / scaling / refresh rate / scan-line ordering /
+    /// availability — not a video-signal record.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct DisplayConfigPathTargetInfo
     {
         public Luid AdapterId;
         public uint Id;
+
+        // Union of modeInfoIdx and the virtual-mode bitfield pair (see source info).
         public uint ModeInfoIdx;
-        public DisplayConfigVideoSignalInfo TargetVideoSignalInfo;
+
+        public uint OutputTechnology;
+        public uint Rotation;
+        public uint Scaling;
+        public DisplayConfigRational RefreshRate;
+        public uint ScanLineOrdering;
+        public int TargetAvailable;
         public uint StatusFlags;
     }
 
+    /// <summary>Native <c>DISPLAYCONFIG_PATH_INFO</c> (wingdi.h, 72 bytes).</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct DisplayConfigPathInfo
     {
@@ -640,20 +796,21 @@ internal static class DisplayColorInfo
         public uint Flags;
     }
 
+    /// <summary>
+    /// Native <c>DISPLAYCONFIG_MODE_INFO</c> (wingdi.h, 64 bytes). Only the header is
+    /// consumed; the trailing union (target/source/desktop-image mode, up to a 48-byte
+    /// video-signal record) is padding that must keep the native stride.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct DisplayConfigModeInfo
     {
         public uint InfoType;
         public uint Id;
         public Luid AdapterId;
-        public ulong TargetModePixelRate;
-        public DisplayConfigRational TargetModeHSyncFreq;
-        public DisplayConfigRational TargetModeVSyncFreq;
-        public DisplayConfig2DRegion TargetModeActiveSize;
-        public DisplayConfig2DRegion TargetModeTotalSize;
-        public uint TargetModeVideoStandard;
-        public uint TargetModeScanLineOrdering;
-        public DisplayConfig2DRegion TargetModePosition;
+
+        // Largest union member is DISPLAYCONFIG_TARGET_MODE (a 48-byte, 8-byte-aligned
+        // video-signal record); the Luid above ends at offset 16, so this pads to 64.
+        public DisplayConfigVideoSignalInfo Mode;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -718,6 +875,7 @@ internal static class DisplayColorInfo
 
     internal readonly struct AdvancedColorState
     {
+        /// <summary>Creates a state snapshot for one display.</summary>
         public AdvancedColorState(bool advancedColorEnabled, float sdrWhiteLevelNits)
         {
             AdvancedColorEnabled = advancedColorEnabled;
@@ -729,12 +887,30 @@ internal static class DisplayColorInfo
         public float SdrWhiteLevelNits { get; }
     }
 
+    /// <summary>Managed <c>Marshal.SizeOf&lt;T&gt;()</c> of each DISPLAYCONFIG record, for the layout regression test.</summary>
+    internal static (int PathInfo, int ModeInfo, int PathTargetInfo, int PathSourceInfo) GetManagedRecordSizes() =>
+        (
+            Marshal.SizeOf<DisplayConfigPathInfo>(),
+            Marshal.SizeOf<DisplayConfigModeInfo>(),
+            Marshal.SizeOf<DisplayConfigPathTargetInfo>(),
+            Marshal.SizeOf<DisplayConfigPathSourceInfo>()
+        );
+
     /// <summary>
     /// Maps each GDI display device name to its advanced-color state. Returns an empty
     /// dictionary when the DISPLAYCONFIG API is unavailable.
     /// </summary>
     internal static Dictionary<string, AdvancedColorState> GetAdvancedColorStates()
     {
+        // Defensive stride guard: QueryDisplayConfig writes native-sized records, so a
+        // managed layout drift corrupts every field after the first record boundary
+        // (observed as ERROR_INVALID_PARAMETER from the follow-up device-info queries).
+        if (
+            Marshal.SizeOf<DisplayConfigPathInfo>() != NativeDisplayConfigPathInfoSize
+            || Marshal.SizeOf<DisplayConfigModeInfo>() != NativeDisplayConfigModeInfoSize
+        )
+            return [];
+
         Dictionary<string, AdvancedColorState> states = new(StringComparer.OrdinalIgnoreCase);
 
         if (GetDisplayConfigBufferSizes(QdcOnlyActivePaths, out uint pathCount, out uint modeCount) != 0)
