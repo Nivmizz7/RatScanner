@@ -16,7 +16,7 @@ Do not run or document the app under x86 Windows, WSL, or Linux. Targeting and n
 
 ## SDK / runtime expectations
 
-- Root `global.json` requires the exact SDK used by CI so compiler and bundled-analyzer behavior is reproducible.
+- Root `global.json` pins a patch floor within the SDK feature band CI builds with (`latestPatch` roll-forward), so compiler and bundled-analyzer behavior stays reproducible and machine-side patch servicing cannot break the repo.
 - App TFM: see `src/App/RatScanner.csproj` (`net10.0-windows10.0.22621.0`).
 - RatEye library: `netstandard2.0` (consumed from the submodule by App).
 - Tests: same Windows TFM family as App.
