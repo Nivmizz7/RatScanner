@@ -334,7 +334,13 @@ internal static unsafe class HdrToneMapper
 
     /// <summary>
     /// Identity conversion for frames whose content never exceeds SDR reference white:
-    /// scale scRGB to the reference-white basis, clamp, and sRGB-encode with dithering.
+    /// scale scRGB to the reference-white basis, gamut-map, and sRGB-encode with dithering.
+    ///
+    /// The fast-path gate is a luminance decision, so a wide-gamut pixel (e.g. a saturated
+    /// scRGB primary at <c>r=2, g=0, b=0</c>) can have SDR-range luminance yet a channel
+    /// above 1.0. Such pixels are softly desaturated toward their luminance — exactly as
+    /// the tone-map path does — instead of clipping channels independently, which would
+    /// otherwise discard the pixel's true luminance and hue.
     /// </summary>
     private static void ConvertSdrFastPath(
         IntPtr source,
@@ -367,16 +373,31 @@ internal static unsafe class HdrToneMapper
 
                     if (r < 0f)
                         r = 0f;
-                    else if (r > 1f)
-                        r = 1f;
                     if (g < 0f)
                         g = 0f;
-                    else if (g > 1f)
-                        g = 1f;
                     if (b < 0f)
                         b = 0f;
-                    else if (b > 1f)
-                        b = 1f;
+
+                    // In gamut is the overwhelmingly common case; only out-of-gamut pixels
+                    // pay the desaturation branch. Mirrors the tone-map path with an
+                    // identity luminance target (SDR content maps 1:1 below reference white).
+                    float maxChannel = MathF.Max(r, MathF.Max(g, b));
+                    if (maxChannel > 1f)
+                    {
+                        float lum = MathF.Min(LumR * r + LumG * g + LumB * b, 1f);
+                        float t = (maxChannel - 1f) / MathF.Max(maxChannel - lum, 1e-6f);
+                        if (t > 1f)
+                            t = 1f;
+                        r += (lum - r) * t;
+                        g += (lum - g) * t;
+                        b += (lum - b) * t;
+                        if (r > 1f)
+                            r = 1f;
+                        if (g > 1f)
+                            g = 1f;
+                        if (b > 1f)
+                            b = 1f;
+                    }
 
                     float dither = Bayer8[bayerRow + (x & 7)];
                     WritePixel(dstRow, r, g, b, dither, destinationBytesPerPixel);

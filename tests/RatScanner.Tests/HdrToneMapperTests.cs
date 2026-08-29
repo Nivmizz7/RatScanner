@@ -256,4 +256,68 @@ public class HdrToneMapperTests
         foreach (byte channel in output)
             Assert.InRange(channel, 0, 255);
     }
+
+    /// <summary>
+    /// Regression: a wide-gamut scRGB pixel with SDR-range luminance takes the identity
+    /// fast path (the gate is a luminance decision), but a channel above 1.0 must be
+    /// gamut-mapped by soft desaturation toward luminance — not clipped independently,
+    /// which would discard the pixel's true luminance.
+    /// </summary>
+    [Fact]
+    public void ConvertScRgbToSdr_fast_path_preserves_out_of_gamut_luminance()
+    {
+        // r=2, g=0, b=0 at 80-nit reference white: luminance = 0.2126*2 = 0.425 (< 1, so
+        // the whole frame stays on the fast path), but the red channel is out of gamut.
+        // Independent per-channel clipping would drop luminance to 0.2126 (~127 grey);
+        // soft desaturation toward luminance preserves ~0.425.
+        const float sdrWhite = 80f;
+        ushort[] pixels = new ushort[4];
+        pixels[0] = BitConverter.HalfToUInt16Bits((Half)2f); // R
+        pixels[1] = BitConverter.HalfToUInt16Bits((Half)0f); // G
+        pixels[2] = BitConverter.HalfToUInt16Bits((Half)0f); // B
+        pixels[3] = BitConverter.HalfToUInt16Bits((Half)1f); // A
+
+        byte[] output = new byte[3];
+        GCHandle src = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        GCHandle dst = GCHandle.Alloc(output, GCHandleType.Pinned);
+        try
+        {
+            HdrToneMapper.ConvertScRgbToSdr(
+                src.AddrOfPinnedObject(),
+                1 * 8,
+                new Rectangle(0, 0, 1, 1),
+                dst.AddrOfPinnedObject(),
+                1 * 3,
+                3,
+                sdrWhite,
+                1000f
+            );
+        }
+        finally
+        {
+            src.Free();
+            dst.Free();
+        }
+
+        // Decode the sRGB-encoded BGR output back to linear light and recompute luminance.
+        float b = SrgbDecode(output[0] / 255f);
+        float g = SrgbDecode(output[1] / 255f);
+        float r = SrgbDecode(output[2] / 255f);
+        float outputLuminance = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+
+        // Original luminance is 0.425; independent clipping would collapse it to ~0.2126.
+        Assert.InRange(outputLuminance, 0.37f, 0.47f);
+        Assert.True(
+            outputLuminance > 0.30f,
+            $"Out-of-gamut pixel luminance must be preserved by desaturation, got {outputLuminance}"
+        );
+    }
+
+    /// <summary>Inverse of <see cref="HdrToneMapper.SrgbEncode"/> for verifying decoded output luminance.</summary>
+    private static float SrgbDecode(float encoded)
+    {
+        if (encoded <= 0.04045f)
+            return encoded / 12.92f;
+        return MathF.Pow((encoded + 0.055f) / 1.055f, 2.4f);
+    }
 }
