@@ -167,7 +167,7 @@ The consistency check compares the explicit CA/IDE warning rules in `.editorconf
 - Implicit usings disabled on App — do not rely on global usings.
 - Root `Directory.Build.props` pins `AnalysisLevel=10.0-recommended` and enables `EnforceCodeStyleInBuild`. A curated correctness/dead-code rule set is elevated to build errors via `WarningsAsErrors`; the consistency script keeps that list synchronized with the warning-severity block in `.editorconfig`. The build (Debug **and** Release, both in CI) is the analyzer gate.
 - Reviewed design/cleanup signals explicitly configured outside the curated set are suggestion-level (IDE-only). Other analyzer warnings remain visible but become hard build errors only when added to the synchronized gate. IDE0051/IDE0052 findings are reviewed per case — WPF/XAML and `#if`-gated members (e.g. `SetupExceptionHandling` under Debug) can look dead under one configuration. Never blanket auto-fix them.
-- `global.json` pins the SDK; the pinned analysis level makes analyzer behavior deliberate across SDK upgrades.
+- `global.json` pins an SDK feature-band patch floor (`latestPatch` roll-forward); the pinned analysis level makes analyzer behavior deliberate across SDK upgrades.
 
 ### Package vulnerability / outdated checks
 

@@ -731,7 +731,8 @@ public sealed class RatScannerMain
             };
 
             Vector2 position = new(bounds.X, bounds.Y);
-            using Bitmap screenshot = GetScreenshot(position, bounds.Size);
+            using Bitmap screenshot =
+                CaptureRegionHdrAware(position, bounds.Size) ?? GetScreenshot(position, bounds.Size);
 
             // Scan the item
             RatEye.Processing.MultiInspection multiInspection = RatEyeEngine.NewMultiInspection(screenshot);
@@ -936,7 +937,11 @@ public sealed class RatScannerMain
             destination[prefix + stage] = milliseconds;
     }
 
-    // Returns the ruff screenshot
+    /// <summary>
+    /// Returns the raw GDI (<c>Graphics.CopyFromScreen</c>) screenshot of the given
+    /// virtual-desktop region. HDR routing is handled by <see cref="CaptureRegionHdrAware"/>
+    /// and <see cref="ScreenshotFor"/>, which fall back to this method unchanged.
+    /// </summary>
     private static Bitmap GetScreenshot(Vector2 vector2, Size size)
     {
         Bitmap bmp = new(size.Width, size.Height, PixelFormat.Format24bppRgb);
@@ -955,12 +960,33 @@ public sealed class RatScannerMain
     }
 
     /// <summary>
-    /// Captures a screenshot and records the capture cost plus its pixel area on the
-    /// scan timeline. Capture area matters: it scales both the blit and OCR cost.
+    /// HDR-aware capture for <see cref="GetScreenshot"/> callers. Returns a screenshot of the
+    /// given virtual-desktop region using DXGI Desktop Duplication when the region overlaps an
+    /// HDR display (tone-mapped back to SDR), or <see langword="null"/> so the caller keeps
+    /// the legacy GDI path.
     /// </summary>
+    private static Bitmap? CaptureRegionHdrAware(Vector2 vector2, Size size)
+    {
+        if (!RatConfig.HdrCapture.Enable)
+            return null;
+
+        Rectangle bounds = new(vector2.X, vector2.Y, size.Width, size.Height);
+        if (!HdrScreenCapture.IsHdrCaptureRequired(bounds))
+            return null;
+
+        return HdrScreenCapture.CaptureRectangle(bounds);
+    }
+
+    /// <summary>Captures a screenshot, preferring the HDR-aware path when applicable.</summary>
     private static Bitmap ScreenshotFor(PerfTrace trace, Vector2 position, Size size)
     {
         trace.Note("capture", $"{size.Width}x{size.Height}");
+        Bitmap? hdrScreenshot = null;
+        using (trace.Measure("scan.capture_hdr"))
+            hdrScreenshot = CaptureRegionHdrAware(position, size);
+        if (hdrScreenshot is not null)
+            return hdrScreenshot;
+
         using (trace.Measure("scan.screenshot"))
             return GetScreenshot(position, size);
     }
@@ -1092,6 +1118,12 @@ public sealed class RatScannerMain
             }
 
             ItemScans.Changed -= OnItemScansChanged;
+
+            // Release the static per-output duplication sessions and their D3D11 resources
+            // deterministically instead of at process teardown. No-op when HDR capture was
+            // never used (empty session list).
+            HdrScreenCapture.ResetSessions();
+
             HotkeyManager.Dispose();
             TarkovTrackerDB.Dispose();
             _scanDiagnostics.Dispose();

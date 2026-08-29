@@ -110,6 +110,17 @@ internal static class RatConfig
         internal static int Duration = 1500;
     }
 
+    // Capture options
+    internal static class HdrCapture
+    {
+        // Off by default: on HDR displays the DXGI duplication surface delivers SDR content
+        // with a boosted (unestablished) transfer function, so the DD path can over-brighten
+        // SDR icons/names compared to GDI (which is correct for SDR content in HDR mode).
+        // Opt in for experimental HDR capture; revisit once the duplication transfer is
+        // pinned down and validated against a live HDR game session.
+        internal static bool Enable;
+    }
+
     // UI options
     internal static class UserInterface
     {
@@ -321,6 +332,9 @@ internal static class RatConfig
             ToolTip.DigitGroupingSymbol
         );
 
+        config.Section = nameof(HdrCapture);
+        HdrCapture.Enable = config.ReadBool(nameof(HdrCapture.Enable), HdrCapture.Enable);
+
         config.Section = nameof(UserInterface);
         UserInterface.Language = (UiLanguage)
             config.ReadInt(nameof(UserInterface.Language), (int)UserInterface.Language);
@@ -471,6 +485,9 @@ internal static class RatConfig
             config.Section = nameof(ToolTip);
             config.WriteInt(nameof(ToolTip.Duration), ToolTip.Duration);
             config.WriteString(nameof(ToolTip.DigitGroupingSymbol), ToolTip.DigitGroupingSymbol);
+
+            config.Section = nameof(HdrCapture);
+            config.WriteBool(nameof(HdrCapture.Enable), HdrCapture.Enable);
 
             config.Section = nameof(UserInterface);
             config.WriteInt(nameof(UserInterface.Language), (int)UserInterface.Language);
