@@ -6,7 +6,7 @@
 
 Windows x64-only Escape from Tarkov external item scanner. WPF hosts MudBlazor UI via WebView2; screenshots feed standalone RatEye source checked out as a Git submodule under `src/ScanEngine/`. Catalog data comes mainly from **json.tarkov.dev**; maps use a slim GraphQL query on **api.tarkov.dev** with JSON fallback. Maintained at `tarkovtracker-org/RatScanner`, semver **4.x** (`v4.x.x`).
 
-**Stack snapshot:** `net10.0-windows10.0.22621.0` · WPF + WinForms · Blazor WebView · MudBlazor · RatStash · OpenCvSharp · Tesseract · Newtonsoft.Json. Package versions live in `.csproj` files — do not copy versions into docs.
+**Stack snapshot:** `net10.0-windows10.0.22621.0` · WPF + WinForms · Blazor WebView · MudBlazor · RatStash · OpenCvSharp · Tesseract · Newtonsoft.Json · Vortice (DXGI/D3D11 for HDR capture). Package versions live in `.csproj` files — do not copy versions into docs.
 
 ## Non-negotiable constraints
 

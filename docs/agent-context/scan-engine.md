@@ -47,10 +47,38 @@ Do not modify config objects after they are passed into an engine instance (engi
 | Stage | Owner |
 | --- | --- |
 | Region geometry / game display scale | App (`RatConfig`, `Display/*`) |
-| Bitmap capture | App `RatScannerMain.GetScreenshot` |
+| Bitmap capture (GDI, detection-gated HDR via DXGI) | App `RatScannerMain.GetScreenshot` / `Display/HdrScreenCapture` |
 | Preprocess / OCR / template match | ScanEngine |
 | Confidence thresholds / warn UI | App config + presentation |
 | Catalog mapping / queues / overlays | App |
+
+### HDR (advanced color) capture
+
+When a scanned region overlaps a display running in HDR mode, item content can exceed SDR
+white and GDI `CopyFromScreen` clips it. The App ships an experimental DXGI Desktop
+Duplication path (`Display/HdrScreenCapture` + `Display/HdrToneMapper`, BT.2390-4 EETF):
+
+- Detection: `Display/HdrScreenCapture.IsHdrCaptureRequired` reads each output's
+  `IDXGIOutput6::GetDesc1` color space (HDR10/HLG signal = HDR); per-output states are
+  cached for 2 s (per display, so mixed HDR/SDR rigs route each region correctly). The
+  DISPLAYCONFIG advanced-color state supplements detection and supplies the display's SDR
+  reference white level for tone mapping.
+- Capture when enabled and HDR: DXGI Desktop Duplication on the intersecting output
+  (`DuplicateOutput`), one D3D11 device per output session so a duplication failure on one
+  display never affects the others; FP16 scRGB frame, region staging via
+  `CopySubresourceRegion`, then BT.2390-4 EETF tone mapping (`Display/HdrToneMapper`) back
+  to an SDR 8-bit BGR bitmap.
+  Output is `Format24bppRgb`, identical to the GDI path. Any failure returns null and the
+  legacy GDI path runs byte-for-byte unchanged.
+- **Off by default** (`RatConfig.HdrCapture.Enable`, config-file only). Local measurements
+  on an HDR display show the duplication surface delivers SDR content (e.g. a 128-grey
+  window reads 150-255) with a boosted, unestablished transfer, while GDI is correct for
+  SDR content. Until the duplication transfer is pinned down and validated against a live
+  HDR game session, GDI remains the safe default; the DD path is opt-in.
+
+Vortice (`Vortice.Direct3D11` / `Vortice.DXGI`) supplies the DXGI/D3D11 interop for the
+HDR path; version pins live in `src/App/RatScanner.csproj`. The engine (RatEye) never sees
+HDR data — it receives the same SDR bitmaps as before.
 
 ## Data dependencies
 

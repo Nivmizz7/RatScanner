@@ -30,6 +30,8 @@
 		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
 		<!-- OpenCvSharp4.runtime.win 4.13 ships Windows native binaries for x64 only. -->
 		<PlatformTarget>x64</PlatformTarget>
+		<!-- HDR capture uses unsafe pointer conversion in the tone mapper and capture copy. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<nullable>Enable</nullable>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<!-- Exclude stale compiler-generated files left by IDE design-time builds. -->
@@ -58,6 +60,8 @@
 		<PackageReference Include="NuGet.Versioning" Version="7.6.0" />
 		<PackageReference Include="RatStash" Version="6.0.0" />
 		<PackageReference Include="SingleInstanceCore" Version="2.2.2" />
+		<PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
+		<PackageReference Include="Vortice.DXGI" Version="3.6.2" />
 	</ItemGroup>
 
 	<ItemGroup>

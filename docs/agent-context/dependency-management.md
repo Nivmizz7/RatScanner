@@ -19,6 +19,7 @@ Do not document “current version is X” in prose. Read the csproj.
 | Concern | Typical home |
 | --- | --- |
 | WPF Blazor WebView, MudBlazor, SingleInstanceCore, Windows Compatibility | App |
+| Vortice (DXGI + Direct3D11) | App — DXGI Desktop Duplication interop for HDR-aware capture (`Display/HdrScreenCapture`); do not repurpose for unrelated D3D work |
 | OpenCvSharp, engine Tesseract.Drawing, System.Drawing.Common | ScanEngine |
 | RatStash, Tesseract, Newtonsoft.Json | Shared across App/ScanEngine as needed |
 | xUnit, test SDK | Tests only |
