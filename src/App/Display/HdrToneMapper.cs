@@ -58,14 +58,19 @@ internal static unsafe class HdrToneMapper
         return lut;
     }
 
-    /// <summary>Builds the half-bit-pattern to float table (NaN sanitized to zero).</summary>
+    /// <summary>Builds the half-bit-pattern to float table (NaN and infinities sanitized).</summary>
     private static float[] BuildHalfLut()
     {
         float[] lut = new float[65536];
         for (int i = 0; i < 65536; i++)
         {
             float value = (float)BitConverter.UInt16BitsToHalf((ushort)i);
-            lut[i] = float.IsNaN(value) ? 0f : value;
+            if (float.IsNaN(value) || float.IsNegativeInfinity(value))
+                lut[i] = 0f;
+            else if (float.IsPositiveInfinity(value))
+                lut[i] = (float)Half.MaxValue;
+            else
+                lut[i] = value;
         }
         return lut;
     }
@@ -382,6 +387,14 @@ internal static unsafe class HdrToneMapper
                     // pay the desaturation branch. Mirrors the tone-map path with an
                     // identity luminance target (SDR content maps 1:1 below reference white).
                     float maxChannel = MathF.Max(r, MathF.Max(g, b));
+                    if (float.IsPositiveInfinity(maxChannel))
+                    {
+                        r = MathF.Min(r, 1f);
+                        g = MathF.Min(g, 1f);
+                        b = MathF.Min(b, 1f);
+                        maxChannel = 1f;
+                    }
+
                     if (maxChannel > 1f)
                     {
                         float lum = MathF.Min(LumR * r + LumG * g + LumB * b, 1f);
@@ -421,6 +434,11 @@ internal static unsafe class HdrToneMapper
     /// <summary>sRGB-encodes one channel via the LUT, applies dither, and quantizes to 8 bits.</summary>
     private static byte EncodeChannel(float linear, float dither)
     {
+        if (float.IsNaN(linear) || linear <= 0f)
+            return (byte)Math.Clamp((int)(dither + 0.5f), 0, 255);
+        if (float.IsPositiveInfinity(linear) || linear >= 1f)
+            return (byte)Math.Clamp((int)(255f + dither + 0.5f), 0, 255);
+
         // Interpolate the continuous sRGB value, dither, then quantize; dithering after
         // quantization would be a no-op.
         float pos = linear * (EncodeLutSize - 1);

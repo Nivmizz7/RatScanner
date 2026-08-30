@@ -313,6 +313,85 @@ public class HdrToneMapperTests
         );
     }
 
+    /// <summary>
+    /// Regression: FP16 special values (+Infinity, -Infinity, NaN) must not cause division by infinity
+    /// (0/0 -> NaN), IndexOutOfRangeException in EncodeLut, or corrupted black pixels for bright highlights.
+    /// Positive infinity must saturate at 255, while negative infinity and NaN must map safely to 0.
+    /// </summary>
+    [Fact]
+    public void ConvertScRgbToSdr_handles_fp16_infinities_and_nan_safely()
+    {
+        const float sdrWhite = 203f;
+        ushort[] pixels = new ushort[4 * 4];
+
+        // Pixel 0: +Infinity (0x7C00)
+        pixels[0] = 0x7C00;
+        pixels[1] = 0x7C00;
+        pixels[2] = 0x7C00;
+        pixels[3] = 0x3C00; // Alpha 1.0
+
+        // Pixel 1: -Infinity (0xFC00)
+        pixels[4] = 0xFC00;
+        pixels[5] = 0xFC00;
+        pixels[6] = 0xFC00;
+        pixels[7] = 0x3C00;
+
+        // Pixel 2: NaN (0x7E00)
+        pixels[8] = 0x7E00;
+        pixels[9] = 0x7E00;
+        pixels[10] = 0x7E00;
+        pixels[11] = 0x3C00;
+
+        // Pixel 3: Normal SDR 100 nits
+        ushort normalHalf = BitConverter.HalfToUInt16Bits((Half)(100f / 80f));
+        pixels[12] = normalHalf;
+        pixels[13] = normalHalf;
+        pixels[14] = normalHalf;
+        pixels[15] = 0x3C00;
+
+        byte[] output = new byte[4 * 3];
+        GCHandle src = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        GCHandle dst = GCHandle.Alloc(output, GCHandleType.Pinned);
+        try
+        {
+            HdrToneMapper.ConvertScRgbToSdr(
+                src.AddrOfPinnedObject(),
+                4 * 8,
+                new Rectangle(0, 0, 4, 1),
+                dst.AddrOfPinnedObject(),
+                4 * 3,
+                3,
+                sdrWhite,
+                1000f
+            );
+        }
+        finally
+        {
+            src.Free();
+            dst.Free();
+        }
+
+        // Pixel 0 (+Infinity) must saturate at full display white (255, 255, 255)
+        Assert.Equal(255, output[0]); // B
+        Assert.Equal(255, output[1]); // G
+        Assert.Equal(255, output[2]); // R
+
+        // Pixel 1 (-Infinity) must map to black (0, 0, 0)
+        Assert.Equal(0, output[3]);
+        Assert.Equal(0, output[4]);
+        Assert.Equal(0, output[5]);
+
+        // Pixel 2 (NaN) must map to black (0, 0, 0)
+        Assert.Equal(0, output[6]);
+        Assert.Equal(0, output[7]);
+        Assert.Equal(0, output[8]);
+
+        // Pixel 3 (SDR content) must stay near expected 100-nit SDR value (~186)
+        Assert.InRange(output[9], 180, 195);
+        Assert.InRange(output[10], 180, 195);
+        Assert.InRange(output[11], 180, 195);
+    }
+
     /// <summary>Inverse of <see cref="HdrToneMapper.SrgbEncode"/> for verifying decoded output luminance.</summary>
     private static float SrgbDecode(float encoded)
     {
